@@ -1,4 +1,7 @@
 # roxmltree
+[![Build Status](https://travis-ci.org/RazrFalcon/roxmltree.svg?branch=master)](https://travis-ci.org/RazrFalcon/roxmltree)
+[![Crates.io](https://img.shields.io/crates/v/roxmltree.svg)](https://crates.io/crates/roxmltree)
+[![Documentation](https://docs.rs/roxmltree/badge.svg)](https://docs.rs/roxmltree)
 
 Represent an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
 
@@ -85,7 +88,7 @@ test medium_elementtree  ... bench:  11,629,513 ns/iter (+/- 27,055)
 ```
 
 *roxmltree* uses [xmlparser] internally,
-while *sdx-document* uses it's own one and *xmltree*, *elementtree* and *treexml* are using the 
+while *sdx-document* uses it's own one and *xmltree*, *elementtree* and *treexml* are using the
 [xml-rs] crate.
 Here is a comparison between *xmlparser* and *xml-rs*:
 
@@ -97,7 +100,7 @@ test medium_xmlparser    ... bench:     434,140 ns/iter (+/- 231)
 test medium_xmlrs        ... bench:  10,391,411 ns/iter (+/- 24,738)
 ```
 
-*Note:* tree crates may use different *xml-rs* crate versions. 
+*Note:* tree crates may use different *xml-rs* crate versions.
 
 You can try it yourself using `cargo bench --features benchmark`
 
