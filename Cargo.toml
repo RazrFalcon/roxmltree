@@ -1,0 +1,34 @@
+[package]
+name = "roxmltree"
+# When updating version, also modify html_root_url in the lib.rs and in the README.tpl
+version = "0.1.0"
+authors = ["RazrFalcon <razrfalcon@gmail.com>"]
+keywords = ["xml", "parser", "tree", "dom"]
+categories = ["parsing"]
+license = "MIT/Apache-2.0"
+description = "Represent XML as a read-only tree."
+repository = "https://github.com/RazrFalcon/roxmltree"
+documentation = "https://docs.rs/roxmltree/"
+readme = "README.md"
+
+[dependencies]
+xmlparser = "0.6.0"
+
+# for benchmark
+bencher = { version = "0.1", optional = true }
+xmltree = { version = "0.8", optional = true }
+sxd-document = { version = "0.2.6", optional = true }
+elementtree = { version = "0.5.0", optional = true }
+treexml = { version = "0.7.0", optional = true }
+xml-rs = { version = "0.8.0", optional = true }
+
+[dev-dependencies]
+pretty_assertions = "0.5.1"
+rustc-test = "0.3"
+
+[features]
+benchmark = ["bencher", "xmltree", "sxd-document", "elementtree", "treexml", "xml-rs"]
+
+[[bench]]
+name = "xml"
+harness = false
