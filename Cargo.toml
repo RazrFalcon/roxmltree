@@ -1,12 +1,12 @@
 [package]
 name = "roxmltree"
-# When updating version, also modify html_root_url in the lib.rs and in the README.tpl
+# When updating version, also modify html_root_url in the lib.rs and in the README.md
 version = "0.1.0"
 authors = ["RazrFalcon <razrfalcon@gmail.com>"]
 keywords = ["xml", "parser", "tree", "dom"]
 categories = ["parsing"]
 license = "MIT/Apache-2.0"
-description = "Represent XML as a read-only tree."
+description = "Represent an XML as a read-only tree."
 repository = "https://github.com/RazrFalcon/roxmltree"
 documentation = "https://docs.rs/roxmltree/"
 readme = "README.md"
