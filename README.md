@@ -25,6 +25,8 @@ Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/bl
 
 ## Alternatives
 
+\* Rust besed for now
+
 | Feature/Crate                   | roxmltree        | [xmltree]        | [elementtree]    | [sxd-document]   | [treexml]        |
 | ------------------------------- | :--------------: | :--------------: | :--------------: | :--------------: | :--------------: |
 | Element namespace resolving     | ✔                | ✔                | ✔               | ~<sup>1</sup>     |                  |
@@ -41,7 +43,8 @@ Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/bl
 | `xml:space`                     |                  |                  |                  |                  |                  |
 | Tree modifications              |                  | ✔                | ✔                | ✔                | ✔                |
 | Writing                         |                  | ✔                | ✔                | ✔                | ✔                |
-| Size overhead<sup>4</sup>       | **~60KiB**       | ~80KiB           | ~96KiB           | ~130KiB          | ~110KiB          |
+| No **unsafe**                   | ✔                | ✔                | ~<sup>4</sup>    |                  | ✔                |
+| Size overhead<sup>5</sup>       | **~60KiB**       | ~80KiB           | ~96KiB           | ~130KiB          | ~110KiB          |
 | Dependencies                    | **1**            | 2                | 18               | 2                | 14               |
 | Tested version                  | 0.1.0            | 0.8.0            | 0.5.0            | 0.2.6            | 0.7.0            |
 | License                         | MIT / Apache-2.0 | MIT              | BSD-3-Clause     | MIT              | MIT              |
@@ -60,7 +63,8 @@ Notes:
 3. *roxmltree* keeps all nodes and attributes position in the original document,
    so you can easily retrieve it if you need it.
    See [examples/print_pos.rs](examples/print_pos.rs) for details.
-4. Binary size overhead according to the [cargo-bloat](https://github.com/RazrFalcon/cargo-bloat).
+4. In the `string_cache` crate.
+5. Binary size overhead according to the [cargo-bloat](https://github.com/RazrFalcon/cargo-bloat).
 
 [Entity references]: https://www.w3.org/TR/REC-xml/#dt-entref
 [Character references]: https://www.w3.org/TR/REC-xml/#NT-CharRef
