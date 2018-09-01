@@ -3,29 +3,29 @@
 [![Crates.io](https://img.shields.io/crates/v/roxmltree.svg)](https://crates.io/crates/roxmltree)
 [![Documentation](https://docs.rs/roxmltree/badge.svg)](https://docs.rs/roxmltree)
 
-Represent an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
+Represents an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
 
 ## Why read-only?
 
-Because in some cases all you need is to retrieve some data from the XML document.
+Because in some cases all you need is to retrieve some data from an XML document.
 And for such cases, we can make a lot of optimizations.
 
 As for *roxmltree*, it's fast not only because it's read-only, but also because
-it uses [xmlparser], which is times faster then [xml-rs].
-See [Performance](#performance) section for details.
+it uses [xmlparser], which is many times faster than [xml-rs].
+See the [Performance](#performance) section for details.
 
 ## Parsing behavior
 
-Sadly, XML can be parsed in many different ways. The *roxmltree* is trying to mimic the
-Python's [lxml](https://lxml.de/) behavior.
+Sadly, XML can be parsed in many different ways. *roxmltree* tries to mimic the
+behavior of Python's [lxml](https://lxml.de/).
 
-Unlike the *lxml*, *roxmltree* do support comments outside the root element.
+Unlike *lxml*, *roxmltree* does support comments outside the root element.
 
 Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md).
 
 ## Alternatives
 
-\* Rust besed for now
+\* Rust-based for now.
 
 | Feature/Crate                   | roxmltree        | [xmltree]        | [elementtree]    | [sxd-document]   | [treexml]        |
 | ------------------------------- | :--------------: | :--------------: | :--------------: | :--------------: | :--------------: |
@@ -60,11 +60,11 @@ Notes:
 
 1. No default namespace propagation.
 2. Nested/indirect entity references are not supported yet.
-3. *roxmltree* keeps all nodes and attributes position in the original document,
+3. *roxmltree* keeps all node and attribute positions in the original document,
    so you can easily retrieve it if you need it.
    See [examples/print_pos.rs](examples/print_pos.rs) for details.
 4. In the `string_cache` crate.
-5. Binary size overhead according to the [cargo-bloat](https://github.com/RazrFalcon/cargo-bloat).
+5. Binary size overhead according to [cargo-bloat](https://github.com/RazrFalcon/cargo-bloat).
 
 [Entity references]: https://www.w3.org/TR/REC-xml/#dt-entref
 [Character references]: https://www.w3.org/TR/REC-xml/#NT-CharRef
@@ -92,7 +92,7 @@ test medium_elementtree  ... bench:  11,629,513 ns/iter (+/- 27,055)
 ```
 
 *roxmltree* uses [xmlparser] internally,
-while *sdx-document* uses it's own one and *xmltree*, *elementtree* and *treexml* are using the
+while *sdx-document* uses its own implementation and *xmltree*, *elementtree* and *treexml* use the
 [xml-rs] crate.
 Here is a comparison between *xmlparser* and *xml-rs*:
 
@@ -113,9 +113,9 @@ You can try it yourself using `cargo bench --features benchmark`
 
 ## Safety
 
-- The library must not panic. Any panic considered as a critical bug
-  and should be reported.
-- The library forbids the unsafe code.
+- This library must not panic. Any panic should be considered a critical bug
+   and reported.
+- This library forbids `unsafe` code.
 
 ## Non-goals
 
@@ -125,9 +125,9 @@ You can try it yourself using `cargo bench --features benchmark`
 
 ## API
 
-The library uses Rust's idiomatic API based on iterators.
-In case you are more familiar with the browsers/JS DOM API - you can check out
-the [tests/dom-api.rs](tests/dom-api.rs) to see how it can be converted into a Rust one.
+This library uses Rust's idiomatic API based on iterators.
+In case you are more familiar with browser/JS DOM APIs - you can check out
+[tests/dom-api.rs](tests/dom-api.rs) to see how it can be converted into a Rust one.
 
 ## Dependency
 
