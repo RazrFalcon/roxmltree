@@ -265,6 +265,26 @@ pub struct Attribute<'d> {
 }
 
 impl<'d> Attribute<'d> {
+    /// Checks that attribute has a namespace.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let doc = roxmltree::Document::parse(
+    ///     "<e xmlns:a='http://www.w3.org' a:b='c'/>").unwrap();
+    ///
+    /// assert_eq!(doc.root_element().attributes()[0].has_namespace(), true);
+    /// ```
+    ///
+    /// ```
+    /// let doc = roxmltree::Document::parse("<e a='b'/>").unwrap();
+    ///
+    /// assert_eq!(doc.root_element().attributes()[0].has_namespace(), false);
+    /// ```
+    pub fn has_namespace(&self) -> bool {
+        !self.namespace().is_empty()
+    }
+
     /// Returns attribute's namespace URI.
     ///
     /// # Examples
