@@ -44,6 +44,7 @@
 - ns_012 - namespace propagation
 - ns_013 - namespace from entity
 - ns_014 - no namespaces
+- ns_014 - duplicated namespaces with different prefixes
 - ns_err_001 - invalid `xml` URI
 - ns_err_002 - reserved URI
 - ns_err_003 - reserved URI

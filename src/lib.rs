@@ -726,7 +726,10 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
 
         let tag_ns = self.tag_name();
 
-        // TODO: this
+        if self.default_namespace() == tag_ns.namespace() {
+            return None;
+        }
+
         self.namespaces().iter().find(|ns| Some(ns.uri()) == tag_ns.namespace())
             .map(|v| v.name).unwrap_or(None)
     }
