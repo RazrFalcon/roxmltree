@@ -769,7 +769,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().lookup_namespace_uri(None), Some("http://www.w3.org"));
     /// ```
-    pub fn lookup_namespace_uri(&self, prefix: Option<&str>) -> Option<&str> {
+    pub fn lookup_namespace_uri(&self, prefix: Option<&'a str>) -> Option<&str> {
         self.namespaces().iter().find(|ns| ns.name == prefix).map(|v| v.uri.as_str())
     }
 
