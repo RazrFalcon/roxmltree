@@ -6,6 +6,6 @@ Document:
         attr@http://www.ietf.org: "b_ns"
         attr@http://www.w3.org: "a_ns"
       namespaces:
-        "": http://www.uvic.ca
+        None: http://www.uvic.ca
         a: http://www.w3.org
         b: http://www.ietf.org

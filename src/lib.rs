@@ -265,26 +265,6 @@ pub struct Attribute<'d> {
 }
 
 impl<'d> Attribute<'d> {
-    /// Checks that attribute has a namespace.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse(
-    ///     "<e xmlns:a='http://www.w3.org' a:b='c'/>").unwrap();
-    ///
-    /// assert_eq!(doc.root_element().attributes()[0].has_namespace(), true);
-    /// ```
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("<e a='b'/>").unwrap();
-    ///
-    /// assert_eq!(doc.root_element().attributes()[0].has_namespace(), false);
-    /// ```
-    pub fn has_namespace(&self) -> bool {
-        !self.namespace().is_empty()
-    }
-
     /// Returns attribute's namespace URI.
     ///
     /// # Examples
@@ -294,11 +274,11 @@ impl<'d> Attribute<'d> {
     ///     "<e xmlns:n='http://www.w3.org' a='b' n:a='c'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().attributes()[0].namespace(), "");
-    /// assert_eq!(doc.root_element().attributes()[1].namespace(), "http://www.w3.org");
+    /// assert_eq!(doc.root_element().attributes()[0].namespace(), None);
+    /// assert_eq!(doc.root_element().attributes()[1].namespace(), Some("http://www.w3.org"));
     /// ```
-    pub fn namespace(&self) -> &str {
-        self.name.ns.as_str()
+    pub fn namespace(&self) -> Option<&str> {
+        self.name.ns.as_ref().map(Uri::as_str)
     }
 
     /// Returns attribute's name.
@@ -375,7 +355,7 @@ impl<'d> fmt::Debug for Attribute<'d> {
 /// Contains URI and *prefix* pair.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Namespace<'d> {
-    name: &'d str,
+    name: Option<&'d str>,
     uri: Uri,
 }
 
@@ -389,9 +369,17 @@ impl<'d> Namespace<'d> {
     ///     "<e xmlns:n='http://www.w3.org'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().namespaces()[0].name(), "n");
+    /// assert_eq!(doc.root_element().namespaces()[0].name(), Some("n"));
     /// ```
-    pub fn name(&self) -> &str {
+    ///
+    /// ```
+    /// let doc = roxmltree::Document::parse(
+    ///     "<e xmlns='http://www.w3.org'/>"
+    /// ).unwrap();
+    ///
+    /// assert_eq!(doc.root_element().namespaces()[0].name(), None);
+    /// ```
+    pub fn name(&self) -> Option<&str> {
         self.name
     }
 
@@ -416,29 +404,28 @@ impl<'d> Namespace<'d> {
 struct Namespaces<'d>(Vec<Namespace<'d>>);
 
 impl<'d> Namespaces<'d> {
-    fn push_ns(&mut self, name: &'d str, uri: String) {
+    fn push_ns(&mut self, name: Option<&'d str>, uri: String) {
+        debug_assert_ne!(name, Some(""));
+
         self.0.push(Namespace {
             name,
             uri: Uri::new(uri),
         });
     }
 
-    fn null_uri(&self) -> Uri {
+    fn xml_uri(&self) -> Uri {
         self[0].uri.clone()
     }
 
-    fn xml_uri(&self) -> Uri {
-        self[1].uri.clone()
-    }
+    fn get_by_prefix(&self, range: Range<usize>, prefix: &str) -> Option<Uri> {
+        let prefix = if prefix.is_empty() { None } else { Some(prefix) };
 
-    fn get_by_prefix(&self, range: Range<usize>, prefix: &str) -> Uri {
         self[range].iter()
                    .find(|ns| ns.name == prefix)
                    .map(|ns| ns.uri.clone())
-                   .unwrap_or_else(|| self.null_uri())
     }
 
-    fn exists(&self, start: usize, prefix: &str) -> bool {
+    fn exists(&self, start: usize, prefix: Option<&str>) -> bool {
         self[start..].iter().any(|ns| ns.name == prefix)
     }
 }
@@ -459,7 +446,7 @@ impl Uri {
         Uri(Rc::new(text))
     }
 
-    fn as_str(&self) -> &str{
+    fn as_str(&self) -> &str {
         self.0.as_str()
     }
 }
@@ -485,26 +472,21 @@ impl fmt::Debug for Uri {
 
 #[derive(Clone, PartialEq)]
 struct ExpandedNameOwned<'d> {
-    ns: Uri,
+    ns: Option<Uri>,
     name: &'d str,
 }
 
 impl<'d> ExpandedNameOwned<'d> {
     fn as_ref(&self) -> ExpandedName {
-        ExpandedName { ns: self.ns.as_str(), name: self.name }
-    }
-
-    fn has_namespace(&self) -> bool {
-        !self.ns.as_str().is_empty()
+        ExpandedName { uri: self.ns.as_ref().map(Uri::as_str), name: self.name }
     }
 }
 
 impl<'d> fmt::Debug for ExpandedNameOwned<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        if self.has_namespace() {
-            write!(f, "{{{}}}{}", self.ns.as_str(), self.name)
-        } else {
-            write!(f, "{}", self.name)
+        match self.ns {
+            Some(ref ns) => write!(f, "{{{}}}{}", ns.as_str(), self.name),
+            None => write!(f, "{}", self.name),
         }
     }
 }
@@ -515,7 +497,7 @@ impl<'d> fmt::Debug for ExpandedNameOwned<'d> {
 /// Contains an namespace URI and name pair.
 #[derive(Clone, Copy, PartialEq)]
 pub struct ExpandedName<'d> {
-    ns: &'d str,
+    uri: Option<&'d str>,
     name: &'d str,
 }
 
@@ -527,29 +509,10 @@ impl<'d> ExpandedName<'d> {
     /// ```
     /// let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().tag_name().namespace(), "http://www.w3.org");
+    /// assert_eq!(doc.root_element().tag_name().namespace(), Some("http://www.w3.org"));
     /// ```
-    pub fn namespace(&self) -> &str {
-        self.ns
-    }
-
-    /// Checks that expanded name has a namespace.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
-    ///
-    /// assert_eq!(doc.root_element().tag_name().has_namespace(), true);
-    /// ```
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("<e xmlns:n='http://www.w3.org'/>").unwrap();
-    ///
-    /// assert_eq!(doc.root_element().tag_name().has_namespace(), false);
-    /// ```
-    pub fn has_namespace(&self) -> bool {
-        !self.ns.is_empty()
+    pub fn namespace(&self) -> Option<&str> {
+        self.uri
     }
 
     /// Returns a name.
@@ -568,10 +531,9 @@ impl<'d> ExpandedName<'d> {
 
 impl<'d> fmt::Debug for ExpandedName<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        if self.has_namespace() {
-            write!(f, "{{{}}}{}", self.ns, self.name)
-        } else {
-            write!(f, "{}", self.name)
+        match self.namespace() {
+            Some(ns) => write!(f, "{{{}}}{}", ns, self.name),
+            None => write!(f, "{}", self.name),
         }
     }
 }
@@ -579,7 +541,7 @@ impl<'d> fmt::Debug for ExpandedName<'d> {
 impl<'d> From<&'d str> for ExpandedName<'d> {
     fn from(v: &'d str) -> Self {
         ExpandedName {
-            ns: "",
+            uri: None,
             name: v,
         }
     }
@@ -588,7 +550,7 @@ impl<'d> From<&'d str> for ExpandedName<'d> {
 impl<'d> From<(&'d str, &'d str)> for ExpandedName<'d> {
     fn from(v: (&'d str, &'d str)) -> Self {
         ExpandedName {
-            ns: v.0,
+            uri: Some(v.0),
             name: v.1,
         }
     }
@@ -666,18 +628,20 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
 
     /// Returns node's tag name.
     ///
+    /// Returns an empty name with no namespace if the current node is not an element.
+    ///
     /// # Examples
     ///
     /// ```
     /// let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().tag_name().namespace(), "http://www.w3.org");
+    /// assert_eq!(doc.root_element().tag_name().namespace(), Some("http://www.w3.org"));
     /// assert_eq!(doc.root_element().tag_name().name(), "e");
     /// ```
     pub fn tag_name(&'a self) -> ExpandedName<'a> {
         match self.d.kind {
             NodeKind::Element { ref tag_name, .. } => tag_name.as_ref(),
-            _ => ExpandedName { ns: "", name: "" },
+            _ => "".into()
         }
     }
 
@@ -701,10 +665,9 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
 
         match self.d.kind {
             NodeKind::Element { ref tag_name, .. } => {
-                if name.has_namespace() {
-                    tag_name.as_ref() == name
-                } else {
-                    tag_name.name == name.name
+                match name.namespace() {
+                    Some(_) => tag_name.as_ref() == name,
+                    None => tag_name.name == name.name,
                 }
             }
             _ => false,
@@ -727,12 +690,12 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     /// assert_eq!(doc.root_element().default_namespace(), None);
     /// ```
     pub fn default_namespace(&self) -> Option<&str> {
-        self.namespaces().iter().find(|ns| ns.name.is_empty()).map(|v| v.uri.as_str())
+        self.namespaces().iter().find(|ns| ns.name.is_none()).map(|v| v.uri.as_str())
     }
 
     /// Returns element's namespace prefix.
     ///
-    /// Returns an empty prefix:
+    /// Returns `None`:
     /// - if the current node is not an element
     /// - if the current element has a default namespace
     /// - if the current element has no namespace
@@ -742,33 +705,30 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     /// ```
     /// let doc = roxmltree::Document::parse("<n:e xmlns:n='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), "n");
+    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), Some("n"));
     /// ```
     ///
     /// ```
     /// let doc = roxmltree::Document::parse("<e xmlns:n='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), "");
+    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), None);
     /// ```
     ///
     /// ```
     /// let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), "");
+    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), None);
     /// ```
-    pub fn resolve_tag_name_prefix(&self) -> &str {
+    pub fn resolve_tag_name_prefix(&self) -> Option<&str> {
         if !self.is_element() {
-            return "";
+            return None;
         }
 
-        let tag_ns = self.tag_name().ns;
+        let tag_ns = self.tag_name();
 
-        // Check for a default namespace first.
-        if self.default_namespace() == Some(&tag_ns) {
-            return "";
-        }
-
-        self.namespaces().iter().find(|ns| ns.uri.as_str() == tag_ns).map(|v| v.name).unwrap_or("")
+        // TODO: this
+        self.namespaces().iter().find(|ns| Some(ns.uri()) == tag_ns.namespace())
+            .map(|v| v.name).unwrap_or(None)
     }
 
     /// Returns a prefix for a given namespace URI.
@@ -780,12 +740,18 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().lookup_prefix("http://www.w3.org"), Some("n"));
     /// ```
+    ///
+    /// ```
+    /// let doc = roxmltree::Document::parse("<e xmlns:n=''/>").unwrap();
+    ///
+    /// assert_eq!(doc.root_element().lookup_prefix(""), Some("n"));
+    /// ```
     pub fn lookup_prefix(&self, uri: &str) -> Option<&str> {
         if uri == NS_XML_URI {
             return Some("xml");
         }
 
-        self.namespaces().iter().find(|ns| ns.uri.as_str() == uri).map(|v| v.name)
+        self.namespaces().iter().find(|ns| ns.uri.as_str() == uri).map(|v| v.name).unwrap_or(None)
     }
 
     /// Returns an URI for a given prefix.
@@ -795,9 +761,15 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     /// ```
     /// let doc = roxmltree::Document::parse("<e xmlns:n='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().lookup_namespace_uri("n"), Some("http://www.w3.org"));
+    /// assert_eq!(doc.root_element().lookup_namespace_uri(Some("n")), Some("http://www.w3.org"));
     /// ```
-    pub fn lookup_namespace_uri(&self, prefix: &str) -> Option<&str> {
+    ///
+    /// ```
+    /// let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
+    ///
+    /// assert_eq!(doc.root_element().lookup_namespace_uri(None), Some("http://www.w3.org"));
+    /// ```
+    pub fn lookup_namespace_uri(&self, prefix: Option<&str>) -> Option<&str> {
         self.namespaces().iter().find(|ns| ns.name == prefix).map(|v| v.uri.as_str())
     }
 

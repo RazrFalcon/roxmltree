@@ -35,7 +35,7 @@ fn main() {
     let mut uris = HashSet::new();
     for node in doc.root().descendants() {
         for ns in node.namespaces() {
-            uris.insert((ns.name().to_string(), ns.uri().to_string()));
+            uris.insert((ns.name().unwrap_or("\"\"").to_string(), ns.uri().to_string()));
         }
     }
     println!("Unique namespaces count: {}", uris.len());

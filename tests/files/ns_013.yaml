@@ -2,5 +2,5 @@ Document:
   - Element:
       tag_name: p@http://www.w3.org
       namespaces:
-        "": http://www.w3.org
+        None: http://www.w3.org
         t: http://www.w3.org

@@ -115,9 +115,9 @@ fn lookup_namespace_uri() {
 
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
-    assert_eq!(node.lookup_namespace_uri("n1"), Some("http://www.w3.org"));
-    assert_eq!(node.lookup_namespace_uri(""), Some("http://www.w4.org"));
-    assert_eq!(node.lookup_namespace_uri("n2"), None);
+    assert_eq!(node.lookup_namespace_uri(Some("n1")), Some("http://www.w3.org"));
+    assert_eq!(node.lookup_namespace_uri(None), Some("http://www.w4.org"));
+    assert_eq!(node.lookup_namespace_uri(Some("n2")), None);
 }
 
 #[test]

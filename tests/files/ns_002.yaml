@@ -4,4 +4,4 @@ Document:
       attributes:
         a: "b"
       namespaces:
-        "": http://www.w3.org/2000/svg
+        None: http://www.w3.org/2000/svg

@@ -5,5 +5,5 @@ Document:
         a: "b2"
         a@http://www.w3.org: "b1"
       namespaces:
-        "": http://www.w3.org
+        None: http://www.w3.org
         n1: http://www.w3.org

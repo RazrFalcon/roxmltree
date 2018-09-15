@@ -5,7 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
-### Added
-- `Attribute::has_namespace`.
+### Changed
+- `Attribute::namespace` will return `Option` now.
+- `ExpandedName::namespace` will return `Option` now.
+- `Namespace::name` will return `Option` now.
+- `Node::resolve_tag_name_prefix` will return `Option` now.
+- `Node::lookup_namespace_uri` accepts `Option<&str>` and not `&str` now.
+
+### Removed
+- `ExpandedName::has_namespace`. `ExpandedName::namespace` will return `Option` now.
 
 [Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.1.0...HEAD

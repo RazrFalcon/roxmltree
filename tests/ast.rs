@@ -126,20 +126,30 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                 NodeType::Element => {
                     writeln_indented!(depth, s, "- Element:");
 
-                    if child.tag_name().has_namespace() {
-                        writeln_indented!(depth + 2, s, "tag_name: {}@{}",
-                                          child.tag_name().name(), child.tag_name().namespace());
-                    } else {
-                        writeln_indented!(depth + 2, s, "tag_name: {}", child.tag_name().name());
+                    match child.tag_name().namespace() {
+                        Some(ns) => {
+                            if ns.is_empty() {
+                                writeln_indented!(depth + 2, s, "tag_name: {}", child.tag_name().name());
+                            } else {
+                                writeln_indented!(depth + 2, s, "tag_name: {}@{}",
+                                                  child.tag_name().name(), ns);
+                            }
+                        }
+                        None => {
+                            writeln_indented!(depth + 2, s, "tag_name: {}", child.tag_name().name());
+                        }
                     }
 
                     if !child.attributes().is_empty() {
                         let mut attrs = Vec::new();
                         for attr in child.attributes() {
-                            if !attr.namespace().is_empty() {
-                                attrs.push((format!("{}@{}", attr.name(), attr.namespace()), attr.value()));
-                            } else {
-                                attrs.push((attr.name().to_string(), attr.value()));
+                            match attr.namespace() {
+                                Some(ns) => {
+                                    attrs.push((format!("{}@{}", attr.name(), ns), attr.value()));
+                                }
+                                None => {
+                                    attrs.push((attr.name().to_string(), attr.value()));
+                                }
                             }
                         }
                         attrs.sort_by(|a, b| a.0.cmp(&b.0));
@@ -153,7 +163,7 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                     if !child.namespaces().is_empty() {
                         let mut ns_list = Vec::new();
                         for ns in child.namespaces() {
-                            let name = if ns.name().is_empty() { "\"\"" } else { ns.name() };
+                            let name = ns.name().unwrap_or("None");
                             let uri = if ns.uri().is_empty() { "\"\"" } else { ns.uri() };
                             ns_list.push((name, uri));
                         }

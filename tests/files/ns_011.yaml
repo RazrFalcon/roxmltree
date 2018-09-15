@@ -4,4 +4,4 @@ Document:
       attributes:
         a: "b"
       namespaces:
-        "": ""
+        None: ""

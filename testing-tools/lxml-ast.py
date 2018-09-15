@@ -68,9 +68,9 @@ def print_node(node, depth):
         ns_list = []
         for name, value in node.nsmap.items():
             if not name and not value:
-                ns_list.append(['""', '""'])
+                ns_list.append(['None', '""'])
             elif not name:
-                ns_list.append(['""', value])
+                ns_list.append(['None', value])
             elif not value:
                 ns_list.append([name, '""'])
             else:

@@ -228,7 +228,7 @@ impl<'d> TagNameSpan<'d> {
 fn parse(text: &str) -> Result<Document, Error> {
     let mut pd = ParserData {
         attrs_start_idx: 0,
-        ns_start_idx: 2,
+        ns_start_idx: 1,
         tmp_attrs: Vec::new(),
         entities: Vec::new(),
         u_buffer: Vec::with_capacity(32),
@@ -254,8 +254,8 @@ fn parse(text: &str) -> Result<Document, Error> {
         orig_pos: 0,
     });
 
-    doc.namespaces.push_ns("", String::new());
-    doc.namespaces.push_ns("xml", NS_XML_URI.to_string());
+//    doc.namespaces.push_ns("", String::new());
+    doc.namespaces.push_ns(Some("xml"), NS_XML_URI.to_string());
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
@@ -368,14 +368,14 @@ fn process_attribute<'d>(
         }
 
         // Check for duplicated namespaces.
-        if doc.namespaces[pd.ns_start_idx..].iter().any(|attr| attr.name == local_str) {
+        if doc.namespaces[pd.ns_start_idx..].iter().any(|attr| attr.name == Some(local_str)) {
             let pos = err_pos_from_qname(prefix, local);
             return Err(Error::DuplicatedNamespace(local_str.to_string(), pos));
         }
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces.push_ns(local_str, value);
+            doc.namespaces.push_ns(Some(local_str), value);
         }
     } else if local_str == "xmlns" {
         // The xml namespace MUST NOT be declared as the default namespace.
@@ -390,7 +390,7 @@ fn process_attribute<'d>(
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        doc.namespaces.push_ns("", value);
+        doc.namespaces.push_ns(None, value);
     } else {
         pd.tmp_attrs.push(AttributeData { prefix, prefix_str, local, local_str,
                                           value_pos: orig_pos, value });
@@ -454,11 +454,11 @@ fn process_element<'d>(
             let ns = if attr.prefix_str == "xml" {
                 // The prefix 'xml' is by definition bound to the namespace name
                 // http://www.w3.org/XML/1998/namespace.
-                doc.namespaces.xml_uri()
+                Some(doc.namespaces.xml_uri())
             } else if attr.prefix_str.is_empty() {
                 // 'The namespace name for an unprefixed attribute name
                 // always has no value.'
-                doc.namespaces.null_uri()
+                None
             } else {
                 doc.namespaces.get_by_prefix(namespaces.clone(), attr.prefix_str)
             };
@@ -511,7 +511,7 @@ fn process_element<'d>(
 
             if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.0].kind {
                 let parent_node = doc.get(*parent_id);
-                let parent_prefix = parent_node.resolve_tag_name_prefix();
+                let parent_prefix = parent_node.resolve_tag_name_prefix().unwrap_or("");
 
                 if prefix_str != parent_prefix || local_str != tag_name.name {
                     return Err(Error::UnexpectedCloseTag {
