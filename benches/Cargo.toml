@@ -1,0 +1,19 @@
+[package]
+name = "benchmark"
+version = "0.1.0"
+workspace = ".."
+
+[dependencies]
+roxmltree = { path = "../" }
+xmlparser = "0.6.0"
+bencher = "0.1"
+xmltree = "0.8"
+sxd-document = "0.2.6"
+elementtree = "0.5.0"
+treexml = "0.7.0"
+xml-rs = "0.8.0"
+
+[[bin]]
+name = "benchmark"
+path = "xml.rs"
+harness = false

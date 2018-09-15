@@ -106,7 +106,7 @@ test medium_xmlrs        ... bench:  10,391,411 ns/iter (+/- 24,738)
 
 *Note:* tree crates may use different *xml-rs* crate versions.
 
-You can try it yourself using `cargo bench --features benchmark`
+You can try it yourself by running `cargo run --release` in the `benches` dir.
 
 [xml-rs]: https://crates.io/crates/xml-rs
 [xmlparser]: https://crates.io/crates/xmlparser

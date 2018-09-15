@@ -35,7 +35,7 @@ fn load_data(path: &str) -> Vec<u8> {
 
 
 fn medium_xmlparser(bencher: &mut Bencher) {
-    let text = load_string("benches/medium.svg");
+    let text = load_string("medium.svg");
     bencher.iter(|| {
         for t in xmlparser::Tokenizer::from(text.as_str()) {
             let _ = t.unwrap();
@@ -44,7 +44,7 @@ fn medium_xmlparser(bencher: &mut Bencher) {
 }
 
 fn large_xmlparser(bencher: &mut Bencher) {
-    let text = load_string("benches/large.plist");
+    let text = load_string("large.plist");
     bencher.iter(|| {
         for t in xmlparser::Tokenizer::from(text.as_str()) {
             let _ = t.unwrap();
@@ -54,7 +54,7 @@ fn large_xmlparser(bencher: &mut Bencher) {
 
 
 fn medium_xmlrs(bencher: &mut Bencher) {
-    let text = load_string("benches/medium.svg");
+    let text = load_string("medium.svg");
     bencher.iter(|| {
         for event in xml::EventReader::new(text.as_bytes()) {
             let _ = event.unwrap();
@@ -63,7 +63,7 @@ fn medium_xmlrs(bencher: &mut Bencher) {
 }
 
 fn large_xmlrs(bencher: &mut Bencher) {
-    let text = load_string("benches/large.plist");
+    let text = load_string("large.plist");
     bencher.iter(|| {
         for event in xml::EventReader::new(text.as_bytes()) {
             let _ = event.unwrap();
@@ -73,56 +73,56 @@ fn large_xmlrs(bencher: &mut Bencher) {
 
 
 fn medium_roxmltree(bencher: &mut Bencher) {
-    let text = load_string("benches/medium.svg");
+    let text = load_string("medium.svg");
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
 fn large_roxmltree(bencher: &mut Bencher) {
-    let text = load_string("benches/large.plist");
+    let text = load_string("large.plist");
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
 
 fn medium_xmltree(bencher: &mut Bencher) {
-    let text = load_string("benches/medium.svg");
+    let text = load_string("medium.svg");
     bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
 }
 
 fn large_xmltree(bencher: &mut Bencher) {
-    let text = load_string("benches/large.plist");
+    let text = load_string("large.plist");
     bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
 }
 
 
 fn medium_sdx_document(bencher: &mut Bencher) {
-    let text = load_string("benches/medium.svg");
+    let text = load_string("medium.svg");
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
 
 fn large_sdx_document(bencher: &mut Bencher) {
-    let text = load_string("benches/large.plist");
+    let text = load_string("large.plist");
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
 
 
 fn medium_elementtree(bencher: &mut Bencher) {
-    let data = load_data("benches/medium.svg");
+    let data = load_data("medium.svg");
     bencher.iter(|| elementtree::Element::from_reader(&data[..]).unwrap())
 }
 
 fn large_elementtree(bencher: &mut Bencher) {
-    let data = load_data("benches/large.plist");
+    let data = load_data("large.plist");
     bencher.iter(|| elementtree::Element::from_reader(&data[..]).unwrap())
 }
 
 
 fn medium_treexml(bencher: &mut Bencher) {
-    let data = load_data("benches/medium.svg");
+    let data = load_data("medium.svg");
     bencher.iter(|| treexml::Document::parse(&data[..]).unwrap())
 }
 
 fn large_treexml(bencher: &mut Bencher) {
-    let data = load_data("benches/large.plist");
+    let data = load_data("large.plist");
     bencher.iter(|| treexml::Document::parse(&data[..]).unwrap())
 }
 
