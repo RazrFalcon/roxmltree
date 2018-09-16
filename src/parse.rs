@@ -735,7 +735,7 @@ fn _normalize_attribute(
     let mut s = Stream::from(text);
     while !s.at_end() {
         // `unwrap` is safe, because we already checked that stream is not at end.
-        let c = s.curr_byte().unwrap();
+        let c = s.curr_byte_unchecked();
 
         // Check for character/entity references.
         if c == b'&' {

@@ -13,7 +13,7 @@ elementtree = "0.5.0"
 treexml = "0.7.0"
 xml-rs = "0.8.0"
 
-[[bin]]
+[[bench]]
 name = "benchmark"
 path = "xml.rs"
 harness = false

@@ -78,17 +78,17 @@ Notes:
 ## Performance
 
 ```text
-test large_roxmltree     ... bench:   8,807,741 ns/iter (+/- 70,532)
-test large_sdx_document  ... bench:   9,777,811 ns/iter (+/- 242,912)
-test large_xmltree       ... bench:  31,041,407 ns/iter (+/- 27,171)
-test large_treexml       ... bench:  32,048,129 ns/iter (+/- 29,860)
-test large_elementtree   ... bench:  32,073,296 ns/iter (+/- 68,433)
+test large_roxmltree     ... bench:   8,980,381 ns/iter (+/- 43,420)
+test large_sdx_document  ... bench:  10,092,993 ns/iter (+/- 224,417)
+test large_xmltree       ... bench:  32,025,637 ns/iter (+/- 49,911)
+test large_treexml       ... bench:  32,577,612 ns/iter (+/- 88,429)
+test large_elementtree   ... bench:  32,615,187 ns/iter (+/- 74,479)
 
-test medium_roxmltree    ... bench:   1,735,369 ns/iter (+/- 3,218)
-test medium_sdx_document ... bench:   3,569,814 ns/iter (+/- 10,518)
-test medium_treexml      ... bench:  11,163,737 ns/iter (+/- 26,084)
-test medium_xmltree      ... bench:  11,267,754 ns/iter (+/- 70,971)
-test medium_elementtree  ... bench:  11,629,513 ns/iter (+/- 27,055)
+test medium_roxmltree    ... bench:   1,526,123 ns/iter (+/- 2,261)
+test medium_sdx_document ... bench:   3,710,940 ns/iter (+/- 12,006)
+test medium_treexml      ... bench:  11,505,751 ns/iter (+/- 12,405)
+test medium_xmltree      ... bench:  11,686,290 ns/iter (+/- 34,964)
+test medium_elementtree  ... bench:  11,993,620 ns/iter (+/- 10,132)
 ```
 
 *roxmltree* uses [xmlparser] internally,
@@ -97,24 +97,23 @@ while *sdx-document* uses its own implementation and *xmltree*, *elementtree* an
 Here is a comparison between *xmlparser* and *xml-rs*:
 
 ```text
-test large_xmlparser     ... bench:   2,019,245 ns/iter (+/- 693)
-test large_xmlrs         ... bench:  29,086,480 ns/iter (+/- 22,741)
+test large_xmlparser     ... bench:   2,050,485 ns/iter (+/- 1,105)
+test large_xmlrs         ... bench:  29,378,340 ns/iter (+/- 125,250)
 
-test medium_xmlparser    ... bench:     434,140 ns/iter (+/- 231)
-test medium_xmlrs        ... bench:  10,391,411 ns/iter (+/- 24,738)
+test medium_xmlparser    ... bench:     431,782 ns/iter (+/- 546)
+test medium_xmlrs        ... bench:  10,612,855 ns/iter (+/- 9,050)
 ```
 
 *Note:* tree crates may use different *xml-rs* crate versions.
 
-You can try it yourself by running `cargo run --release` in the `benches` dir.
+You can try it yourself by running `cargo bench` in the `benches` dir.
 
 [xml-rs]: https://crates.io/crates/xml-rs
 [xmlparser]: https://crates.io/crates/xmlparser
 
 ## Safety
 
-- This library must not panic. Any panic should be considered a critical bug
-   and reported.
+- This library must not panic. Any panic should be considered a critical bug and reported.
 - This library forbids `unsafe` code.
 
 ## Non-goals

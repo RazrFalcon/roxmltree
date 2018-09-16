@@ -15,7 +15,9 @@ readme = "README.md"
 members = ["benches"]
 
 [dependencies]
-xmlparser = "0.6.0"
+#xmlparser = "0.6.0"
+xmlparser = { git = "https://github.com/RazrFalcon/xmlparser.git", rev = "8a075b2" }
+#xmlparser = { path = "../xmlparser" }
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
