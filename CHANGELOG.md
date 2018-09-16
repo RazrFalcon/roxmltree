@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `Namespace::name` will return `Option` now.
 - `Node::resolve_tag_name_prefix` will return `Option` now.
 - `Node::lookup_namespace_uri` accepts `Option<&str>` and not `&str` now.
+- Performance optimizations.
 
 ### Removed
 - `ExpandedName::has_namespace`. `ExpandedName::namespace` will return `Option` now.

@@ -3,6 +3,7 @@ use std::error;
 use std::str;
 use std::io::Write;
 use std::mem;
+use std::borrow::Cow;
 
 use xmlparser::{
     self,
@@ -151,7 +152,7 @@ struct AttributeData<'d> {
     local: StrSpan<'d>,
     local_str: &'d str,
     value_pos: usize,
-    value: String,
+    value: Cow<'d, str>,
 }
 
 impl<'d> Document<'d> {
@@ -375,7 +376,7 @@ fn process_attribute<'d>(
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces.push_ns(Some(local_str), value);
+            doc.namespaces.push_ns(Some(local_str), value.into());
         }
     } else if local_str == "xmlns" {
         // The xml namespace MUST NOT be declared as the default namespace.
@@ -390,7 +391,7 @@ fn process_attribute<'d>(
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        doc.namespaces.push_ns(None, value);
+        doc.namespaces.push_ns(None, value.into());
     } else {
         pd.tmp_attrs.push(AttributeData { prefix, prefix_str, local, local_str,
                                           value_pos: orig_pos, value });
@@ -479,7 +480,7 @@ fn process_element<'d>(
 
             doc.attrs.push(Attribute {
                 name: attr_name,
-                value: mem::replace(&mut attr.value, String::new()),
+                value: mem::replace(&mut attr.value, Cow::Borrowed("")),
                 attr_pos,
                 value_pos: attr.value_pos,
             });
@@ -713,16 +714,37 @@ fn process_cdata<'d>(
 }
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
-fn normalize_attribute(
-    text: StrSpan,
+fn normalize_attribute<'d>(
+    text: StrSpan<'d>,
     trim_spaces: bool,
     entities: &[(&str, StrSpan)],
     buffer: &mut Vec<u8>,
-) -> Result<String, Error> {
-    buffer.clear();
-    _normalize_attribute(text, trim_spaces, entities, false, buffer)?;
-    // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
-    Ok(str::from_utf8(buffer).unwrap().to_owned())
+) -> Result<Cow<'d, str>, Error> {
+    if is_normalization_required(text) {
+        buffer.clear();
+        _normalize_attribute(text, trim_spaces, entities, false, buffer)?;
+        // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
+        Ok(Cow::Owned(str::from_utf8(buffer).unwrap().to_owned()))
+    } else {
+        Ok(Cow::Borrowed(text.to_str()))
+    }
+}
+
+fn is_normalization_required(text: StrSpan) -> bool {
+    // We assume that `&` indicates an entity or a character reference.
+    // But in rare cases it can be just an another character.
+
+    fn check(c: u8) -> bool {
+        match c {
+              b'&'
+            | b'\t'
+            | b'\n'
+            | b'\r' => true,
+            _ => false,
+        }
+    }
+
+    text.to_str().bytes().any(check)
 }
 
 fn _normalize_attribute(
@@ -734,7 +756,7 @@ fn _normalize_attribute(
 ) -> Result<(), Error> {
     let mut s = Stream::from(text);
     while !s.at_end() {
-        // `unwrap` is safe, because we already checked that stream is not at end.
+        // Safe, because we already checked that stream is not at the end.
         let c = s.curr_byte_unchecked();
 
         // Check for character/entity references.

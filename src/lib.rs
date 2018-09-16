@@ -25,6 +25,7 @@ extern crate xmlparser;
 use std::fmt;
 use std::ops::{Deref, Range};
 use std::rc::Rc;
+use std::borrow::Cow;
 
 pub use xmlparser::TextPos;
 
@@ -259,7 +260,7 @@ struct NodeData<'d> {
 #[derive(PartialEq)]
 pub struct Attribute<'d> {
     name: ExpandedNameOwned<'d>,
-    value: String,
+    value: Cow<'d, str>,
     attr_pos: usize,
     value_pos: usize,
 }

@@ -78,13 +78,13 @@ Notes:
 ## Performance
 
 ```text
-test large_roxmltree     ... bench:   8,980,381 ns/iter (+/- 43,420)
+test large_roxmltree     ... bench:   8,859,229 ns/iter (+/- 17,173)
 test large_sdx_document  ... bench:  10,092,993 ns/iter (+/- 224,417)
 test large_xmltree       ... bench:  32,025,637 ns/iter (+/- 49,911)
 test large_treexml       ... bench:  32,577,612 ns/iter (+/- 88,429)
 test large_elementtree   ... bench:  32,615,187 ns/iter (+/- 74,479)
 
-test medium_roxmltree    ... bench:   1,526,123 ns/iter (+/- 2,261)
+test medium_roxmltree    ... bench:   1,095,610 ns/iter (+/- 2,544)
 test medium_sdx_document ... bench:   3,710,940 ns/iter (+/- 12,006)
 test medium_treexml      ... bench:  11,505,751 ns/iter (+/- 12,405)
 test medium_xmltree      ... bench:  11,686,290 ns/iter (+/- 34,964)
