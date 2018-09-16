@@ -27,6 +27,8 @@ use {
     PI,
 };
 
+const ENTITY_DEPTH: u8 = 10;
+
 
 /// A list of all possible errors.
 #[derive(Debug)]
@@ -62,17 +64,8 @@ pub enum Error {
     /// A reference to an entity that was not defined in the DTD.
     UnknownEntityReference(String, TextPos),
 
-    /// Nested entity references are not supported.
-    ///
-    /// Example:
-    /// ```xml
-    /// <!DOCTYPE test [
-    ///     <!ENTITY a '&b;'>
-    ///     <!ENTITY b 'text'>
-    /// ]>
-    /// <e a='&a;'/>
-    /// ```
-    NestedEntityReference(TextPos),
+    /// A possible entity reference loop.
+    EntityReferenceLoop(TextPos),
 
     /// An element has a duplicated attributes.
     ///
@@ -123,8 +116,8 @@ impl fmt::Display for Error {
             Error::UnknownEntityReference(ref name, pos) => {
                 write!(f, "unknown entity reference '{}' at {}", name, pos)
             }
-            Error::NestedEntityReference(pos) => {
-                write!(f, "nested entity reference detected at {}, it's not supported", pos)
+            Error::EntityReferenceLoop(pos) => {
+                write!(f, "a possible entity reference loop is detected at {}", pos)
             }
             Error::DuplicatedAttribute(ref name, pos) => {
                 write!(f, "attribute '{}' at {} is already defined", name, pos)
@@ -221,6 +214,10 @@ struct TagNameSpan<'d> {
 }
 
 impl<'d> TagNameSpan<'d> {
+    fn new_null() -> Self {
+        Self { prefix: StrSpan::from(""), name: StrSpan::from("") }
+    }
+
     fn new(prefix: StrSpan<'d>, name: StrSpan<'d>) -> Self {
         Self { prefix, name }
     }
@@ -255,13 +252,12 @@ fn parse(text: &str) -> Result<Document, Error> {
         orig_pos: 0,
     });
 
-//    doc.namespaces.push_ns("", String::new());
     doc.namespaces.push_ns(Some("xml"), NS_XML_URI.to_string());
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
-    let mut tag_name = TagNameSpan::new(StrSpan::from(""), StrSpan::from(""));
-    process_tokens(parser, false, parent_id, &mut tag_name, &mut pd, &mut doc)?;
+    let mut tag_name = TagNameSpan::new_null();
+    process_tokens(parser, 0, parent_id, &mut tag_name, &mut pd, &mut doc)?;
 
     if !doc.root().children().any(|n| n.is_element()) {
         return Err(Error::NoRootNode);
@@ -272,7 +268,7 @@ fn parse(text: &str) -> Result<Document, Error> {
 
 fn process_tokens<'d>(
     parser: xmlparser::Tokenizer<'d>,
-    nested: bool,
+    depth: u8,
     mut parent_id: NodeId,
     tag_name: &mut TagNameSpan<'d>,
     pd: &mut ParserData<'d>,
@@ -296,7 +292,7 @@ fn process_tokens<'d>(
             }
             xmlparser::Token::Text(text) |
             xmlparser::Token::Whitespaces(text) => {
-                process_text(text, parent_id, nested, pd, doc)?;
+                process_text(text, parent_id, depth, pd, doc)?;
             }
             xmlparser::Token::Cdata(text) => {
                 process_cdata(text, parent_id, pd, doc);
@@ -312,7 +308,7 @@ fn process_tokens<'d>(
                 *tag_name = TagNameSpan::new(prefix, local);
             }
             xmlparser::Token::Attribute((prefix, local), value) => {
-                process_attribute(prefix, local, value, pd, doc)?;
+                process_attribute(depth, prefix, local, value, pd, doc)?;
             }
             xmlparser::Token::ElementEnd(end) => {
                 process_element(*tag_name, end, &mut parent_id, pd, doc)?;
@@ -332,6 +328,7 @@ fn process_tokens<'d>(
 }
 
 fn process_attribute<'d>(
+    depth: u8,
     prefix: StrSpan<'d>,
     local: StrSpan<'d>,
     value: StrSpan<'d>,
@@ -341,7 +338,7 @@ fn process_attribute<'d>(
     let prefix_str = prefix.to_str();
     let local_str = local.to_str();
     let orig_pos = value.start();
-    let value = normalize_attribute(value, false, &pd.entities, &mut pd.u_buffer)?;
+    let value = normalize_attribute(depth, value, &pd.entities, &mut pd.u_buffer)?;
 
     if prefix_str == "xmlns" {
         // The xmlns namespace MUST NOT be declared as the default namespace.
@@ -550,10 +547,11 @@ fn process_element<'d>(
 fn process_text<'d>(
     text: StrSpan<'d>,
     parent_id: NodeId,
-    nested: bool,
+    depth: u8,
     pd: &mut ParserData<'d>,
     doc: &mut Document<'d>,
 ) -> Result<(), Error> {
+    let mut depth = depth;
     pd.u_buffer.clear();
 
     let mut s = Stream::from(text);
@@ -575,9 +573,9 @@ fn process_text<'d>(
                 }
             }
             NextChunk::Text(fragment) => {
-                if nested {
+                if depth > ENTITY_DEPTH {
                     let pos = s.gen_error_pos();
-                    return Err(Error::NestedEntityReference(pos));
+                    return Err(Error::EntityReferenceLoop(pos));
                 }
 
                 if !pd.u_buffer.is_empty() {
@@ -589,8 +587,9 @@ fn process_text<'d>(
                 let mut parser = xmlparser::Tokenizer::from(fragment);
                 parser.enable_fragment_mode();
 
-                let mut tag_name = TagNameSpan::new(StrSpan::from(""), StrSpan::from(""));
-                process_tokens(parser, true, parent_id, &mut tag_name, pd, doc)?;
+                let mut tag_name = TagNameSpan::new_null();
+                depth += 1;
+                process_tokens(parser, depth, parent_id, &mut tag_name, pd, doc)?;
                 pd.u_buffer.clear();
             }
         }
@@ -715,14 +714,14 @@ fn process_cdata<'d>(
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
 fn normalize_attribute<'d>(
+    depth: u8,
     text: StrSpan<'d>,
-    trim_spaces: bool,
     entities: &[(&str, StrSpan)],
     buffer: &mut Vec<u8>,
 ) -> Result<Cow<'d, str>, Error> {
     if is_normalization_required(text) {
         buffer.clear();
-        _normalize_attribute(text, trim_spaces, entities, false, buffer)?;
+        _normalize_attribute(text, entities, depth, buffer)?;
         // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
         Ok(Cow::Owned(str::from_utf8(buffer).unwrap().to_owned()))
     } else {
@@ -749,11 +748,12 @@ fn is_normalization_required(text: StrSpan) -> bool {
 
 fn _normalize_attribute(
     text: StrSpan,
-    trim_spaces: bool,
     entities: &[(&str, StrSpan)],
-    nested: bool,
+    depth: u8,
     buf: &mut Vec<u8>,
 ) -> Result<(), Error> {
+    let mut depth = depth;
+
     let mut s = Stream::from(text);
     while !s.at_end() {
         // Safe, because we already checked that stream is not at the end.
@@ -768,7 +768,7 @@ fn _normalize_attribute(
                     write!(&mut char_buf[..], "{}", ch).unwrap();
                     for b in &char_buf {
                         if *b != 0xFF {
-                            if nested {
+                            if depth > 0 {
                                 push_byte(*b, None, buf);
                             } else {
                                 buf.push(*b);
@@ -779,14 +779,15 @@ fn _normalize_attribute(
                     continue;
                 }
                 Some(Reference::EntityRef(name)) => {
-                    if nested {
+                    if depth > ENTITY_DEPTH {
                         let pos = s.gen_error_pos();
-                        return Err(Error::NestedEntityReference(pos));
+                        return Err(Error::EntityReferenceLoop(pos));
                     }
 
                     match entities.iter().find(|v| v.0 == name) {
                         Some(v) => {
-                            _normalize_attribute(v.1, trim_spaces, entities, true, buf)?;
+                            depth += 1;
+                            _normalize_attribute(v.1, entities, depth, buf)?;
                         }
                         None => {
                             let pos = s.gen_error_pos();

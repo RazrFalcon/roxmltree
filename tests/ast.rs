@@ -36,7 +36,6 @@ impl HasExtension for path::Path {
 
 // List of not yet supported test cases.
 static IGNORE: &[&str] = &[
-    "entity_007.xml",
     "tree_003.xml",
 ];
 

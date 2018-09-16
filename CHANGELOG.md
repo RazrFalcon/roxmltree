@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `Error::EntityReferenceLoop`.
+- Nested entity references.
+
 ### Changed
 - `Attribute::namespace` will return `Option` now.
 - `ExpandedName::namespace` will return `Option` now.
@@ -15,5 +19,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Removed
 - `ExpandedName::has_namespace`. `ExpandedName::namespace` will return `Option` now.
+- `Error::NestedEntityReference`.
 
 [Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.1.0...HEAD

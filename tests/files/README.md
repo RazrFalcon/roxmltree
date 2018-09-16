@@ -30,6 +30,8 @@
 - entity_err_002 - recursive entity references
 - entity_err_003 - reference to a close tag
 - entity_err_004 - reference to a close tag
+- entity_err_005 - billion laughs
+- entity_err_006 - billion laughs
 - ns_001 - attributes with different namespaces
 - ns_002 - attribute is not affected by the default namespace
 - ns_003 - attributes with different namespaces
