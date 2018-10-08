@@ -15,7 +15,7 @@ License: ISC.
 
 #![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
 
-#![doc(html_root_url = "https://docs.rs/roxmltree/0.1.0")]
+#![doc(html_root_url = "https://docs.rs/roxmltree/0.2.0")]
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

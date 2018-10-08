@@ -31,7 +31,7 @@ Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/bl
 | ------------------------------- | :--------------: | :--------------: | :--------------: | :--------------: | :--------------: |
 | Element namespace resolving     | ✔                | ✔                | ✔               | ~<sup>1</sup>     |                  |
 | Attribute namespace resolving   | ✔                |                  |                  | ✔                |                  |
-| [Entity references]             | ✔<sup>2</sup>    | ⚠                | ⚠                | ⚠             | ⚠                |
+| [Entity references]             | ✔                | ⚠                | ⚠                | ⚠             | ⚠                |
 | [Character references]          | ✔                | ✔                | ✔                | ✔                | ✔                |
 | [Attribute-Value normalization] | ✔                |                  |                  |                  |                  |
 | Comments                        | ✔                |                  |                  | ✔                |                  |
@@ -39,14 +39,14 @@ Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/bl
 | UTF-8 BOM                       | ✔                | ⚠               | ⚠               | ⚠               | ⚠                |
 | Non UTF-8 input                 |                  |                  |                  |                  |                  |
 | Complete DTD support            |                  |                  |                  |                  |                  |
-| Position preserving<sup>3</sup> | ✔                |                 |                 |                 |                  |
+| Position preserving<sup>2</sup> | ✔                |                 |                 |                 |                  |
 | `xml:space`                     |                  |                  |                  |                  |                  |
 | Tree modifications              |                  | ✔                | ✔                | ✔                | ✔                |
 | Writing                         |                  | ✔                | ✔                | ✔                | ✔                |
-| No **unsafe**                   | ✔                | ✔                | ~<sup>4</sup>    |                  | ✔                |
-| Size overhead<sup>5</sup>       | **~60KiB**       | ~80KiB           | ~96KiB           | ~130KiB          | ~110KiB          |
+| No **unsafe**                   | ✔                | ✔                | ~<sup>3</sup>    |                  | ✔                |
+| Size overhead<sup>4</sup>       | **~62KiB**       | ~80KiB           | ~96KiB           | ~130KiB          | ~110KiB          |
 | Dependencies                    | **1**            | 2                | 18               | 2                | 14               |
-| Tested version                  | 0.1.0            | 0.8.0            | 0.5.0            | 0.2.6            | 0.7.0            |
+| Tested version                  | 0.2.0            | 0.8.0            | 0.5.0            | 0.2.6            | 0.7.0            |
 | License                         | MIT / Apache-2.0 | MIT              | BSD-3-Clause     | MIT              | MIT              |
 
 Legend:
@@ -59,12 +59,11 @@ Legend:
 Notes:
 
 1. No default namespace propagation.
-2. Nested/indirect entity references are not supported yet.
-3. *roxmltree* keeps all node and attribute positions in the original document,
+2. *roxmltree* keeps all node and attribute positions in the original document,
    so you can easily retrieve it if you need it.
    See [examples/print_pos.rs](examples/print_pos.rs) for details.
-4. In the `string_cache` crate.
-5. Binary size overhead according to [cargo-bloat](https://github.com/RazrFalcon/cargo-bloat).
+3. In the `string_cache` crate.
+4. Binary size overhead according to [cargo-bloat](https://github.com/RazrFalcon/cargo-bloat).
 
 [Entity references]: https://www.w3.org/TR/REC-xml/#dt-entref
 [Character references]: https://www.w3.org/TR/REC-xml/#NT-CharRef
