@@ -765,9 +765,10 @@ fn _normalize_attribute(
                 Some(Reference::CharRef(ch)) => {
                     for b in CharToBytes::new(ch) {
                         if depth > 0 {
-                            // TODO: explain
                             push_byte(b, None, buffer);
                         } else {
+                            // Characters not from entity should be added as is.
+                            // Not sure why...
                             buffer.push(b);
                         }
                     }

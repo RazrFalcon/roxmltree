@@ -82,9 +82,6 @@ def print_node(node, depth):
             print_ind(depth + 3, '{}: {}'.format(name, value))
 
     if len(node):
-        tail = node[-1].tail
-
-    if len(node):
         print_ind(depth + 2, 'children:')
 
         if node.text:
@@ -92,12 +89,12 @@ def print_node(node, depth):
 
         for child in node:
             print_node(child, depth + 3)
-
-        if tail:
-            print_ind(depth + 3, '- Text: "{}"'.format(escape_text(tail)))
     elif node.text:
         print_ind(depth + 2, 'children:')
         print_ind(depth + 3, '- Text: "{}"'.format(escape_text(node.text)))
+
+    if node.tail:
+        print_ind(depth, '- Text: "{}"'.format(escape_text(node.tail)))
 
 
 tree = etree.parse(sys.argv[1])
