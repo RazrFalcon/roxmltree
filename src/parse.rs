@@ -768,7 +768,7 @@ fn _normalize_attribute(
                             push_byte(b, None, buffer);
                         } else {
                             // Characters not from entity should be added as is.
-                            // Not sure why...
+                            // Not sure why... At least `lxml` produces the same results.
                             buffer.push(b);
                         }
                     }

@@ -26,6 +26,7 @@
 - entity_008 - entity reference to an element
 - entity_009 - entity reference to a mixed content
 - entity_010 - entity reference to an element with an entity reference
+- entity_011 - character and entity references in attributes
 - entity_err_001 - unknown entity reference
 - entity_err_002 - recursive entity references
 - entity_err_003 - reference to a close tag
@@ -65,6 +66,7 @@
 - text_007 - '\r\n\r\n' text
 - text_008 - only whitespaces
 - text_009 - escaped text
+- text_010 - text around elements
 - tree_001 - all node types
 - tree_002 - BOM
 - tree_003 - Windows-1251 encoding
