@@ -1,7 +1,6 @@
 use std::fmt;
 use std::error;
 use std::str;
-use std::io::Write;
 use std::mem;
 use std::borrow::Cow;
 
@@ -198,12 +197,17 @@ impl<'d> Document<'d> {
     }
 }
 
+struct Entity<'d>  {
+    name: &'d str,
+    value: StrSpan<'d>,
+}
+
 struct ParserData<'d> {
     attrs_start_idx: usize,
     ns_start_idx: usize,
     tmp_attrs: Vec<AttributeData<'d>>,
-    entities: Vec<(&'d str, StrSpan<'d>)>,
-    u_buffer: Vec<u8>,
+    entities: Vec<Entity<'d>>,
+    buffer: Vec<u8>,
     prev_node_type: Option<xmlparser::Token<'d>>,
 }
 
@@ -229,13 +233,15 @@ fn parse(text: &str) -> Result<Document, Error> {
         ns_start_idx: 1,
         tmp_attrs: Vec::new(),
         entities: Vec::new(),
-        u_buffer: Vec::with_capacity(32),
+        buffer: Vec::with_capacity(32),
         prev_node_type: None,
     };
 
+    // Trying to guess rough nodes and attributes amount.
     let nodes_capacity = text.bytes().filter(|c| *c == b'<').count();
     let attributes_capacity = text.bytes().filter(|c| *c == b'=').count();
 
+    // Init document.
     let mut doc = Document {
         text,
         nodes: Vec::with_capacity(nodes_capacity),
@@ -243,6 +249,7 @@ fn parse(text: &str) -> Result<Document, Error> {
         namespaces: Namespaces(Vec::new()),
     };
 
+    // Add a root node.
     doc.nodes.push(NodeData {
         parent: None,
         prev_sibling: None,
@@ -315,7 +322,7 @@ fn process_tokens<'d>(
             }
             xmlparser::Token::EntityDeclaration(name, value) => {
                 if let xmlparser::EntityDefinition::EntityValue(value) = value {
-                    pd.entities.push((name.to_str(), value));
+                    pd.entities.push(Entity { name: name.to_str(), value });
                 }
             }
             _ => {}
@@ -338,7 +345,7 @@ fn process_attribute<'d>(
     let prefix_str = prefix.to_str();
     let local_str = local.to_str();
     let orig_pos = value.start();
-    let value = normalize_attribute(depth, value, &pd.entities, &mut pd.u_buffer)?;
+    let value = normalize_attribute(depth, value, &pd.entities, &mut pd.buffer)?;
 
     if prefix_str == "xmlns" {
         // The xmlns namespace MUST NOT be declared as the default namespace.
@@ -366,7 +373,7 @@ fn process_attribute<'d>(
         }
 
         // Check for duplicated namespaces.
-        if doc.namespaces[pd.ns_start_idx..].iter().any(|attr| attr.name == Some(local_str)) {
+        if doc.namespaces.exists(pd.ns_start_idx, Some(local_str)) {
             let pos = err_pos_from_qname(prefix, local);
             return Err(Error::DuplicatedNamespace(local_str.to_string(), pos));
         }
@@ -552,25 +559,16 @@ fn process_text<'d>(
     doc: &mut Document<'d>,
 ) -> Result<(), Error> {
     let mut depth = depth;
-    pd.u_buffer.clear();
+    pd.buffer.clear();
 
     let mut s = Stream::from(text);
     while !s.at_end() {
         match parse_next_chunk(&mut s, &pd.entities)? {
             NextChunk::Byte(c) => {
-                pd.u_buffer.push(c);
+                pd.buffer.push(c);
             }
             NextChunk::Char(c) => {
-                let mut buf = [0xFF; 4];
-                // `unwrap` is safe, `char` is 4 bytes long.
-                write!(&mut buf[..], "{}", c).unwrap();
-                for b in &buf {
-                    if *b == 0xFF {
-                        break;
-                    }
-
-                    pd.u_buffer.push(*b);
-                }
+                pd.buffer.extend(CharToBytes::new(c));
             }
             NextChunk::Text(fragment) => {
                 if depth > ENTITY_DEPTH {
@@ -578,10 +576,10 @@ fn process_text<'d>(
                     return Err(Error::EntityReferenceLoop(pos));
                 }
 
-                if !pd.u_buffer.is_empty() {
-                    let s = trim_new_lines(&pd.u_buffer);
+                if !pd.buffer.is_empty() {
+                    let s = trim_new_lines(&pd.buffer);
                     append_text(s, text.start(), parent_id, pd, doc);
-                    pd.u_buffer.clear();
+                    pd.buffer.clear();
                 }
 
                 let mut parser = xmlparser::Tokenizer::from(fragment);
@@ -590,15 +588,15 @@ fn process_text<'d>(
                 let mut tag_name = TagNameSpan::new_null();
                 depth += 1;
                 process_tokens(parser, depth, parent_id, &mut tag_name, pd, doc)?;
-                pd.u_buffer.clear();
+                pd.buffer.clear();
             }
         }
     }
 
-    if !pd.u_buffer.is_empty() {
-        let s = trim_new_lines(&pd.u_buffer);
+    if !pd.buffer.is_empty() {
+        let s = trim_new_lines(&pd.buffer);
         append_text(s, text.start(), parent_id, pd, doc);
-        pd.u_buffer.clear();
+        pd.buffer.clear();
     }
 
     Ok(())
@@ -608,7 +606,7 @@ fn append_text(
     text: String,
     orig_pos: usize,
     parent_id: NodeId,
-    pd: &mut ParserData,
+    pd: &ParserData,
     doc: &mut Document,
 ) {
     if let Some(xmlparser::Token::Cdata(_)) = pd.prev_node_type {
@@ -630,14 +628,16 @@ fn trim_new_lines(text: &[u8]) -> String {
 
     let mut i = 1;
     while i < text.len() {
-        let prev_byte = text[i - 1];
-        let curr_byte = text[i];
+        let (prev_byte, curr_byte) = (text[i - 1], text[i]);
 
-        if prev_byte == b'\r' && curr_byte == b'\n' {
+        if        prev_byte == b'\r' && curr_byte == b'\n' {
+            // \r\n -> \n
             text.remove(i - 1);
         } else if prev_byte == b'\r' && curr_byte != b'\n' {
+            // \r -> \n
             text[i - 1] = b'\n';
         } else if curr_byte == b'\r' && i == text.len() - 1 {
+            // \r at the end -> \n
             text[i] = b'\n';
         } else {
             i += 1;
@@ -656,11 +656,11 @@ enum NextChunk<'a> {
 
 fn parse_next_chunk<'a>(
     s: &mut Stream<'a>,
-    entities: &[(&str, StrSpan<'a>)],
+    entities: &[Entity<'a>],
 ) -> Result<NextChunk<'a>, Error> {
     debug_assert!(!s.at_end());
 
-    // `unwrap` is safe, because we already checked that stream is not at end.
+    // `unwrap` is safe, because we already checked that stream is not at the end.
     // But we have an additional `debug_assert` above just in case.
     let c = s.curr_byte().unwrap();
 
@@ -671,9 +671,9 @@ fn parse_next_chunk<'a>(
                 Ok(NextChunk::Char(ch))
             }
             Some(Reference::EntityRef(name)) => {
-                match entities.iter().find(|v| v.0 == name) {
-                    Some(v) => {
-                        Ok(NextChunk::Text(v.1))
+                match entities.iter().find(|e| e.name == name) {
+                    Some(entity) => {
+                        Ok(NextChunk::Text(entity.value))
                     }
                     None => {
                         let pos = s.gen_error_pos();
@@ -695,7 +695,7 @@ fn parse_next_chunk<'a>(
 fn process_cdata<'d>(
     cdata: StrSpan<'d>,
     parent_id: NodeId,
-    pd: &mut ParserData,
+    pd: &ParserData,
     doc: &mut Document<'d>,
 ) {
     match pd.prev_node_type {
@@ -716,10 +716,10 @@ fn process_cdata<'d>(
 fn normalize_attribute<'d>(
     depth: u8,
     text: StrSpan<'d>,
-    entities: &[(&str, StrSpan)],
+    entities: &[Entity],
     buffer: &mut Vec<u8>,
 ) -> Result<Cow<'d, str>, Error> {
-    if is_normalization_required(text) {
+    if is_normalization_required(&text) {
         buffer.clear();
         _normalize_attribute(text, entities, depth, buffer)?;
         // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
@@ -729,7 +729,7 @@ fn normalize_attribute<'d>(
     }
 }
 
-fn is_normalization_required(text: StrSpan) -> bool {
+fn is_normalization_required(text: &StrSpan) -> bool {
     // We assume that `&` indicates an entity or a character reference.
     // But in rare cases it can be just an another character.
 
@@ -748,9 +748,9 @@ fn is_normalization_required(text: StrSpan) -> bool {
 
 fn _normalize_attribute(
     text: StrSpan,
-    entities: &[(&str, StrSpan)],
+    entities: &[Entity],
     depth: u8,
-    buf: &mut Vec<u8>,
+    buffer: &mut Vec<u8>,
 ) -> Result<(), Error> {
     let mut depth = depth;
 
@@ -763,16 +763,12 @@ fn _normalize_attribute(
         if c == b'&' {
             match s.try_consume_reference() {
                 Some(Reference::CharRef(ch)) => {
-                    let mut char_buf = [0xFF; 4];
-                    // `unwrap` is safe, `char` is 4 bytes long.
-                    write!(&mut char_buf[..], "{}", ch).unwrap();
-                    for b in &char_buf {
-                        if *b != 0xFF {
-                            if depth > 0 {
-                                push_byte(*b, None, buf);
-                            } else {
-                                buf.push(*b);
-                            }
+                    for b in CharToBytes::new(ch) {
+                        if depth > 0 {
+                            // TODO: explain
+                            push_byte(b, None, buffer);
+                        } else {
+                            buffer.push(b);
                         }
                     }
 
@@ -784,10 +780,10 @@ fn _normalize_attribute(
                         return Err(Error::EntityReferenceLoop(pos));
                     }
 
-                    match entities.iter().find(|v| v.0 == name) {
-                        Some(v) => {
+                    match entities.iter().find(|e| e.name == name) {
+                        Some(entity) => {
                             depth += 1;
-                            _normalize_attribute(v.1, entities, depth, buf)?;
+                            _normalize_attribute(entity.value, entities, depth, buffer)?;
                         }
                         None => {
                             let pos = s.gen_error_pos();
@@ -805,7 +801,7 @@ fn _normalize_attribute(
             s.advance(1);
         }
 
-        push_byte(c, s.get_curr_byte(), buf);
+        push_byte(c, s.get_curr_byte(), buffer);
     }
 
     Ok(())
@@ -845,17 +841,50 @@ fn err_pos_from_qname(prefix: StrSpan, local: StrSpan) -> TextPos {
 
 fn err_pos_from_tag_name(prefix: StrSpan, local: StrSpan, close_tag: bool) -> TextPos {
     let mut pos = err_pos_from_qname(prefix, local);
-
-    if close_tag {
-        pos.col -= 2; // jump before '</'
-    } else {
-        pos.col -= 1; // jump before '<'
-    }
-
+    // jump before '<'
+    pos.col -= if close_tag { 2 } else { 1 };
     pos
 }
 
 fn orig_pos_from_tag_name(tag_name: &TagNameSpan) -> usize {
     let span = if tag_name.prefix.is_empty() { tag_name.name } else { tag_name.prefix };
     span.start() - 1 // jump before '<'
+}
+
+
+/// Iterate over `char` by `u8`.
+struct CharToBytes {
+    buf: [u8; 4],
+    idx: u8,
+}
+
+impl CharToBytes {
+    fn new(c: char) -> Self {
+        let mut buf = [0xFF; 4];
+        c.encode_utf8(&mut buf);
+
+        CharToBytes {
+            buf,
+            idx: 0,
+        }
+    }
+}
+
+impl Iterator for CharToBytes {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx < 4 {
+            let b = self.buf[self.idx as usize];
+
+            if b != 0xFF {
+                self.idx += 1;
+                return Some(b);
+            } else {
+                self.idx = 4;
+            }
+        }
+
+        None
+    }
 }
