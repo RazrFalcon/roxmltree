@@ -57,13 +57,8 @@ fn run() {
         }
     }
 
-    let mut args: Vec<String> = env::args().collect();
-
-    if let Some(idx) = args.iter().position(|x| *x == "--nocapture") {
-        args.remove(idx);
-    }
-
-    rustc_test::test_main(&args, tests);
+    let args: Vec<String> = env::args().collect();
+    rustc_test::test_main(&args[..1], tests);
 }
 
 fn create_test(path: path::PathBuf) -> TestDescAndFn {
@@ -87,7 +82,7 @@ fn actual_test(path: path::PathBuf) {
         }
     };
 
-    assert_eq!(TStr(&expected), TStr(&to_yaml(&doc)));
+    assert_eq!(TStr(&to_yaml(&doc)), TStr(&expected));
 }
 
 fn load_file(path: &path::Path) -> String {

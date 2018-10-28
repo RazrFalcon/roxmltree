@@ -561,14 +561,29 @@ fn process_text<'d>(
     let mut depth = depth;
     pd.buffer.clear();
 
+    let mut is_as_is = false;
     let mut s = Stream::from(text);
     while !s.at_end() {
         match parse_next_chunk(&mut s, &pd.entities)? {
             NextChunk::Byte(c) => {
-                pd.buffer.push(c);
+                if is_as_is {
+                    pd.buffer.push(c);
+                    is_as_is = false;
+                } else {
+                    push_byte_to_text(c, s.at_end(), &mut pd.buffer);
+                }
             }
             NextChunk::Char(c) => {
-                pd.buffer.extend(CharToBytes::new(c));
+                for b in CharToBytes::new(c) {
+                    if depth > 0 {
+                        push_byte_to_text(b, s.at_end(), &mut pd.buffer);
+                    } else {
+                        // Characters not from entity should be added as is.
+                        // Not sure why... At least `lxml` produces the same results.
+                        pd.buffer.push(b);
+                        is_as_is = true;
+                    }
+                }
             }
             NextChunk::Text(fragment) => {
                 if depth > ENTITY_DEPTH {
@@ -577,8 +592,9 @@ fn process_text<'d>(
                 }
 
                 if !pd.buffer.is_empty() {
-                    let s = trim_new_lines(&pd.buffer);
-                    append_text(s, text.start(), parent_id, pd, doc);
+                    is_as_is = false;
+
+                    append_text(text.start(), parent_id, pd, doc);
                     pd.buffer.clear();
                 }
 
@@ -594,8 +610,7 @@ fn process_text<'d>(
     }
 
     if !pd.buffer.is_empty() {
-        let s = trim_new_lines(&pd.buffer);
-        append_text(s, text.start(), parent_id, pd, doc);
+        append_text(text.start(), parent_id, pd, doc);
         pd.buffer.clear();
     }
 
@@ -603,49 +618,28 @@ fn process_text<'d>(
 }
 
 fn append_text(
-    text: String,
     orig_pos: usize,
     parent_id: NodeId,
     pd: &ParserData,
     doc: &mut Document,
 ) {
-    if let Some(xmlparser::Token::Cdata(_)) = pd.prev_node_type {
-        if let Some(node) = doc.nodes.iter_mut().last() {
-            if let NodeKind::Text(ref mut last_text) = node.kind {
-                last_text.push_str(&text);
+    // `unwrap` is safe, because the input text was already a valid UTF-8 string.
+    let text = str::from_utf8(&pd.buffer).unwrap();
+
+    match pd.prev_node_type {
+        Some(xmlparser::Token::Cdata(_)) |
+        Some(xmlparser::Token::Text(_)) |
+        Some(xmlparser::Token::Whitespaces(_)) => {
+            if let Some(node) = doc.nodes.iter_mut().last() {
+                if let NodeKind::Text(ref mut prev_text) = node.kind {
+                    prev_text.push_str(text);
+                }
             }
         }
-    } else {
-        doc.append(parent_id, NodeKind::Text(text), orig_pos);
-    }
-}
-
-// Translate \r\n and any \r that is not followed by \n to a single \n character.
-//
-// https://www.w3.org/TR/xml/#sec-line-ends
-fn trim_new_lines(text: &[u8]) -> String {
-    let mut text = text.to_vec();
-
-    let mut i = 1;
-    while i < text.len() {
-        let (prev_byte, curr_byte) = (text[i - 1], text[i]);
-
-        if        prev_byte == b'\r' && curr_byte == b'\n' {
-            // \r\n -> \n
-            text.remove(i - 1);
-        } else if prev_byte == b'\r' && curr_byte != b'\n' {
-            // \r -> \n
-            text[i - 1] = b'\n';
-        } else if curr_byte == b'\r' && i == text.len() - 1 {
-            // \r at the end -> \n
-            text[i] = b'\n';
-        } else {
-            i += 1;
+        _ => {
+            doc.append(parent_id, NodeKind::Text(text.to_string()), orig_pos);
         }
     }
-
-    // `unwrap` is safe, because the input text was already a valid UTF-8 string.
-    String::from_utf8(text).unwrap()
 }
 
 enum NextChunk<'a> {
@@ -765,7 +759,7 @@ fn _normalize_attribute(
                 Some(Reference::CharRef(ch)) => {
                     for b in CharToBytes::new(ch) {
                         if depth > 0 {
-                            push_byte(b, None, buffer);
+                            push_byte_to_attr(b, None, buffer);
                         } else {
                             // Characters not from entity should be added as is.
                             // Not sure why... At least `lxml` produces the same results.
@@ -802,13 +796,13 @@ fn _normalize_attribute(
             s.advance(1);
         }
 
-        push_byte(c, s.get_curr_byte(), buffer);
+        push_byte_to_attr(c, s.get_curr_byte(), buffer);
     }
 
     Ok(())
 }
 
-fn push_byte(mut c: u8, c2: Option<u8>, buf: &mut Vec<u8>) {
+fn push_byte_to_attr(mut c: u8, c2: Option<u8>, buf: &mut Vec<u8>) {
     // \r in \r\n should be ignored.
     if c == b'\r' && c2 == Some(b'\n') {
         return;
@@ -821,6 +815,26 @@ fn push_byte(mut c: u8, c2: Option<u8>, buf: &mut Vec<u8>) {
     };
 
     buf.push(c);
+}
+
+// Translate \r\n and any \r that is not followed by \n into a single \n character.
+//
+// https://www.w3.org/TR/xml/#sec-line-ends
+fn push_byte_to_text(c: u8, at_end: bool, buf: &mut Vec<u8>) {
+    if buf.last() == Some(&b'\r') {
+        let idx = buf.len() - 1;
+        buf[idx] = b'\n';
+
+        if at_end && c == b'\r' {
+            buf.push(b'\n');
+        } else if c != b'\n' {
+            buf.push(c);
+        }
+    } else if at_end && c == b'\r' {
+        buf.push(b'\n');
+    } else {
+        buf.push(c);
+    }
 }
 
 fn gen_qname_string(prefix: &str, local: &str) -> String {

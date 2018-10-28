@@ -215,6 +215,7 @@ pub enum NodeType {
     Text,
 }
 
+
 /// A processing instruction.
 #[derive(Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
