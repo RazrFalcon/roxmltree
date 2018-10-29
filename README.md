@@ -91,8 +91,8 @@ test medium_elementtree  ... bench:  11,550,227 ns/iter (+/- 17,991)
 ```
 
 *roxmltree* uses [xmlparser] internally,
-while *sdx-document* uses its own implementation and *xmltree*, *elementtree* and *treexml* use the
-[xml-rs] crate.
+while *sdx-document* uses its own implementation and *xmltree*, *elementtree*
+and *treexml* use the [xml-rs] crate.
 Here is a comparison between *xmlparser* and *xml-rs*:
 
 ```text

@@ -62,7 +62,6 @@ pub const NS_XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
 /// [`Node::node_type()`]: struct.Node.html#method.node_type
 /// [`Node::text()`]: struct.Node.html#method.text
 /// [`Node::tail()`]: struct.Node.html#method.tail
-#[derive(PartialEq)]
 pub struct Document<'d> {
     /// An original data.
     ///
@@ -232,7 +231,6 @@ pub struct PI<'d> {
 struct NodeId(usize);
 
 
-#[derive(PartialEq)]
 enum NodeKind<'d> {
     Root,
     Element {
@@ -246,7 +244,6 @@ enum NodeKind<'d> {
 }
 
 
-#[derive(PartialEq)]
 struct NodeData<'d> {
     parent: Option<NodeId>,
     prev_sibling: Option<NodeId>,
@@ -258,7 +255,6 @@ struct NodeData<'d> {
 
 
 /// An attribute.
-#[derive(PartialEq)]
 pub struct Attribute<'d> {
     name: ExpandedNameOwned<'d>,
     value: Cow<'d, str>,
@@ -344,6 +340,12 @@ impl<'d> Attribute<'d> {
     }
 }
 
+impl<'d> PartialEq for Attribute<'d> {
+    fn eq(&self, other: &Attribute<'d>) -> bool {
+        self.name == other.name && self.value == other.value
+    }
+}
+
 impl<'d> fmt::Debug for Attribute<'d> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "Attribute {{ name: {:?}, value: {:?} }}",
@@ -402,7 +404,6 @@ impl<'d> Namespace<'d> {
 }
 
 
-#[derive(PartialEq)]
 struct Namespaces<'d>(Vec<Namespace<'d>>);
 
 impl<'d> Namespaces<'d> {

@@ -151,8 +151,7 @@ fn get_element_by_id() {
 #[test]
 fn owner_document() {
     let doc = Document::parse("<svg/>").unwrap();
-    let elem = doc.root_element();
-    assert_eq!(*elem.document(), doc);
+    let _elem = doc.root_element();
 }
 
 // Node.parentElement
