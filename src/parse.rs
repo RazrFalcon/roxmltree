@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::borrow::{Cow, Borrow};
 use std::error;
 use std::fmt;
 use std::mem;
@@ -301,7 +301,9 @@ fn process_tokens<'d>(
                 process_text(text, parent_id, entity_depth, pd, doc)?;
             }
             xmlparser::Token::Cdata(text) => {
-                process_cdata(text, parent_id, pd, doc);
+                let cow_str = Cow::Borrowed(text.to_str());
+                append_text(cow_str, parent_id, text.start(), pd.after_text, doc);
+                pd.after_text = true;
             }
             xmlparser::Token::ElementStart(prefix, local) => {
                 if prefix.to_str() == "xmlns" {
@@ -559,9 +561,23 @@ fn process_text<'d>(
     pd: &mut ParserData<'d>,
     doc: &mut Document<'d>,
 ) -> Result<(), Error> {
-    let mut entity_depth = entity_depth;
+    // Add text as is if it has only valid characters.
+    if !text.to_str().bytes().any(|b| b == b'&' || b == b'\r') {
+        append_text(Cow::Borrowed(text.to_str()), parent_id, text.start(), pd.after_text, doc);
+        pd.after_text = true;
+        return Ok(());
+    }
+
+    fn _append_text(parent_id: NodeId, orig_pos: usize, pd: &mut ParserData, doc: &mut Document) {
+        let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
+        append_text(cow_text, parent_id, orig_pos, pd.after_text, doc);
+        pd.after_text = true;
+        pd.buffer.clear();
+    }
+
     pd.buffer.clear();
 
+    let mut entity_depth = entity_depth;
     let mut is_as_is = false; // TODO: explain
     let mut s = Stream::from(text);
     while !s.at_end() {
@@ -587,16 +603,15 @@ fn process_text<'d>(
                 }
             }
             NextChunk::Text(fragment) => {
+                is_as_is = false;
+
                 if entity_depth > ENTITY_DEPTH {
                     let pos = s.gen_error_pos();
                     return Err(Error::EntityReferenceLoop(pos));
                 }
 
                 if !pd.buffer.is_empty() {
-                    is_as_is = false;
-
-                    append_text(parent_id, text.start(), pd, doc);
-                    pd.buffer.clear();
+                    _append_text(parent_id, text.start(), pd, doc);
                 }
 
                 let mut parser = xmlparser::Tokenizer::from(fragment);
@@ -611,30 +626,34 @@ fn process_text<'d>(
     }
 
     if !pd.buffer.is_empty() {
-        append_text(parent_id, text.start(), pd, doc);
-        pd.buffer.clear();
+        _append_text(parent_id, text.start(), pd, doc);
     }
 
     Ok(())
 }
 
-fn append_text(
+fn append_text<'d>(
+    text: Cow<'d, str>,
     parent_id: NodeId,
     orig_pos: usize,
-    pd: &mut ParserData,
-    doc: &mut Document,
+    after_text: bool,
+    doc: &mut Document<'d>,
 ) {
-    let text = pd.buffer.to_str();
-
-    if pd.after_text {
+    if after_text {
         if let Some(node) = doc.nodes.iter_mut().last() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
-                prev_text.push_str(text);
+                match prev_text {
+                    Cow::Borrowed(..) => {
+                        *prev_text = Cow::Owned(prev_text.to_string() + text.borrow());
+                    }
+                    Cow::Owned(ref mut s) => {
+                        s.push_str(text.borrow());
+                    }
+                }
             }
         }
     } else {
-        pd.after_text = true;
-        doc.append(parent_id, NodeKind::Text(text.to_string()), orig_pos);
+        doc.append(parent_id, NodeKind::Text(text), orig_pos);
     }
 }
 
@@ -682,24 +701,6 @@ fn parse_next_chunk<'a>(
     }
 }
 
-fn process_cdata<'d>(
-    cdata: StrSpan<'d>,
-    parent_id: NodeId,
-    pd: &mut ParserData,
-    doc: &mut Document<'d>,
-) {
-    if pd.after_text {
-        if let Some(node) = doc.nodes.iter_mut().last() {
-            if let NodeKind::Text(ref mut text) = node.kind {
-                text.push_str(cdata.to_str());
-            }
-        }
-    } else {
-        pd.after_text = true;
-        doc.append(parent_id, NodeKind::Text(cdata.to_str().to_owned()), cdata.start());
-    }
-}
-
 // https://www.w3.org/TR/REC-xml/#AVNormalize
 fn normalize_attribute<'d>(
     entity_depth: u8,
@@ -710,7 +711,6 @@ fn normalize_attribute<'d>(
     if is_normalization_required(&text) {
         buffer.clear();
         _normalize_attribute(text, entities, entity_depth, buffer)?;
-        // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
         Ok(Cow::Owned(buffer.to_str().to_owned()))
     } else {
         Ok(Cow::Borrowed(text.to_str()))

@@ -77,7 +77,7 @@ Notes:
 ## Performance
 
 ```text
-test large_roxmltree     ... bench:   8,808,300 ns/iter (+/- 173,019)
+test large_roxmltree     ... bench:   5,609,303 ns/iter (+/- 105,511)
 test large_sdx_document  ... bench:  10,299,996 ns/iter (+/- 315,027)
 test large_xmltree       ... bench:  32,797,800 ns/iter (+/- 134,016)
 test large_treexml       ... bench:  31,380,063 ns/iter (+/- 71,732)

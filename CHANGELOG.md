@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Changed
+- Store text nodes as `&str` when possible. On an XML with a lot of simple text can be ~2x faster.
 - `Document` no longer implements `PartialEq`.
 
 ### Fixed

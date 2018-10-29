@@ -240,7 +240,7 @@ enum NodeKind<'d> {
     },
     PI(PI<'d>),
     Comment(&'d str),
-    Text(String),
+    Text(Cow<'d, str>),
 }
 
 
