@@ -642,7 +642,7 @@ fn append_text<'d>(
     if after_text {
         if let Some(node) = doc.nodes.iter_mut().last() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
-                match prev_text {
+                match *prev_text {
                     Cow::Borrowed(..) => {
                         *prev_text = Cow::Owned(prev_text.to_string() + text.borrow());
                     }
