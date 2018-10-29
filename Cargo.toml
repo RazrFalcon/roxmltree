@@ -19,7 +19,7 @@ exclude = ["testing-tools"]
 doctest = true
 
 [dependencies]
-xmlparser = "0.6.1"
+xmlparser = "0.7"
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
