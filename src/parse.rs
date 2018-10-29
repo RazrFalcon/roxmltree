@@ -285,13 +285,12 @@ fn process_tokens<'d>(
         let token = token?;
         match token {
             xmlparser::Token::ProcessingInstruction(target, content) => {
-                doc.append(parent_id,
-                    NodeKind::PI(PI {
-                        target: target.to_str(),
-                        value: content.map(|v| v.to_str()),
-                    }),
-                    target.start() - 2, // jump before '<?'
-                );
+                let orig_pos = target.start() - 2; // jump before '<?'
+                let pi = NodeKind::PI(PI {
+                    target: target.to_str(),
+                    value: content.map(|v| v.to_str()),
+                });
+                doc.append(parent_id, pi, orig_pos);
             }
             xmlparser::Token::Comment(text) => {
                 let orig_pos = text.start() - 4; // jump before '<!--'
@@ -423,7 +422,7 @@ fn process_element<'d>(
         // <root>&p;</root>
 
         if let xmlparser::ElementEnd::Close(prefix, local) = end_token {
-            return Err(Error::UnexpectedEntityCloseTag(err_pos_from_tag_name(prefix, local, true)));
+            return Err(Error::UnexpectedEntityCloseTag(err_pos_for_close_tag(prefix, local)));
         } else {
             unreachable!("should be already checked by the xmlparser");
         }
@@ -482,11 +481,7 @@ fn process_element<'d>(
                 return Err(Error::DuplicatedAttribute(attr.local_str.to_string(), pos));
             }
 
-            let attr_pos = if attr.prefix.is_empty() {
-                attr.local.start()
-            } else {
-                attr.prefix.start()
-            };
+            let attr_pos = if attr.prefix.is_empty() { attr.local } else { attr.prefix }.start();
 
             doc.attrs.push(Attribute {
                 name: attr_name,
@@ -528,7 +523,7 @@ fn process_element<'d>(
                     return Err(Error::UnexpectedCloseTag {
                         expected: gen_qname_string(parent_prefix, tag_name.name),
                         actual: gen_qname_string(prefix_str, local_str),
-                        pos: err_pos_from_tag_name(prefix, local, true),
+                        pos: err_pos_for_close_tag(prefix, local),
                     });
                 }
             }
@@ -567,7 +562,7 @@ fn process_text<'d>(
     let mut entity_depth = entity_depth;
     pd.buffer.clear();
 
-    let mut is_as_is = false;
+    let mut is_as_is = false; // TODO: explain
     let mut s = Stream::from(text);
     while !s.at_end() {
         match parse_next_chunk(&mut s, &pd.entities)? {
@@ -600,7 +595,7 @@ fn process_text<'d>(
                 if !pd.buffer.is_empty() {
                     is_as_is = false;
 
-                    append_text(text.start(), parent_id, pd, doc);
+                    append_text(parent_id, text.start(), pd, doc);
                     pd.buffer.clear();
                 }
 
@@ -608,7 +603,7 @@ fn process_text<'d>(
                 parser.enable_fragment_mode();
 
                 let mut tag_name = TagNameSpan::new_null();
-                entity_depth += 1;
+                entity_depth += 1; // TODO: explain
                 process_tokens(parser, entity_depth, parent_id, &mut tag_name, pd, doc)?;
                 pd.buffer.clear();
             }
@@ -616,7 +611,7 @@ fn process_text<'d>(
     }
 
     if !pd.buffer.is_empty() {
-        append_text(text.start(), parent_id, pd, doc);
+        append_text(parent_id, text.start(), pd, doc);
         pd.buffer.clear();
     }
 
@@ -624,8 +619,8 @@ fn process_text<'d>(
 }
 
 fn append_text(
-    orig_pos: usize,
     parent_id: NodeId,
+    orig_pos: usize,
     pd: &mut ParserData,
     doc: &mut Document,
 ) {
@@ -749,53 +744,50 @@ fn _normalize_attribute(
 
     let mut s = Stream::from(text);
     while !s.at_end() {
-        // Safe, because we already checked that stream is not at the end.
+        // Safe, because we already checked that the stream is not at the end.
         let c = s.curr_byte_unchecked();
 
-        // Check for character/entity references.
-        if c == b'&' {
-            match s.try_consume_reference() {
-                Some(Reference::CharRef(ch)) => {
-                    for b in CharToBytes::new(ch) {
-                        if entity_depth > 0 {
-                            buffer.push_from_attr(b, None);
-                        } else {
-                            // Characters not from entity should be added as is.
-                            // Not sure why... At least `lxml` produces the same results.
-                            buffer.push_raw(b);
-                        }
-                    }
-
-                    continue;
-                }
-                Some(Reference::EntityRef(name)) => {
-                    if entity_depth > ENTITY_DEPTH {
-                        let pos = s.gen_error_pos();
-                        return Err(Error::EntityReferenceLoop(pos));
-                    }
-
-                    match entities.iter().find(|e| e.name == name) {
-                        Some(entity) => {
-                            entity_depth += 1;
-                            _normalize_attribute(entity.value, entities, entity_depth, buffer)?;
-                        }
-                        None => {
-                            let pos = s.gen_error_pos();
-                            return Err(Error::UnknownEntityReference(name.into(), pos));
-                        }
-                    }
-
-                    continue;
-                }
-                None => {
-                    s.advance(1);
-                }
-            }
-        } else {
+        if c != b'&' {
             s.advance(1);
+            buffer.push_from_attr(c, s.get_curr_byte());
+            continue;
         }
 
-        buffer.push_from_attr(c, s.get_curr_byte());
+        // Check for character/entity references.
+        match s.try_consume_reference() {
+            Some(Reference::CharRef(ch)) => {
+                for b in CharToBytes::new(ch) {
+                    if entity_depth > 0 {
+                        buffer.push_from_attr(b, None);
+                    } else {
+                        // Characters not from entity should be added as is.
+                        // Not sure why... At least `lxml` produces the same results.
+                        buffer.push_raw(b);
+                    }
+                }
+            }
+            Some(Reference::EntityRef(name)) => {
+                if entity_depth > ENTITY_DEPTH {
+                    let pos = s.gen_error_pos();
+                    return Err(Error::EntityReferenceLoop(pos));
+                }
+
+                match entities.iter().find(|e| e.name == name) {
+                    Some(entity) => {
+                        entity_depth += 1;
+                        _normalize_attribute(entity.value, entities, entity_depth, buffer)?;
+                    }
+                    None => {
+                        let pos = s.gen_error_pos();
+                        return Err(Error::UnknownEntityReference(name.into(), pos));
+                    }
+                }
+            }
+            None => {
+                s.advance(1);
+                buffer.push_from_attr(c, s.get_curr_byte());
+            }
+        }
     }
 
     Ok(())
@@ -818,10 +810,9 @@ fn err_pos_from_qname(prefix: StrSpan, local: StrSpan) -> TextPos {
     err_pos_from_span(err_span)
 }
 
-fn err_pos_from_tag_name(prefix: StrSpan, local: StrSpan, close_tag: bool) -> TextPos {
+fn err_pos_for_close_tag(prefix: StrSpan, local: StrSpan) -> TextPos {
     let mut pos = err_pos_from_qname(prefix, local);
-    // jump before '<'
-    pos.col -= if close_tag { 2 } else { 1 };
+    pos.col -= 2; // jump before '</'
     pos
 }
 
