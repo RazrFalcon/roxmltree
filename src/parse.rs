@@ -208,7 +208,7 @@ struct ParserData<'d> {
     tmp_attrs: Vec<AttributeData<'d>>,
     entities: Vec<Entity<'d>>,
     buffer: TextBuffer,
-    prev_node_type: Option<xmlparser::Token<'d>>,
+    after_text: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -234,7 +234,7 @@ fn parse(text: &str) -> Result<Document, Error> {
         tmp_attrs: Vec::new(),
         entities: Vec::new(),
         buffer: TextBuffer::new(),
-        prev_node_type: None,
+        after_text: false,
     };
 
     // Trying to guess rough nodes and attributes amount.
@@ -326,7 +326,15 @@ fn process_tokens<'d>(
             _ => {}
         }
 
-        pd.prev_node_type = Some(token);
+        match token {
+            xmlparser::Token::ProcessingInstruction(..) |
+            xmlparser::Token::Comment(..) |
+            xmlparser::Token::ElementStart(..) |
+            xmlparser::Token::ElementEnd(..) => {
+                pd.after_text = false;
+            }
+            _ => {}
+        }
     }
 
     Ok(())
@@ -618,24 +626,20 @@ fn process_text<'d>(
 fn append_text(
     orig_pos: usize,
     parent_id: NodeId,
-    pd: &ParserData,
+    pd: &mut ParserData,
     doc: &mut Document,
 ) {
     let text = pd.buffer.to_str();
 
-    match pd.prev_node_type {
-        Some(xmlparser::Token::Cdata(_)) |
-        Some(xmlparser::Token::Text(_)) |
-        Some(xmlparser::Token::Whitespaces(_)) => {
-            if let Some(node) = doc.nodes.iter_mut().last() {
-                if let NodeKind::Text(ref mut prev_text) = node.kind {
-                    prev_text.push_str(text);
-                }
+    if pd.after_text {
+        if let Some(node) = doc.nodes.iter_mut().last() {
+            if let NodeKind::Text(ref mut prev_text) = node.kind {
+                prev_text.push_str(text);
             }
         }
-        _ => {
-            doc.append(parent_id, NodeKind::Text(text.to_string()), orig_pos);
-        }
+    } else {
+        pd.after_text = true;
+        doc.append(parent_id, NodeKind::Text(text.to_string()), orig_pos);
     }
 }
 
@@ -686,20 +690,18 @@ fn parse_next_chunk<'a>(
 fn process_cdata<'d>(
     cdata: StrSpan<'d>,
     parent_id: NodeId,
-    pd: &ParserData,
+    pd: &mut ParserData,
     doc: &mut Document<'d>,
 ) {
-    match pd.prev_node_type {
-        Some(xmlparser::Token::Text(_)) | Some(xmlparser::Token::Whitespaces(_)) => {
-            if let Some(node) = doc.nodes.iter_mut().last() {
-                if let NodeKind::Text(ref mut text) = node.kind {
-                    text.push_str(cdata.to_str());
-                }
+    if pd.after_text {
+        if let Some(node) = doc.nodes.iter_mut().last() {
+            if let NodeKind::Text(ref mut text) = node.kind {
+                text.push_str(cdata.to_str());
             }
         }
-        _ => {
-            doc.append(parent_id, NodeKind::Text(cdata.to_str().to_owned()), cdata.start());
-        }
+    } else {
+        pd.after_text = true;
+        doc.append(parent_id, NodeKind::Text(cdata.to_str().to_owned()), cdata.start());
     }
 }
 
