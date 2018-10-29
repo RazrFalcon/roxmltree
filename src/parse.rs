@@ -1,20 +1,20 @@
-use std::fmt;
-use std::error;
-use std::str;
-use std::mem;
 use std::borrow::Cow;
+use std::error;
+use std::fmt;
+use std::mem;
+use std::str;
 
 use xmlparser::{
     self,
-    TextPos,
     Reference,
     Stream,
     StrSpan,
+    TextPos,
 };
 
 use {
-    NS_XMLNS_URI,
     NS_XML_URI,
+    NS_XMLNS_URI,
     Attribute,
     Document,
     ExpandedNameOwned,
@@ -207,7 +207,7 @@ struct ParserData<'d> {
     ns_start_idx: usize,
     tmp_attrs: Vec<AttributeData<'d>>,
     entities: Vec<Entity<'d>>,
-    buffer: Vec<u8>,
+    buffer: TextBuffer,
     prev_node_type: Option<xmlparser::Token<'d>>,
 }
 
@@ -233,7 +233,7 @@ fn parse(text: &str) -> Result<Document, Error> {
         ns_start_idx: 1,
         tmp_attrs: Vec::new(),
         entities: Vec::new(),
-        buffer: Vec::with_capacity(32),
+        buffer: TextBuffer::new(),
         prev_node_type: None,
     };
 
@@ -275,7 +275,7 @@ fn parse(text: &str) -> Result<Document, Error> {
 
 fn process_tokens<'d>(
     parser: xmlparser::Tokenizer<'d>,
-    depth: u8,
+    entity_depth: u8,
     mut parent_id: NodeId,
     tag_name: &mut TagNameSpan<'d>,
     pd: &mut ParserData<'d>,
@@ -299,15 +299,13 @@ fn process_tokens<'d>(
             }
             xmlparser::Token::Text(text) |
             xmlparser::Token::Whitespaces(text) => {
-                process_text(text, parent_id, depth, pd, doc)?;
+                process_text(text, parent_id, entity_depth, pd, doc)?;
             }
             xmlparser::Token::Cdata(text) => {
                 process_cdata(text, parent_id, pd, doc);
             }
             xmlparser::Token::ElementStart(prefix, local) => {
-                let prefix_str = prefix.to_str();
-
-                if prefix_str == "xmlns" {
+                if prefix.to_str() == "xmlns" {
                     let pos = err_pos_from_span(prefix);
                     return Err(Error::InvalidElementNamePrefix(pos));
                 }
@@ -315,7 +313,7 @@ fn process_tokens<'d>(
                 *tag_name = TagNameSpan::new(prefix, local);
             }
             xmlparser::Token::Attribute((prefix, local), value) => {
-                process_attribute(depth, prefix, local, value, pd, doc)?;
+                process_attribute(entity_depth, prefix, local, value, pd, doc)?;
             }
             xmlparser::Token::ElementEnd(end) => {
                 process_element(*tag_name, end, &mut parent_id, pd, doc)?;
@@ -335,7 +333,7 @@ fn process_tokens<'d>(
 }
 
 fn process_attribute<'d>(
-    depth: u8,
+    entity_depth: u8,
     prefix: StrSpan<'d>,
     local: StrSpan<'d>,
     value: StrSpan<'d>,
@@ -345,7 +343,7 @@ fn process_attribute<'d>(
     let prefix_str = prefix.to_str();
     let local_str = local.to_str();
     let orig_pos = value.start();
-    let value = normalize_attribute(depth, value, &pd.entities, &mut pd.buffer)?;
+    let value = normalize_attribute(entity_depth, value, &pd.entities, &mut pd.buffer)?;
 
     if prefix_str == "xmlns" {
         // The xmlns namespace MUST NOT be declared as the default namespace.
@@ -554,11 +552,11 @@ fn process_element<'d>(
 fn process_text<'d>(
     text: StrSpan<'d>,
     parent_id: NodeId,
-    depth: u8,
+    entity_depth: u8,
     pd: &mut ParserData<'d>,
     doc: &mut Document<'d>,
 ) -> Result<(), Error> {
-    let mut depth = depth;
+    let mut entity_depth = entity_depth;
     pd.buffer.clear();
 
     let mut is_as_is = false;
@@ -567,26 +565,26 @@ fn process_text<'d>(
         match parse_next_chunk(&mut s, &pd.entities)? {
             NextChunk::Byte(c) => {
                 if is_as_is {
-                    pd.buffer.push(c);
+                    pd.buffer.push_raw(c);
                     is_as_is = false;
                 } else {
-                    push_byte_to_text(c, s.at_end(), &mut pd.buffer);
+                    pd.buffer.push_from_text(c, s.at_end());
                 }
             }
             NextChunk::Char(c) => {
                 for b in CharToBytes::new(c) {
-                    if depth > 0 {
-                        push_byte_to_text(b, s.at_end(), &mut pd.buffer);
+                    if entity_depth > 0 {
+                        pd.buffer.push_from_text(b, s.at_end());
                     } else {
                         // Characters not from entity should be added as is.
                         // Not sure why... At least `lxml` produces the same results.
-                        pd.buffer.push(b);
+                        pd.buffer.push_raw(b);
                         is_as_is = true;
                     }
                 }
             }
             NextChunk::Text(fragment) => {
-                if depth > ENTITY_DEPTH {
+                if entity_depth > ENTITY_DEPTH {
                     let pos = s.gen_error_pos();
                     return Err(Error::EntityReferenceLoop(pos));
                 }
@@ -602,8 +600,8 @@ fn process_text<'d>(
                 parser.enable_fragment_mode();
 
                 let mut tag_name = TagNameSpan::new_null();
-                depth += 1;
-                process_tokens(parser, depth, parent_id, &mut tag_name, pd, doc)?;
+                entity_depth += 1;
+                process_tokens(parser, entity_depth, parent_id, &mut tag_name, pd, doc)?;
                 pd.buffer.clear();
             }
         }
@@ -623,8 +621,7 @@ fn append_text(
     pd: &ParserData,
     doc: &mut Document,
 ) {
-    // `unwrap` is safe, because the input text was already a valid UTF-8 string.
-    let text = str::from_utf8(&pd.buffer).unwrap();
+    let text = pd.buffer.to_str();
 
     match pd.prev_node_type {
         Some(xmlparser::Token::Cdata(_)) |
@@ -708,16 +705,16 @@ fn process_cdata<'d>(
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
 fn normalize_attribute<'d>(
-    depth: u8,
+    entity_depth: u8,
     text: StrSpan<'d>,
     entities: &[Entity],
-    buffer: &mut Vec<u8>,
+    buffer: &mut TextBuffer,
 ) -> Result<Cow<'d, str>, Error> {
     if is_normalization_required(&text) {
         buffer.clear();
-        _normalize_attribute(text, entities, depth, buffer)?;
+        _normalize_attribute(text, entities, entity_depth, buffer)?;
         // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
-        Ok(Cow::Owned(str::from_utf8(buffer).unwrap().to_owned()))
+        Ok(Cow::Owned(buffer.to_str().to_owned()))
     } else {
         Ok(Cow::Borrowed(text.to_str()))
     }
@@ -743,10 +740,10 @@ fn is_normalization_required(text: &StrSpan) -> bool {
 fn _normalize_attribute(
     text: StrSpan,
     entities: &[Entity],
-    depth: u8,
-    buffer: &mut Vec<u8>,
+    entity_depth: u8,
+    buffer: &mut TextBuffer,
 ) -> Result<(), Error> {
-    let mut depth = depth;
+    let mut entity_depth = entity_depth;
 
     let mut s = Stream::from(text);
     while !s.at_end() {
@@ -758,27 +755,27 @@ fn _normalize_attribute(
             match s.try_consume_reference() {
                 Some(Reference::CharRef(ch)) => {
                     for b in CharToBytes::new(ch) {
-                        if depth > 0 {
-                            push_byte_to_attr(b, None, buffer);
+                        if entity_depth > 0 {
+                            buffer.push_from_attr(b, None);
                         } else {
                             // Characters not from entity should be added as is.
                             // Not sure why... At least `lxml` produces the same results.
-                            buffer.push(b);
+                            buffer.push_raw(b);
                         }
                     }
 
                     continue;
                 }
                 Some(Reference::EntityRef(name)) => {
-                    if depth > ENTITY_DEPTH {
+                    if entity_depth > ENTITY_DEPTH {
                         let pos = s.gen_error_pos();
                         return Err(Error::EntityReferenceLoop(pos));
                     }
 
                     match entities.iter().find(|e| e.name == name) {
                         Some(entity) => {
-                            depth += 1;
-                            _normalize_attribute(entity.value, entities, depth, buffer)?;
+                            entity_depth += 1;
+                            _normalize_attribute(entity.value, entities, entity_depth, buffer)?;
                         }
                         None => {
                             let pos = s.gen_error_pos();
@@ -796,45 +793,10 @@ fn _normalize_attribute(
             s.advance(1);
         }
 
-        push_byte_to_attr(c, s.get_curr_byte(), buffer);
+        buffer.push_from_attr(c, s.get_curr_byte());
     }
 
     Ok(())
-}
-
-fn push_byte_to_attr(mut c: u8, c2: Option<u8>, buf: &mut Vec<u8>) {
-    // \r in \r\n should be ignored.
-    if c == b'\r' && c2 == Some(b'\n') {
-        return;
-    }
-
-    // \n, \r and \t should be converted into spaces.
-    c = match c {
-        b'\n' | b'\r' | b'\t' => b' ',
-        _ => c,
-    };
-
-    buf.push(c);
-}
-
-// Translate \r\n and any \r that is not followed by \n into a single \n character.
-//
-// https://www.w3.org/TR/xml/#sec-line-ends
-fn push_byte_to_text(c: u8, at_end: bool, buf: &mut Vec<u8>) {
-    if buf.last() == Some(&b'\r') {
-        let idx = buf.len() - 1;
-        buf[idx] = b'\n';
-
-        if at_end && c == b'\r' {
-            buf.push(b'\n');
-        } else if c != b'\n' {
-            buf.push(c);
-        }
-    } else if at_end && c == b'\r' {
-        buf.push(b'\n');
-    } else {
-        buf.push(c);
-    }
 }
 
 fn gen_qname_string(prefix: &str, local: &str) -> String {
@@ -867,39 +829,110 @@ fn orig_pos_from_tag_name(tag_name: &TagNameSpan) -> usize {
 }
 
 
-/// Iterate over `char` by `u8`.
-struct CharToBytes {
-    buf: [u8; 4],
-    idx: u8,
-}
+mod internals {
+    /// Iterate over `char` by `u8`.
+    pub struct CharToBytes {
+        buf: [u8; 4],
+        idx: u8,
+    }
 
-impl CharToBytes {
-    fn new(c: char) -> Self {
-        let mut buf = [0xFF; 4];
-        c.encode_utf8(&mut buf);
+    impl CharToBytes {
+        pub fn new(c: char) -> Self {
+            let mut buf = [0xFF; 4];
+            c.encode_utf8(&mut buf);
 
-        CharToBytes {
-            buf,
-            idx: 0,
+            CharToBytes {
+                buf,
+                idx: 0,
+            }
         }
     }
-}
 
-impl Iterator for CharToBytes {
-    type Item = u8;
+    impl Iterator for CharToBytes {
+        type Item = u8;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.idx < 4 {
-            let b = self.buf[self.idx as usize];
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.idx < 4 {
+                let b = self.buf[self.idx as usize];
 
-            if b != 0xFF {
-                self.idx += 1;
-                return Some(b);
-            } else {
-                self.idx = 4;
+                if b != 0xFF {
+                    self.idx += 1;
+                    return Some(b);
+                } else {
+                    self.idx = 4;
+                }
+            }
+
+            None
+        }
+    }
+
+
+    pub struct TextBuffer {
+        buf: Vec<u8>,
+    }
+
+    impl TextBuffer {
+        pub fn new() -> Self {
+            TextBuffer {
+                buf: Vec::with_capacity(32),
             }
         }
 
-        None
+        pub fn push_raw(&mut self, c: u8) {
+            self.buf.push(c);
+        }
+
+        pub fn push_from_attr(&mut self, mut c: u8, c2: Option<u8>) {
+            // \r in \r\n should be ignored.
+            if c == b'\r' && c2 == Some(b'\n') {
+                return;
+            }
+
+            // \n, \r and \t should be converted into spaces.
+            c = match c {
+                b'\n' | b'\r' | b'\t' => b' ',
+                _ => c,
+            };
+
+            self.buf.push(c);
+        }
+
+        // Translate \r\n and any \r that is not followed by \n into a single \n character.
+        //
+        // https://www.w3.org/TR/xml/#sec-line-ends
+        pub fn push_from_text(&mut self, c: u8, at_end: bool) {
+            if self.buf.last() == Some(&b'\r') {
+                let idx = self.buf.len() - 1;
+                self.buf[idx] = b'\n';
+
+                if at_end && c == b'\r' {
+                    self.buf.push(b'\n');
+                } else if c != b'\n' {
+                    self.buf.push(c);
+                }
+            } else if at_end && c == b'\r' {
+                self.buf.push(b'\n');
+            } else {
+                self.buf.push(c);
+            }
+        }
+
+        pub fn clear(&mut self) {
+            self.buf.clear();
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.buf.is_empty()
+        }
+
+        pub fn to_str(&self) -> &str {
+            use std::str;
+
+            // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
+            str::from_utf8(&self.buf).unwrap()
+        }
     }
 }
+
+use self::internals::*;

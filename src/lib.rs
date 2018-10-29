@@ -22,10 +22,10 @@ License: ISC.
 
 extern crate xmlparser;
 
+use std::borrow::Cow;
 use std::fmt;
 use std::ops::{Deref, Range};
 use std::rc::Rc;
-use std::borrow::Cow;
 
 pub use xmlparser::TextPos;
 
