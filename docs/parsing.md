@@ -14,7 +14,7 @@ This document explains how *roxmltree* parses and represents the XML document.
 ## XML declaration
 
 [XML declaration](https://www.w3.org/TR/xml/#NT-XMLDecl) is completely ignored.
-Mostly because it doesn't contain any valuable information for us. 
+Mostly because it doesn't contain any valuable information for us.
 
 - `version` is expected to be `1.*`. Otherwise an error will occur.
 - `encoding` is irrelevant since we loading only valid UTF-8 strings.
@@ -22,20 +22,8 @@ Mostly because it doesn't contain any valuable information for us.
 
 ## DTD
 
-Only `ENTITY` objects will be resolved. Everything else will be ignored 
+Only `ENTITY` objects will be resolved. Everything else will be ignored
 at the moment.
-
-Also, nested references are not supported yet. E.g.:
-
-```xml
-<!DOCTYPE test [
-    <!ENTITY a '&b;'>
-    <!ENTITY b 'text'>
-]>
-<e a='&a;'/>
-```
-
-References with elements are supported.
 
 ```xml
 <!DOCTYPE test [
@@ -110,4 +98,4 @@ as explained in the spec.
 
 ## Namespaces resolving
 
-*roxmltree* has a complete support for XML namespaces.  
+*roxmltree* has a complete support for XML namespaces.
