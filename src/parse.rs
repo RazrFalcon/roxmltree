@@ -231,7 +231,7 @@ fn parse(text: &str) -> Result<Document, Error> {
     let mut pd = ParserData {
         attrs_start_idx: 0,
         ns_start_idx: 1,
-        tmp_attrs: Vec::new(),
+        tmp_attrs: Vec::with_capacity(16),
         entities: Vec::new(),
         buffer: TextBuffer::new(),
         after_text: false,
