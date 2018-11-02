@@ -2,6 +2,7 @@ use std::borrow::{Cow, Borrow};
 use std::error;
 use std::fmt;
 use std::mem;
+use std::ops::Range;
 use std::str;
 
 use xmlparser::{
@@ -139,12 +140,12 @@ impl error::Error for Error {
 
 
 struct AttributeData<'d> {
-    prefix: StrSpan<'d>,
-    prefix_str: &'d str,
-    local: StrSpan<'d>,
-    local_str: &'d str,
-    value_pos: usize,
+    /// Contains prefix or local name for error position.
+    name: StrSpan<'d>,
+    prefix: &'d str,
+    local: &'d str,
     value: Cow<'d, str>,
+    value_pos: usize,
 }
 
 impl<'d> Document<'d> {
@@ -351,7 +352,7 @@ fn process_attribute<'d>(
 ) -> Result<(), Error> {
     let prefix_str = prefix.to_str();
     let local_str = local.to_str();
-    let orig_pos = value.start();
+    let value_pos = value.start();
     let value = normalize_attribute(entity_depth, value, &pd.entities, &mut pd.buffer)?;
 
     if prefix_str == "xmlns" {
@@ -404,8 +405,10 @@ fn process_attribute<'d>(
 
         doc.namespaces.push_ns(None, value.into());
     } else {
-        pd.tmp_attrs.push(AttributeData { prefix, prefix_str, local, local_str,
-                                          value_pos: orig_pos, value });
+        let name = if prefix.is_empty() { local } else { prefix };
+        pd.tmp_attrs.push(AttributeData {
+            name, prefix: prefix_str, local: local_str, value, value_pos
+        });
     }
 
     Ok(())
@@ -430,73 +433,12 @@ fn process_element<'d>(
         }
     }
 
-    // Resolve namespaces.
-    let mut tmp_parent_id = parent_id.0;
-    while tmp_parent_id != 0 {
-        let curr_id = tmp_parent_id;
-        tmp_parent_id = match doc.nodes[tmp_parent_id].parent {
-            Some(id) => id.0,
-            None => 0,
-        };
+    let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
+    pd.ns_start_idx = doc.namespaces.len();
 
-        let ns_range = match doc.nodes[curr_id].kind {
-            NodeKind::Element { ref namespaces, .. } => namespaces.clone(),
-            _ => continue,
-        };
-
-        for i in ns_range {
-            if !doc.namespaces.exists(pd.ns_start_idx, doc.namespaces[i].name) {
-                let v = doc.namespaces[i].clone();
-                doc.namespaces.0.push(v);
-            }
-        }
-    }
-
-    let mut namespaces = 0..0;
-    if pd.ns_start_idx != doc.namespaces.len() {
-        namespaces = pd.ns_start_idx..doc.namespaces.len();
-        pd.ns_start_idx = doc.namespaces.len();
-    }
-
-
-    // Resolve attributes.
-    let mut attributes = 0..0;
-    if !pd.tmp_attrs.is_empty() {
-        for attr in &mut pd.tmp_attrs {
-            let ns = if attr.prefix_str == "xml" {
-                // The prefix 'xml' is by definition bound to the namespace name
-                // http://www.w3.org/XML/1998/namespace.
-                Some(doc.namespaces.xml_uri())
-            } else if attr.prefix_str.is_empty() {
-                // 'The namespace name for an unprefixed attribute name
-                // always has no value.'
-                None
-            } else {
-                doc.namespaces.get_by_prefix(namespaces.clone(), attr.prefix_str)
-            };
-
-            let attr_name = ExpandedNameOwned { ns, name: attr.local_str };
-
-            // Check for duplicated attributes.
-            if doc.attrs[pd.attrs_start_idx..].iter().any(|attr| attr.name == attr_name) {
-                let pos = err_pos_from_qname(attr.prefix, attr.local);
-                return Err(Error::DuplicatedAttribute(attr.local_str.to_string(), pos));
-            }
-
-            let attr_pos = if attr.prefix.is_empty() { attr.local } else { attr.prefix }.start();
-
-            doc.attrs.push(Attribute {
-                name: attr_name,
-                value: mem::replace(&mut attr.value, Cow::Borrowed("")),
-                attr_pos,
-                value_pos: attr.value_pos,
-            });
-        }
-        attributes = pd.attrs_start_idx..doc.attrs.len();
-        pd.attrs_start_idx = doc.attrs.len();
-    }
+    let attributes = resolve_attributes(pd.attrs_start_idx, namespaces.clone(), &mut pd.tmp_attrs, doc)?;
+    pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
-
 
     let tag_ns_uri = doc.namespaces.get_by_prefix(namespaces.clone(), tag_name.prefix.to_str());
     match end_token {
@@ -552,6 +494,83 @@ fn process_element<'d>(
     }
 
     Ok(())
+}
+
+fn resolve_namespaces(
+    start_idx: usize,
+    parent_id: NodeId,
+    doc: &mut Document,
+) -> Range<usize> {
+    let mut tmp_parent_id = parent_id.0;
+    while tmp_parent_id != 0 {
+        let curr_id = tmp_parent_id;
+        tmp_parent_id = match doc.nodes[tmp_parent_id].parent {
+            Some(id) => id.0,
+            None => 0,
+        };
+
+        let ns_range = match doc.nodes[curr_id].kind {
+            NodeKind::Element { ref namespaces, .. } => namespaces.clone(),
+            _ => continue,
+        };
+
+        for i in ns_range {
+            if !doc.namespaces.exists(start_idx, doc.namespaces[i].name) {
+                let v = doc.namespaces[i].clone();
+                doc.namespaces.0.push(v);
+            }
+        }
+    }
+
+    let mut namespaces = 0..0;
+    if start_idx != doc.namespaces.len() {
+        namespaces = start_idx..doc.namespaces.len();
+    }
+
+    namespaces
+}
+
+fn resolve_attributes<'d>(
+    start_idx: usize,
+    namespaces: Range<usize>,
+    tmp_attrs: &mut [AttributeData<'d>],
+    doc: &mut Document<'d>,
+) -> Result<Range<usize>, Error> {
+    if tmp_attrs.is_empty() {
+        return Ok(0..0);
+    }
+
+    for attr in tmp_attrs {
+        let ns = if attr.prefix == "xml" {
+            // The prefix 'xml' is by definition bound to the namespace name
+            // http://www.w3.org/XML/1998/namespace.
+            Some(doc.namespaces.xml_uri())
+        } else if attr.prefix.is_empty() {
+            // 'The namespace name for an unprefixed attribute name
+            // always has no value.'
+            None
+        } else {
+            doc.namespaces.get_by_prefix(namespaces.clone(), attr.prefix)
+        };
+
+        let attr_name = ExpandedNameOwned { ns, name: attr.local };
+
+        // Check for duplicated attributes.
+        if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
+            let pos = err_pos_from_span(attr.name);
+            return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
+        }
+
+        doc.attrs.push(Attribute {
+            name: attr_name,
+            // Takes a value from a slice without consuming the slice.
+            value: mem::replace(&mut attr.value, Cow::Borrowed("")),
+            attr_pos: attr.name.start(),
+            value_pos: attr.value_pos,
+        });
+    }
+
+    Ok(start_idx..doc.attrs.len())
 }
 
 fn process_text<'d>(
@@ -640,6 +659,7 @@ fn append_text<'d>(
     doc: &mut Document<'d>,
 ) {
     if after_text {
+        // Prepend to a previous text node.
         if let Some(node) = doc.nodes.iter_mut().last() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
                 match *prev_text {
@@ -669,9 +689,9 @@ fn parse_next_chunk<'a>(
 ) -> Result<NextChunk<'a>, Error> {
     debug_assert!(!s.at_end());
 
-    // `unwrap` is safe, because we already checked that stream is not at the end.
+    // Safe, because we already checked that stream is not at the end.
     // But we have an additional `debug_assert` above just in case.
-    let c = s.curr_byte().unwrap();
+    let c = s.curr_byte_unchecked();
 
     // Check for character/entity references.
     if c == b'&' {
