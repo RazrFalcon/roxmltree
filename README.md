@@ -88,6 +88,12 @@ test medium_sdx_document ... bench:   3,601,921 ns/iter (+/- 14,758)
 test medium_treexml      ... bench:  10,975,247 ns/iter (+/- 22,692)
 test medium_xmltree      ... bench:  11,601,320 ns/iter (+/- 46,216)
 test medium_elementtree  ... bench:  11,550,227 ns/iter (+/- 17,991)
+
+test tiny_roxmltree      ... bench:       8,002 ns/iter (+/- 73)
+test tiny_sdx_document   ... bench:      26,835 ns/iter (+/- 47)
+test tiny_xmltree        ... bench:      47,199 ns/iter (+/- 110)
+test tiny_treexml        ... bench:      50,399 ns/iter (+/- 55)
+test tiny_elementtree    ... bench:      51,569 ns/iter (+/- 165)
 ```
 
 *roxmltree* uses [xmlparser] internally,
@@ -101,6 +107,9 @@ test large_xmlrs         ... bench:  28,252,304 ns/iter (+/- 27,852)
 
 test medium_xmlparser    ... bench:     517,778 ns/iter (+/- 1,842)
 test medium_xmlrs        ... bench:  10,237,568 ns/iter (+/- 13,497)
+
+test tiny_xmlparser      ... bench:       4,283 ns/iter (+/- 29)
+test tiny_xmlrs          ... bench:      45,832 ns/iter (+/- 50)
 ```
 
 *Note:* tree crates may use different *xml-rs* crate versions.

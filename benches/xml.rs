@@ -34,6 +34,15 @@ fn load_data(path: &str) -> Vec<u8> {
 }
 
 
+fn tiny_xmlparser(bencher: &mut Bencher) {
+    let text = load_string("fonts.conf");
+    bencher.iter(|| {
+        for t in xmlparser::Tokenizer::from(text.as_str()) {
+            let _ = t.unwrap();
+        }
+    })
+}
+
 fn medium_xmlparser(bencher: &mut Bencher) {
     let text = load_string("medium.svg");
     bencher.iter(|| {
@@ -52,6 +61,15 @@ fn large_xmlparser(bencher: &mut Bencher) {
     })
 }
 
+
+fn tiny_xmlrs(bencher: &mut Bencher) {
+    let text = load_string("fonts.conf");
+    bencher.iter(|| {
+        for event in xml::EventReader::new(text.as_bytes()) {
+            let _ = event.unwrap();
+        }
+    })
+}
 
 fn medium_xmlrs(bencher: &mut Bencher) {
     let text = load_string("medium.svg");
@@ -72,6 +90,11 @@ fn large_xmlrs(bencher: &mut Bencher) {
 }
 
 
+fn tiny_roxmltree(bencher: &mut Bencher) {
+    let text = load_string("fonts.conf");
+    bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
+}
+
 fn medium_roxmltree(bencher: &mut Bencher) {
     let text = load_string("medium.svg");
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
@@ -82,6 +105,11 @@ fn large_roxmltree(bencher: &mut Bencher) {
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
+
+fn tiny_xmltree(bencher: &mut Bencher) {
+    let text = load_string("fonts.conf");
+    bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
+}
 
 fn medium_xmltree(bencher: &mut Bencher) {
     let text = load_string("medium.svg");
@@ -94,6 +122,11 @@ fn large_xmltree(bencher: &mut Bencher) {
 }
 
 
+fn tiny_sdx_document(bencher: &mut Bencher) {
+    let text = load_string("fonts.conf");
+    bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
+}
+
 fn medium_sdx_document(bencher: &mut Bencher) {
     let text = load_string("medium.svg");
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
@@ -104,6 +137,11 @@ fn large_sdx_document(bencher: &mut Bencher) {
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
 
+
+fn tiny_elementtree(bencher: &mut Bencher) {
+    let data = load_data("fonts.conf");
+    bencher.iter(|| elementtree::Element::from_reader(&data[..]).unwrap())
+}
 
 fn medium_elementtree(bencher: &mut Bencher) {
     let data = load_data("medium.svg");
@@ -116,6 +154,11 @@ fn large_elementtree(bencher: &mut Bencher) {
 }
 
 
+fn tiny_treexml(bencher: &mut Bencher) {
+    let data = load_data("fonts.conf");
+    bencher.iter(|| treexml::Document::parse(&data[..]).unwrap())
+}
+
 fn medium_treexml(bencher: &mut Bencher) {
     let data = load_data("medium.svg");
     bencher.iter(|| treexml::Document::parse(&data[..]).unwrap())
@@ -127,12 +170,12 @@ fn large_treexml(bencher: &mut Bencher) {
 }
 
 
-benchmark_group!(roxmltree, medium_roxmltree, large_roxmltree);
-benchmark_group!(xmltree, medium_xmltree, large_xmltree);
-benchmark_group!(sdx, medium_sdx_document, large_sdx_document);
-benchmark_group!(elementtree, medium_elementtree, large_elementtree);
-benchmark_group!(treexml, medium_treexml, large_treexml);
-benchmark_group!(xmlparser, medium_xmlparser, large_xmlparser);
-benchmark_group!(xmlrs, medium_xmlrs, large_xmlrs);
+benchmark_group!(roxmltree, tiny_roxmltree, medium_roxmltree, large_roxmltree);
+benchmark_group!(xmltree, tiny_xmltree, medium_xmltree, large_xmltree);
+benchmark_group!(sdx, tiny_sdx_document, medium_sdx_document, large_sdx_document);
+benchmark_group!(elementtree, tiny_elementtree, medium_elementtree, large_elementtree);
+benchmark_group!(treexml, tiny_treexml, medium_treexml, large_treexml);
+benchmark_group!(xmlparser, tiny_xmlparser, medium_xmlparser, large_xmlparser);
+benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs);
 benchmark_main!(roxmltree, xmltree, sdx, elementtree, treexml, xmlparser, xmlrs);
 //benchmark_main!(roxmltree);
