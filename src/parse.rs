@@ -271,6 +271,10 @@ fn parse(text: &str) -> Result<Document, Error> {
         return Err(Error::NoRootNode);
     }
 
+    doc.nodes.shrink_to_fit();
+    doc.attrs.shrink_to_fit();
+    doc.namespaces.0.shrink_to_fit();
+
     Ok(doc)
 }
 
