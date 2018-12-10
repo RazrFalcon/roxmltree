@@ -561,6 +561,7 @@ impl<'d> From<(&'d str, &'d str)> for ExpandedName<'d> {
 
 
 /// A node.
+#[derive(Clone, Copy)]
 pub struct Node<'a, 'd: 'a> {
     /// Node ID.
     id: NodeId,
@@ -569,12 +570,6 @@ pub struct Node<'a, 'd: 'a> {
     doc: &'a Document<'d>,
 
     d: &'a NodeData<'d>,
-}
-
-impl<'a, 'd> Copy for Node<'a, 'd> {}
-
-impl<'a, 'd> Clone for Node<'a, 'd> {
-    fn clone(&self) -> Self { *self }
 }
 
 impl<'a, 'd> Eq for Node<'a, 'd> {}
@@ -1136,12 +1131,9 @@ macro_rules! axis_iterators {
     ($(#[$m:meta] $i:ident($f:path);)*) => {
         $(
             #[$m]
+            #[derive(Clone)]
             pub struct $i<'a, 'd: 'a>(Option<Node<'a, 'd>>);
-            impl<'a, 'd: 'a> Clone for $i<'a, 'd> {
-                fn clone(&self) -> Self {
-                    $i(self.0)
-                }
-            }
+
             impl<'a, 'd: 'a> Iterator for $i<'a, 'd> {
                 type Item = Node<'a, 'd>;
                 fn next(&mut self) -> Option<Self::Item> {
@@ -1173,15 +1165,10 @@ axis_iterators! {
 
 
 /// Iterator over children.
+#[derive(Clone)]
 pub struct Children<'a, 'd: 'a> {
     front: Option<Node<'a, 'd>>,
     back: Option<Node<'a, 'd>>,
-}
-
-impl<'a, 'd: 'a> Clone for Children<'a, 'd> {
-    fn clone(&self) -> Self {
-        Self { front: self.front, back: self.back }
-    }
 }
 
 impl<'a, 'd: 'a> Iterator for Children<'a, 'd> {
@@ -1216,7 +1203,7 @@ impl<'a, 'd: 'a> DoubleEndedIterator for Children<'a, 'd> {
 
 
 /// Open or close edge of a node.
-#[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Edge<'a, 'd: 'a> {
     /// Open.
     Open(Node<'a, 'd>),
@@ -1224,34 +1211,12 @@ pub enum Edge<'a, 'd: 'a> {
     Close(Node<'a, 'd>),
 }
 
-impl<'a, 'd: 'a> Copy for Edge<'a, 'd> {}
-
-impl<'a, 'd: 'a> Clone for Edge<'a, 'd> {
-    fn clone(&self) -> Self { *self }
-}
-
-impl<'a, 'd: 'a> Eq for Edge<'a, 'd> {}
-
-impl<'a, 'd: 'a> PartialEq for Edge<'a, 'd> {
-    fn eq(&self, other: &Self) -> bool {
-        match (*self, *other) {
-            (Edge::Open(a), Edge::Open(b)) | (Edge::Close(a), Edge::Close(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
 
 /// Iterator which traverses a subtree.
+#[derive(Clone)]
 pub struct Traverse<'a, 'd: 'a> {
     root: Node<'a, 'd>,
     edge: Option<Edge<'a, 'd>>,
-}
-
-impl<'a, 'd: 'a> Clone for Traverse<'a, 'd> {
-    fn clone(&self) -> Self {
-        Self { root: self.root, edge: self.edge }
-    }
 }
 
 impl<'a, 'd: 'a> Iterator for Traverse<'a, 'd> {
@@ -1285,13 +1250,8 @@ impl<'a, 'd: 'a> Iterator for Traverse<'a, 'd> {
 
 
 /// Iterator over a node and its descendants.
+#[derive(Clone)]
 pub struct Descendants<'a, 'd: 'a>(Traverse<'a, 'd>);
-
-impl<'a, 'd: 'a> Clone for Descendants<'a, 'd> {
-    fn clone(&self) -> Self {
-        Descendants(self.0.clone())
-    }
-}
 
 impl<'a, 'd: 'a> Iterator for Descendants<'a, 'd> {
     type Item = Node<'a, 'd>;
