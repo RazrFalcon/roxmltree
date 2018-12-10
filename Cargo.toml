@@ -19,7 +19,8 @@ exclude = ["testing-tools"]
 doctest = true
 
 [dependencies]
-xmlparser = "0.7"
+#xmlparser = "0.7"
+xmlparser = { git = "https://github.com/RazrFalcon/xmlparser", rev = "8af3260" }
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"

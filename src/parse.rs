@@ -83,6 +83,26 @@ pub enum Error {
     ParserError(xmlparser::Error),
 }
 
+impl Error {
+    /// Returns the error position.
+    pub fn pos(&self) -> TextPos {
+        match *self {
+            Error::InvalidXmlPrefixUri(pos) => pos,
+            Error::UnexpectedXmlUri(pos) => pos,
+            Error::UnexpectedXmlnsUri(pos) => pos,
+            Error::InvalidElementNamePrefix(pos) => pos,
+            Error::DuplicatedNamespace(ref _name, pos) => pos,
+            Error::UnexpectedCloseTag { pos, .. } => pos,
+            Error::UnexpectedEntityCloseTag(pos) => pos,
+            Error::UnknownEntityReference(ref _name, pos) => pos,
+            Error::EntityReferenceLoop(pos) => pos,
+            Error::DuplicatedAttribute(ref _name, pos) => pos,
+            Error::ParserError(ref err) => err.pos(),
+            _ => TextPos::new(1, 1)
+        }
+    }
+}
+
 impl From<xmlparser::Error> for Error {
     fn from(e: xmlparser::Error) -> Self {
         Error::ParserError(e)
@@ -628,7 +648,7 @@ fn process_text<'d>(
                 is_as_is = false;
 
                 if entity_depth > ENTITY_DEPTH {
-                    let pos = s.gen_error_pos();
+                    let pos = s.gen_text_pos();
                     return Err(Error::EntityReferenceLoop(pos));
                 }
 
@@ -708,7 +728,7 @@ fn parse_next_chunk<'a>(
                         Ok(NextChunk::Text(entity.value))
                     }
                     None => {
-                        let pos = s.gen_error_pos();
+                        let pos = s.gen_text_pos();
                         Err(Error::UnknownEntityReference(name.into(), pos))
                     }
                 }
@@ -791,7 +811,7 @@ fn _normalize_attribute(
             }
             Some(Reference::EntityRef(name)) => {
                 if entity_depth > ENTITY_DEPTH {
-                    let pos = s.gen_error_pos();
+                    let pos = s.gen_text_pos();
                     return Err(Error::EntityReferenceLoop(pos));
                 }
 
@@ -801,7 +821,7 @@ fn _normalize_attribute(
                         _normalize_attribute(entity.value, entities, entity_depth, buffer)?;
                     }
                     None => {
-                        let pos = s.gen_error_pos();
+                        let pos = s.gen_text_pos();
                         return Err(Error::UnknownEntityReference(name.into(), pos));
                     }
                 }
@@ -825,7 +845,7 @@ fn gen_qname_string(prefix: &str, local: &str) -> String {
 }
 
 fn err_pos_from_span(text: StrSpan) -> TextPos {
-    Stream::from(text).gen_error_pos()
+    Stream::from(text).gen_text_pos()
 }
 
 fn err_pos_from_qname(prefix: StrSpan, local: StrSpan) -> TextPos {

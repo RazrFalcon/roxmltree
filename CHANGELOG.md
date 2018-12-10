@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ## [0.3.0] - 2018-10-29
+### Added
+- `Error::pos()`.
+
 ### Changed
 - Store text nodes as `&str` when possible. On an XML with a lot of simple text can be ~2x faster.
 - `Document` no longer implements `PartialEq`.

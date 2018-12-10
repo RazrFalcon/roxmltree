@@ -126,7 +126,7 @@ impl<'d> Document<'d> {
     /// assert_eq!(doc.text_pos_from(9999), roxmltree::TextPos::new(2, 5));
     /// ```
     pub fn text_pos_from(&self, pos: usize) -> TextPos {
-        xmlparser::Stream::from(self.text).gen_error_pos_from(pos)
+        xmlparser::Stream::from(self.text).gen_text_pos_from(pos)
     }
 }
 
