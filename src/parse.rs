@@ -526,12 +526,11 @@ fn resolve_namespaces(
         }
     }
 
-    let mut namespaces = 0..0;
     if start_idx != doc.namespaces.len() {
-        namespaces = start_idx..doc.namespaces.len();
+        start_idx..doc.namespaces.len()
+    } else {
+        0..0
     }
-
-    namespaces
 }
 
 fn resolve_attributes<'d>(
