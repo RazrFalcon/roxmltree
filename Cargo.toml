@@ -15,6 +15,9 @@ readme = "README.md"
 members = ["benches"]
 exclude = ["testing-tools"]
 
+[badges]
+travis-ci = { repository = "RazrFalcon/roxmltree" }
+
 [lib]
 doctest = true
 
