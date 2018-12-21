@@ -171,3 +171,30 @@ fn text_pos_03() {
 
     assert_eq!(node.node_pos(), TextPos::new(2, 1));
 }
+
+#[test]
+fn lifetimes() {
+    fn f<'a, 'd, F, R>(doc: &'a roxmltree::Document<'d>, fun: F) -> R 
+        where F: Fn(&'a roxmltree::Document<'d>) -> R
+    {
+        fun(doc)
+    }
+
+    let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
+
+    let _ = f(&doc, |d| d.root());
+    let _ = f(&doc, |d| d.root().document());
+    let _ = f(&doc, |d| d.root().tag_name());
+    let _ = f(&doc, |d| d.root().tag_name().namespace());
+    let _ = f(&doc, |d| d.root().tag_name().name());
+    let _ = f(&doc, |d| d.root().default_namespace());
+    let _ = f(&doc, |d| d.root().resolve_tag_name_prefix());
+    let _ = f(&doc, |d| d.root().lookup_prefix(""));
+    let _ = f(&doc, |d| d.root().lookup_namespace_uri(None));
+    let _ = f(&doc, |d| d.root().attribute("a"));
+    let _ = f(&doc, |d| d.root().attributes());
+    let _ = f(&doc, |d| d.root().namespaces());
+    let _ = f(&doc, |d| d.root().text());
+    let _ = f(&doc, |d| d.root().tail());
+    let _ = f(&doc, |d| d.root().pi());
+}
