@@ -82,7 +82,7 @@ impl<'d> Document<'d> {
     /// assert!(doc.root().is_root());
     /// assert!(doc.root().first_child().unwrap().has_tag_name("e"));
     /// ```
-    pub fn root(&self) -> Node {
+    pub fn root<'a>(&'a self) -> Node<'a, 'd> {
         Node { id: NodeId(0), d: &self.nodes[0], doc: self }
     }
 
@@ -514,7 +514,7 @@ impl<'d> ExpandedName<'d> {
     ///
     /// assert_eq!(doc.root_element().tag_name().namespace(), Some("http://www.w3.org"));
     /// ```
-    pub fn namespace(&self) -> Option<&str> {
+    pub fn namespace(&self) -> Option<&'d str> {
         self.uri
     }
 
@@ -527,7 +527,7 @@ impl<'d> ExpandedName<'d> {
     ///
     /// assert_eq!(doc.root_element().tag_name().name(), "e");
     /// ```
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &'d str {
         self.name
     }
 }
@@ -620,8 +620,8 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     }
 
     /// Returns node's document.
-    pub fn document(&self) -> &Document {
-        &self.doc
+    pub fn document(&self) -> &'a Document<'d> {
+        self.doc
     }
 
     /// Returns node's tag name.
@@ -636,7 +636,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     /// assert_eq!(doc.root_element().tag_name().namespace(), Some("http://www.w3.org"));
     /// assert_eq!(doc.root_element().tag_name().name(), "e");
     /// ```
-    pub fn tag_name(&'a self) -> ExpandedName<'a> {
+    pub fn tag_name(&self) -> ExpandedName<'a> {
         match self.d.kind {
             NodeKind::Element { ref tag_name, .. } => tag_name.as_ref(),
             _ => "".into()
@@ -687,7 +687,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().default_namespace(), None);
     /// ```
-    pub fn default_namespace(&self) -> Option<&str> {
+    pub fn default_namespace(&self) -> Option<&'a str> {
         self.namespaces().iter().find(|ns| ns.name.is_none()).map(|v| v.uri.as_str())
     }
 
@@ -717,7 +717,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), None);
     /// ```
-    pub fn resolve_tag_name_prefix(&self) -> Option<&str> {
+    pub fn resolve_tag_name_prefix(&self) -> Option<&'a str> {
         if !self.is_element() {
             return None;
         }
@@ -747,7 +747,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().lookup_prefix(""), Some("n"));
     /// ```
-    pub fn lookup_prefix(&self, uri: &str) -> Option<&str> {
+    pub fn lookup_prefix(&self, uri: &str) -> Option<&'a str> {
         if uri == NS_XML_URI {
             return Some("xml");
         }
@@ -770,7 +770,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().lookup_namespace_uri(None), Some("http://www.w3.org"));
     /// ```
-    pub fn lookup_namespace_uri(&self, prefix: Option<&'a str>) -> Option<&str> {
+    pub fn lookup_namespace_uri(&self, prefix: Option<&'a str>) -> Option<&'a str> {
         self.namespaces().iter().find(|ns| ns.name == prefix).map(|v| v.uri.as_str())
     }
 
@@ -792,7 +792,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     /// assert_eq!(doc.root_element().attribute("a"), Some("b"));
     /// assert_eq!(doc.root_element().attribute(("http://www.w3.org", "a")), Some("c"));
     /// ```
-    pub fn attribute<N>(&self, name: N) -> Option<&str>
+    pub fn attribute<N>(&self, name: N) -> Option<&'a str>
         where N: Into<ExpandedName<'a>>
     {
         let name = name.into();
@@ -832,7 +832,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().attributes().len(), 2);
     /// ```
-    pub fn attributes(&self) -> &[Attribute] {
+    pub fn attributes(&self) -> &'a [Attribute<'d>] {
         match self.d.kind {
             NodeKind::Element { ref attributes, .. } => &self.doc.attrs[attributes.clone()],
             _ => &[],
@@ -898,7 +898,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().namespaces().len(), 1);
     /// ```
-    pub fn namespaces(&self) -> &[Namespace] {
+    pub fn namespaces(&self) -> &'a [Namespace<'d>] {
         match self.d.kind {
             NodeKind::Element { ref namespaces, .. } => {
                 &self.doc.namespaces[namespaces.clone()]
@@ -933,7 +933,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root().first_child().unwrap().text(), Some(" comment "));
     /// ```
-    pub fn text(&self) -> Option<&str> {
+    pub fn text(&self) -> Option<&'a str> {
         match self.d.kind {
             NodeKind::Element { .. } => {
                 match self.first_child() {
@@ -968,7 +968,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     /// let p = doc.descendants().find(|n| n.has_tag_name("p")).unwrap();
     /// assert_eq!(p.tail(), Some("\n    text2\n"));
     /// ```
-    pub fn tail(&self) -> Option<&str> {
+    pub fn tail(&self) -> Option<&'a str> {
         if !self.is_element() {
             return None;
         }
@@ -985,7 +985,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     }
 
     /// Returns node as Processing Instruction.
-    pub fn pi(&self) -> Option<PI> {
+    pub fn pi(&self) -> Option<PI<'d>> {
         match self.d.kind {
             NodeKind::PI(pi) => Some(pi),
             _ => None,
