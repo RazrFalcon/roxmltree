@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2018-01-02
+### Changed
+- Use longer lifetimes in return types. By [tmiasko](https://github.com/tmiasko).
+
 ## [0.4.0] - 2018-12-13
 ### Added
 - `Error::pos()`.
@@ -35,7 +39,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `ExpandedName::has_namespace`. `ExpandedName::namespace` will return `Option` now.
 - `Error::NestedEntityReference`.
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.1.0...v0.2.0

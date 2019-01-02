@@ -17,7 +17,7 @@ This document explains how *roxmltree* parses and represents the XML document.
 Mostly because it doesn't contain any valuable information for us.
 
 - `version` is expected to be `1.*`. Otherwise an error will occur.
-- `encoding` is irrelevant since we loading only valid UTF-8 strings.
+- `encoding` is irrelevant since we are parsing only valid UTF-8 strings.
 - And no one really follow the `standalone` constraints.
 
 ## DTD

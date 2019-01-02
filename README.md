@@ -46,7 +46,7 @@ Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/bl
 | No **unsafe**                   | ✔                | ✔                | ~<sup>3</sup>    |                  | ✔                |
 | Size overhead<sup>4</sup>       | **~62KiB**       | ~80KiB           | ~96KiB           | ~130KiB          | ~110KiB          |
 | Dependencies                    | **1**            | 2                | 18               | 2                | 14               |
-| Tested version                  | 0.4.0            | 0.8.0            | 0.5.0            | 0.2.6            | 0.7.0            |
+| Tested version                  | 0.4.1            | 0.8.0            | 0.5.0            | 0.2.6            | 0.7.0            |
 | License                         | MIT / Apache-2.0 | MIT              | BSD-3-Clause     | MIT              | MIT              |
 
 Legend:
