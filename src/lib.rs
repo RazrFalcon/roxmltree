@@ -51,13 +51,13 @@ type Range = std::ops::Range<usize>;
 /// Root, Element, PI, Comment and Text.
 ///
 /// As you can see there are no XML declaration and CDATA types.
-/// The XML declaration is basically skipped, since it doesn't contains any
+/// The XML declaration is basically skipped, since it doesn't contain any
 /// valuable information (we support only UTF-8 anyway).
 /// And CDATA will be converted into a Text node as is, without
 /// any preprocessing (you can read more about it
 /// [here](https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md)).
 ///
-/// Also, the Text node data can be accesses from the text node itself or from
+/// Also, the Text node data can be accessed from the text node itself or from
 /// the parent element via [`Node::text()`] or [`Node::tail()`].
 ///
 /// [`Nodes`]: struct.Node.html
@@ -92,7 +92,7 @@ impl<'d> Document<'d> {
     ///
     /// Unlike `root`, will return a first element node.
     ///
-    /// The root element is always exists.
+    /// The root element always exists.
     ///
     /// # Examples
     ///
