@@ -483,13 +483,14 @@ fn process_element<'d>(
                     attributes,
                     namespaces,
                 },
-                tag_name.span.range()
+                tag_name.span.start()..token_span.end()
             );
         }
         xmlparser::ElementEnd::Close(prefix, local) => {
             let prefix = prefix.to_str();
             let local = local.to_str();
 
+            doc.nodes[parent_id.0].range.end = token_span.end();
             if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.0].kind {
                 let parent_node = doc.get(*parent_id);
                 let parent_prefix = parent_node.resolve_tag_name_prefix().unwrap_or("");
@@ -519,7 +520,7 @@ fn process_element<'d>(
                     attributes,
                     namespaces,
                 },
-                tag_name.span.range()
+                tag_name.span.start()..token_span.end()
             );
         }
     }

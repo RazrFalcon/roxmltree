@@ -133,6 +133,7 @@ fn text_pos_01() {
     let node = doc.root_element();
 
     assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
+    assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(4, 5));
 
     if let Some(attr) = node.attribute_node("a") {
         assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 4));
@@ -145,6 +146,7 @@ fn text_pos_01() {
 
     let p = comm.next_sibling().unwrap().next_sibling().unwrap();
     assert_eq!(doc.text_pos_at(p.range().start), TextPos::new(3, 5));
+    assert_eq!(doc.text_pos_at(p.range().end), TextPos::new(3, 16));
 
     let text = p.first_child().unwrap();
     assert_eq!(doc.text_pos_at(text.range().start), TextPos::new(3, 8));
@@ -176,7 +178,7 @@ fn text_pos_03() {
     let node = doc.root_element();
 
     assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(2, 1));
-    assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(2, 3));
+    assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(2, 5));
 }
 
 #[test]
