@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `Node::range`.
+- `Node::attribute_node`.
+- `Attribute::range`.
+- `Attribute::value_range`.
+
+### Changed
+- Rename `text_pos_from` into `text_pos_at`.
+
+### Removed
+- `Node::pos`. Use `Node::range` instead.
+- `Node::node_pos`. Use `doc.text_pos_at(node.range().start)` instead.
+- `Node::attribute_pos`.
+- `Node::attribute_value_pos`.
+- `Attribute::pos`. Use `Attribute::range` instead.
+- `Attribute::value_pos`. Use `Attribute::value_range` instead.
 
 ## [0.4.1] - 2018-01-02
 ### Changed

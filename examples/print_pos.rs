@@ -25,7 +25,7 @@ fn main() {
     // TODO: finish
     for node in doc.descendants() {
         if node.is_element() {
-            println!("{:?} at {}", node.tag_name(), node.node_pos());
+            println!("{:?} at {}", node.tag_name(), doc.text_pos_at(node.range().start));
         }
     }
 }

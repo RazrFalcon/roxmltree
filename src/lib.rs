@@ -24,7 +24,7 @@ extern crate xmlparser;
 
 use std::borrow::Cow;
 use std::fmt;
-use std::ops::{Deref, Range};
+use std::ops::Deref;
 use std::rc::Rc;
 
 pub use xmlparser::TextPos;
@@ -39,6 +39,8 @@ pub const NS_XML_URI: &str = "http://www.w3.org/XML/1998/namespace";
 /// The <http://www.w3.org/2000/xmlns/> URI.
 pub const NS_XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
 
+
+type Range = std::ops::Range<usize>;
 
 /// An XML tree container.
 ///
@@ -117,15 +119,17 @@ impl<'d> Document<'d> {
     /// # Examples
     ///
     /// ```
-    /// let doc = roxmltree::Document::parse("\
+    /// use roxmltree::*;
+    ///
+    /// let doc = Document::parse("\
     /// <!-- comment -->
     /// <e/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.text_pos_from(10), roxmltree::TextPos::new(1, 11));
-    /// assert_eq!(doc.text_pos_from(9999), roxmltree::TextPos::new(2, 5));
+    /// assert_eq!(doc.text_pos_at(10), TextPos::new(1, 11));
+    /// assert_eq!(doc.text_pos_at(9999), TextPos::new(2, 5));
     /// ```
-    pub fn text_pos_from(&self, pos: usize) -> TextPos {
+    pub fn text_pos_at(&self, pos: usize) -> TextPos {
         xmlparser::Stream::from(self.text).gen_text_pos_from(pos)
     }
 }
@@ -235,8 +239,8 @@ enum NodeKind<'d> {
     Root,
     Element {
         tag_name: ExpandedNameOwned<'d>,
-        attributes: Range<usize>,
-        namespaces: Range<usize>,
+        attributes: Range,
+        namespaces: Range,
     },
     PI(PI<'d>),
     Comment(&'d str),
@@ -250,7 +254,7 @@ struct NodeData<'d> {
     next_sibling: Option<NodeId>,
     children: Option<(NodeId, NodeId)>,
     kind: NodeKind<'d>,
-    orig_pos: usize,
+    range: Range,
 }
 
 
@@ -258,8 +262,8 @@ struct NodeData<'d> {
 pub struct Attribute<'d> {
     name: ExpandedNameOwned<'d>,
     value: Cow<'d, str>,
-    attr_pos: usize,
-    value_pos: usize,
+    range: Range,
+    value_range: Range,
 }
 
 impl<'d> Attribute<'d> {
@@ -311,32 +315,32 @@ impl<'d> Attribute<'d> {
         &self.value
     }
 
-    /// Returns attribute's name position in bytes in the original document.
+    /// Returns attribute's name range in bytes in the original document.
     ///
-    /// You can calculate a human-readable text position via [Node::text_pos_from].
+    /// You can calculate a human-readable text position via [Document::text_pos_at].
     ///
     /// ```text
     /// <e attr='value'/>
     ///    ^
     /// ```
     ///
-    /// [Node::text_pos_from]: struct.Node.html#method.text_pos_from
-    pub fn pos(&self) -> usize {
-        self.attr_pos
+    /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
+    pub fn range(&self) -> Range {
+        self.range.clone()
     }
 
-    /// Returns attribute's value position in bytes in the original document.
+    /// Returns attribute's value range in bytes in the original document.
     ///
-    /// You can calculate a human-readable text position via [Node::text_pos_from].
+    /// You can calculate a human-readable text position via [Document::text_pos_at].
     ///
     /// ```text
     /// <e attr='value'/>
     ///          ^
     /// ```
     ///
-    /// [Node::text_pos_from]: struct.Node.html#method.text_pos_from
-    pub fn value_pos(&self) -> usize {
-        self.value_pos
+    /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
+    pub fn value_range(&self) -> Range {
+        self.value_range.clone()
     }
 }
 
@@ -420,7 +424,7 @@ impl<'d> Namespaces<'d> {
         self[0].uri.clone()
     }
 
-    fn get_by_prefix(&self, range: Range<usize>, prefix: &str) -> Option<Uri> {
+    fn get_by_prefix(&self, range: Range, prefix: &str) -> Option<Uri> {
         let prefix = if prefix.is_empty() { None } else { Some(prefix) };
 
         self[range].iter()
@@ -799,6 +803,18 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
         self.attributes().iter().find(|a| a.name.as_ref() == name).map(|a| a.value.as_ref())
     }
 
+    /// Returns element's attribute object.
+    ///
+    /// The same as [`attribute()`], but returns the `Attribute` itself instead of a value string.
+    ///
+    /// [`attribute()`]: struct.Node.html#method.attribute
+    pub fn attribute_node<N>(&self, name: N) -> Option<&'a Attribute<'d>>
+        where N: Into<ExpandedName<'a>>
+    {
+        let name = name.into();
+        self.attributes().iter().find(|a| a.name.as_ref() == name)
+    }
+
     /// Checks that element has a specified attribute.
     ///
     /// # Examples
@@ -837,54 +853,6 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
             NodeKind::Element { ref attributes, .. } => &self.doc.attrs[attributes.clone()],
             _ => &[],
         }
-    }
-
-    /// Calculates attribute's position in the original document.
-    ///
-    /// **Note:** this operation is expensive.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse(
-    ///     "<e xmlns:n='http://www.w3.org' a='b' n:a='c'/>"
-    /// ).unwrap();
-    ///
-    /// assert_eq!(doc.root_element().attribute_pos("a"),
-    ///            Some(roxmltree::TextPos::new(1, 32)));
-    /// assert_eq!(doc.root_element().attribute_pos(("http://www.w3.org", "a")),
-    ///            Some(roxmltree::TextPos::new(1, 38)));
-    /// ```
-    pub fn attribute_pos<N>(&self, name: N) -> Option<TextPos>
-        where N: Into<ExpandedName<'a>>
-    {
-        let name = name.into();
-        self.attributes().iter().find(|a| a.name.as_ref() == name)
-            .map(|a| self.document().text_pos_from(a.attr_pos))
-    }
-
-    /// Calculates attribute's value position in the original document.
-    ///
-    /// **Note:** this operation is expensive.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse(
-    ///     "<e xmlns:n='http://www.w3.org' a='b' n:a='c'/>"
-    /// ).unwrap();
-    ///
-    /// assert_eq!(doc.root_element().attribute_value_pos("a"),
-    ///            Some(roxmltree::TextPos::new(1, 35)));
-    /// assert_eq!(doc.root_element().attribute_value_pos(("http://www.w3.org", "a")),
-    ///            Some(roxmltree::TextPos::new(1, 43)));
-    /// ```
-    pub fn attribute_value_pos<N>(&self, name: N) -> Option<TextPos>
-        where N: Into<ExpandedName<'a>>
-    {
-        let name = name.into();
-        self.attributes().iter().find(|a| a.name.as_ref() == name)
-            .map(|a| self.document().text_pos_from(a.value_pos))
     }
 
     /// Returns element's namespaces.
@@ -1086,27 +1054,9 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
         Descendants(self.traverse())
     }
 
-    /// Returns node's position in bytes in the original document.
-    pub fn pos(&self) -> usize {
-        self.d.orig_pos
-    }
-
-    /// Calculates node's position in the original document.
-    ///
-    /// **Note:** this operation is expensive.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("\
-    /// <!-- comment -->
-    /// <e/>"
-    /// ).unwrap();
-    ///
-    /// assert_eq!(doc.root_element().node_pos(), roxmltree::TextPos::new(2, 1));
-    /// ```
-    pub fn node_pos(&self) -> TextPos {
-        self.document().text_pos_from(self.d.orig_pos)
+    /// Returns node's range in bytes in the original document.
+    pub fn range(&self) -> Range {
+        self.d.range.clone()
     }
 }
 

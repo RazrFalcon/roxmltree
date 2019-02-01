@@ -132,19 +132,22 @@ fn text_pos_01() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(node.node_pos(), TextPos::new(1, 1));
-    assert_eq!(node.attribute_pos("a").unwrap(), TextPos::new(1, 4));
-    assert_eq!(node.attribute_value_pos("a").unwrap(), TextPos::new(1, 7));
+    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
+
+    if let Some(attr) = node.attribute_node("a") {
+        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 4));
+        assert_eq!(doc.text_pos_at(attr.value_range().start), TextPos::new(1, 7));
+    }
 
     // first child is a text/whitespace, not a comment
     let comm = node.first_child().unwrap().next_sibling().unwrap();
-    assert_eq!(comm.node_pos(), TextPos::new(2, 5));
+    assert_eq!(doc.text_pos_at(comm.range().start), TextPos::new(2, 5));
 
     let p = comm.next_sibling().unwrap().next_sibling().unwrap();
-    assert_eq!(p.node_pos(), TextPos::new(3, 5));
+    assert_eq!(doc.text_pos_at(p.range().start), TextPos::new(3, 5));
 
     let text = p.first_child().unwrap();
-    assert_eq!(text.node_pos(), TextPos::new(3, 8));
+    assert_eq!(doc.text_pos_at(text.range().start), TextPos::new(3, 8));
 }
 
 #[test]
@@ -154,9 +157,12 @@ fn text_pos_02() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(node.node_pos(), TextPos::new(1, 1));
-    assert_eq!(node.attribute_pos(("http://www.w3.org", "a")).unwrap(), TextPos::new(1, 36));
-    assert_eq!(node.attribute_value_pos(("http://www.w3.org", "a")).unwrap(), TextPos::new(1, 42));
+    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
+
+    if let Some(attr) = node.attribute_node(("http://www.w3.org", "a")) {
+        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 36));
+        assert_eq!(doc.text_pos_at(attr.value_range().start), TextPos::new(1, 42));
+    }
 }
 
 #[test]
@@ -169,12 +175,13 @@ fn text_pos_03() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(node.node_pos(), TextPos::new(2, 1));
+    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(2, 1));
+    assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(2, 3));
 }
 
 #[test]
 fn lifetimes() {
-    fn f<'a, 'd, F, R>(doc: &'a roxmltree::Document<'d>, fun: F) -> R 
+    fn f<'a, 'd, F, R>(doc: &'a roxmltree::Document<'d>, fun: F) -> R
         where F: Fn(&'a roxmltree::Document<'d>) -> R
     {
         fun(doc)
@@ -192,6 +199,7 @@ fn lifetimes() {
     let _ = f(&doc, |d| d.root().lookup_prefix(""));
     let _ = f(&doc, |d| d.root().lookup_namespace_uri(None));
     let _ = f(&doc, |d| d.root().attribute("a"));
+    let _ = f(&doc, |d| d.root().attribute_node("a"));
     let _ = f(&doc, |d| d.root().attributes());
     let _ = f(&doc, |d| d.root().namespaces());
     let _ = f(&doc, |d| d.root().text());
