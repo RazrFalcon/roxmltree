@@ -18,36 +18,34 @@ See the [Performance](#performance) section for details.
 
 Sadly, XML can be parsed in many different ways. *roxmltree* tries to mimic the
 behavior of Python's [lxml](https://lxml.de/).
-
-Unlike *lxml*, *roxmltree* does support comments outside the root element.
+But unlike *lxml*, *roxmltree* does support comments outside the root element.
 
 Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md).
 
 ## Alternatives
 
-\* Rust-based for now.
-
-| Feature/Crate                   | roxmltree        | [xmltree]        | [elementtree]    | [sxd-document]   | [treexml]        |
-| ------------------------------- | :--------------: | :--------------: | :--------------: | :--------------: | :--------------: |
-| Element namespace resolving     | ✔                | ✔                | ✔               | ~<sup>1</sup>     |                  |
-| Attribute namespace resolving   | ✔                |                  |                  | ✔                |                  |
-| [Entity references]             | ✔                | ⚠                | ⚠                | ⚠             | ⚠                |
-| [Character references]          | ✔                | ✔                | ✔                | ✔                | ✔                |
-| [Attribute-Value normalization] | ✔                |                  |                  |                  |                  |
-| Comments                        | ✔                |                  |                  | ✔                |                  |
-| Processing instructions         | ✔                | ⚠                |                  | ✔               |                  |
-| UTF-8 BOM                       | ✔                | ⚠               | ⚠               | ⚠               | ⚠                |
-| Non UTF-8 input                 |                  |                  |                  |                  |                  |
-| Complete DTD support            |                  |                  |                  |                  |                  |
-| Position preserving<sup>2</sup> | ✔                |                 |                 |                 |                  |
-| `xml:space`                     |                  |                  |                  |                  |                  |
-| Tree modifications              |                  | ✔                | ✔                | ✔                | ✔                |
-| Writing                         |                  | ✔                | ✔                | ✔                | ✔                |
-| No **unsafe**                   | ✔                | ✔                | ~<sup>3</sup>    |                  | ✔                |
-| Size overhead<sup>4</sup>       | **~62KiB**       | ~80KiB           | ~96KiB           | ~130KiB          | ~110KiB          |
-| Dependencies                    | **1**            | 2                | 18               | 2                | 14               |
-| Tested version                  | 0.4.1            | 0.8.0            | 0.5.0            | 0.2.6            | 0.7.0            |
-| License                         | MIT / Apache-2.0 | MIT              | BSD-3-Clause     | MIT              | MIT              |
+| Feature/Crate                   | roxmltree        | [libxml2]        | [xmltree]        | [elementtree]    | [sxd-document]   | [treexml]        |
+| ------------------------------- | :--------------: | :--------------: | :--------------: | :--------------: | :--------------: | :--------------: |
+| Element namespace resolving     | ✔                | ✔                | ✔                | ✔               | ~<sup>1</sup>     |                  |
+| Attribute namespace resolving   | ✔                | ✔                |                  |                  | ✔                |                  |
+| [Entity references]             | ✔                | ✔                | ⚠                | ⚠                | ⚠             | ⚠                |
+| [Character references]          | ✔                | ✔                | ✔                | ✔                | ✔                | ✔                |
+| [Attribute-Value normalization] | ✔                | ✔                |                  |                  |                  |                  |
+| Comments                        | ✔                | ✔                |                  |                  | ✔                |                  |
+| Processing instructions         | ✔                | ✔                | ⚠                |                  | ✔               |                  |
+| UTF-8 BOM                       | ✔                | ✔                | ⚠               | ⚠               | ⚠               | ⚠                |
+| Non UTF-8 input                 |                  | ✔                 |                  |                  |                  |                  |
+| Complete DTD support            |                  | ✔                |                  |                  |                  |                  |
+| Position preserving<sup>2</sup> | ✔                | ✔                |                 |                 |                 |                  |
+| HTML support                    |                  | ✔                |                  |                  |                  |                  |
+| Tree modifications              |                  | ✔                | ✔                | ✔                | ✔                | ✔                |
+| Writing                         |                  | ✔                | ✔                | ✔                | ✔                | ✔                |
+| No **unsafe**                   | ✔                |                  | ✔                | ~<sup>3</sup>    |                  | ✔                |
+| Language                        | Rust             | C                | Rust             | Rust             | Rust             | Rust             |
+| Size overhead<sup>4</sup>       | **~62KiB**       | ~1.4M            | ~80KiB           | ~96KiB           | ~130KiB          | ~110KiB          |
+| Dependencies                    | **1**            | -                | 2                | 18               | 2                | 14               |
+| Tested version                  | 0.4.1            | 2.9.8            | 0.8.0            | 0.5.0            | 0.2.6            | 0.7.0            |
+| License                         | MIT / Apache-2.0 | MIT              | MIT              | BSD-3-Clause     | MIT              | MIT              |
 
 Legend:
 
@@ -69,6 +67,7 @@ Notes:
 [Character references]: https://www.w3.org/TR/REC-xml/#NT-CharRef
 [Attribute-Value Normalization]: https://www.w3.org/TR/REC-xml/#AVNormalize
 
+[libxml2]: http://xmlsoft.org/
 [xmltree]: https://crates.io/crates/xmltree
 [elementtree]: https://crates.io/crates/elementtree
 [treexml]: https://crates.io/crates/treexml
@@ -112,9 +111,15 @@ test tiny_xmlparser      ... bench:       4,283 ns/iter (+/- 29)
 test tiny_xmlrs          ... bench:      45,832 ns/iter (+/- 50)
 ```
 
-*Note:* tree crates may use different *xml-rs* crate versions.
-
 You can try it yourself by running `cargo bench` in the `benches` dir.
+
+Notes:
+
+- Since all libraries have a different XML support, benchmarking is a bit pointless.
+- Tree crates may use different *xml-rs* crate versions.
+- We do not bench the libxml2, because `xmlReadFile()` will parse only an XML structure,
+  without attributes normalization and stuff. So it's hard to compare.
+  And we have to use a separate benchmark utility.
 
 [xml-rs]: https://crates.io/crates/xml-rs
 [xmlparser]: https://crates.io/crates/xmlparser
