@@ -178,4 +178,4 @@ benchmark_group!(treexml, tiny_treexml, medium_treexml, large_treexml);
 benchmark_group!(xmlparser, tiny_xmlparser, medium_xmlparser, large_xmlparser);
 benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs);
 benchmark_main!(roxmltree, xmltree, sdx, elementtree, treexml, xmlparser, xmlrs);
-//benchmark_main!(roxmltree);
+// benchmark_main!(roxmltree, xmlparser);

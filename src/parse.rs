@@ -317,25 +317,24 @@ fn process_tokens<'d>(
         match token {
             xmlparser::Token::ProcessingInstruction { target, content, span } => {
                 let pi = NodeKind::PI(PI {
-                    target: target.to_str(),
-                    value: content.map(|v| v.to_str()),
+                    target: target.as_str(),
+                    value: content.map(|v| v.as_str()),
                 });
                 doc.append(parent_id, pi, span.range());
             }
             xmlparser::Token::Comment { text, span } => {
-                doc.append(parent_id, NodeKind::Comment(text.to_str()), span.range());
+                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range());
             }
-            xmlparser::Token::Text { text } |
-            xmlparser::Token::Whitespaces { text } => {
+            xmlparser::Token::Text { text } => {
                 process_text(text, parent_id, entity_depth, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
-                let cow_str = Cow::Borrowed(text.to_str());
+                let cow_str = Cow::Borrowed(text.as_str());
                 append_text(cow_str, parent_id, span.range(), pd.after_text, doc);
                 pd.after_text = true;
             }
             xmlparser::Token::ElementStart { prefix, local, span } => {
-                if prefix.to_str() == "xmlns" {
+                if prefix.as_str() == "xmlns" {
                     let pos = err_pos_from_span(prefix);
                     return Err(Error::InvalidElementNamePrefix(pos));
                 }
@@ -350,7 +349,7 @@ fn process_tokens<'d>(
             }
             xmlparser::Token::EntityDeclaration { name, definition, .. } => {
                 if let xmlparser::EntityDefinition::EntityValue(value) = definition {
-                    pd.entities.push(Entity { name: name.to_str(), value });
+                    pd.entities.push(Entity { name: name.as_str(), value });
                 }
             }
             _ => {}
@@ -379,8 +378,8 @@ fn process_attribute<'d>(
     pd: &mut ParserData<'d>,
     doc: &mut Document<'d>,
 ) -> Result<(), Error> {
-    let prefix_str = prefix.to_str();
-    let local_str = local.to_str();
+    let prefix_str = prefix.as_str();
+    let local_str = local.as_str();
     let range = token_span.range();
     let value_range = value.range();
     let value = normalize_attribute(entity_depth, value, &pd.entities, &mut pd.buffer)?;
@@ -471,14 +470,14 @@ fn process_element<'d>(
     pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
 
-    let tag_ns_uri = doc.namespaces.get_by_prefix(namespaces.clone(), tag_name.prefix.to_str());
+    let tag_ns_uri = doc.namespaces.get_by_prefix(namespaces.clone(), tag_name.prefix.as_str());
     match end_token {
         xmlparser::ElementEnd::Empty => {
             doc.append(*parent_id,
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
                         ns: tag_ns_uri,
-                        name: tag_name.name.to_str(),
+                        name: tag_name.name.as_str(),
                     },
                     attributes,
                     namespaces,
@@ -487,8 +486,8 @@ fn process_element<'d>(
             );
         }
         xmlparser::ElementEnd::Close(prefix, local) => {
-            let prefix = prefix.to_str();
-            let local = local.to_str();
+            let prefix = prefix.as_str();
+            let local = local.as_str();
 
             doc.nodes[parent_id.0].range.end = token_span.end();
             if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.0].kind {
@@ -515,7 +514,7 @@ fn process_element<'d>(
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
                         ns: tag_ns_uri,
-                        name: tag_name.name.to_str(),
+                        name: tag_name.name.as_str(),
                     },
                     attributes,
                     namespaces,
@@ -612,8 +611,8 @@ fn process_text<'d>(
     doc: &mut Document<'d>,
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
-    if !text.to_str().bytes().any(|b| b == b'&' || b == b'\r') {
-        append_text(Cow::Borrowed(text.to_str()), parent_id, text.range(), pd.after_text, doc);
+    if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
+        append_text(Cow::Borrowed(text.as_str()), parent_id, text.range(), pd.after_text, doc);
         pd.after_text = true;
         return Ok(());
     }
@@ -726,17 +725,18 @@ fn parse_next_chunk<'a>(
 
     // Check for character/entity references.
     if c == b'&' {
+        let start = s.pos();
         match s.try_consume_reference() {
-            Some(Reference::CharRef(ch)) => {
+            Some(Reference::Char(ch)) => {
                 Ok(NextChunk::Char(ch))
             }
-            Some(Reference::EntityRef(name)) => {
+            Some(Reference::Entity(name)) => {
                 match entities.iter().find(|e| e.name == name) {
                     Some(entity) => {
                         Ok(NextChunk::Text(entity.value))
                     }
                     None => {
-                        let pos = s.gen_text_pos();
+                        let pos = s.gen_text_pos_from(start);
                         Err(Error::UnknownEntityReference(name.into(), pos))
                     }
                 }
@@ -764,7 +764,7 @@ fn normalize_attribute<'d>(
         _normalize_attribute(text, entities, entity_depth, buffer)?;
         Ok(Cow::Owned(buffer.to_str().to_owned()))
     } else {
-        Ok(Cow::Borrowed(text.to_str()))
+        Ok(Cow::Borrowed(text.as_str()))
     }
 }
 
@@ -782,7 +782,7 @@ fn is_normalization_required(text: &StrSpan) -> bool {
         }
     }
 
-    text.to_str().bytes().any(check)
+    text.as_str().bytes().any(check)
 }
 
 fn _normalize_attribute(
@@ -800,13 +800,14 @@ fn _normalize_attribute(
 
         if c != b'&' {
             s.advance(1);
-            buffer.push_from_attr(c, s.get_curr_byte());
+            buffer.push_from_attr(c, s.curr_byte().ok());
             continue;
         }
 
         // Check for character/entity references.
+        let start = s.pos();
         match s.try_consume_reference() {
-            Some(Reference::CharRef(ch)) => {
+            Some(Reference::Char(ch)) => {
                 for b in CharToBytes::new(ch) {
                     if entity_depth > 0 {
                         buffer.push_from_attr(b, None);
@@ -817,7 +818,7 @@ fn _normalize_attribute(
                     }
                 }
             }
-            Some(Reference::EntityRef(name)) => {
+            Some(Reference::Entity(name)) => {
                 if entity_depth > ENTITY_DEPTH {
                     let pos = s.gen_text_pos();
                     return Err(Error::EntityReferenceLoop(pos));
@@ -829,14 +830,14 @@ fn _normalize_attribute(
                         _normalize_attribute(entity.value, entities, entity_depth, buffer)?;
                     }
                     None => {
-                        let pos = s.gen_text_pos();
+                        let pos = s.gen_text_pos_from(start);
                         return Err(Error::UnknownEntityReference(name.into(), pos));
                     }
                 }
             }
             None => {
                 s.advance(1);
-                buffer.push_from_attr(c, s.get_curr_byte());
+                buffer.push_from_attr(c, s.curr_byte().ok());
             }
         }
     }
