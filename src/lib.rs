@@ -424,14 +424,6 @@ impl<'d> Namespaces<'d> {
         self[0].uri.clone()
     }
 
-    fn get_by_prefix(&self, range: Range, prefix: &str) -> Option<Uri> {
-        let prefix = if prefix.is_empty() { None } else { Some(prefix) };
-
-        self[range].iter()
-                   .find(|ns| ns.name == prefix)
-                   .map(|ns| ns.uri.clone())
-    }
-
     fn exists(&self, start: usize, prefix: Option<&str>) -> bool {
         self[start..].iter().any(|ns| ns.name == prefix)
     }

@@ -25,6 +25,7 @@ use {
     NodeKind,
     PI,
     Range,
+    Uri,
 };
 
 const ENTITY_DEPTH: u8 = 10;
@@ -47,6 +48,13 @@ pub enum Error {
 
     /// A namespace was already defined on this element.
     DuplicatedNamespace(String, TextPos),
+
+    /// An unknown namespace.
+    ///
+    /// Indicates that an element or an attribute has an unknown qualified name prefix.
+    ///
+    /// The first value is a prefix.
+    UnknownNamespace(String, TextPos),
 
     /// Incorrect tree structure.
     #[allow(missing_docs)]
@@ -92,6 +100,7 @@ impl Error {
             Error::UnexpectedXmlnsUri(pos) => pos,
             Error::InvalidElementNamePrefix(pos) => pos,
             Error::DuplicatedNamespace(ref _name, pos) => pos,
+            Error::UnknownNamespace(ref _name, pos) => pos,
             Error::UnexpectedCloseTag { pos, .. } => pos,
             Error::UnexpectedEntityCloseTag(pos) => pos,
             Error::UnknownEntityReference(ref _name, pos) => pos,
@@ -126,6 +135,9 @@ impl fmt::Display for Error {
             }
             Error::DuplicatedNamespace(ref name, pos) => {
                 write!(f, "namespace '{}' at {} is already defined", name, pos)
+            }
+            Error::UnknownNamespace(ref name, pos) => {
+                write!(f, "an unknown namespace prefix '{}' at {}", name, pos)
             }
             Error::UnexpectedCloseTag { ref expected, ref actual, pos } => {
                 write!(f, "expected '{}' tag, not '{}' at {}", expected, actual, pos)
@@ -466,11 +478,13 @@ fn process_element<'d>(
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
     pd.ns_start_idx = doc.namespaces.len();
 
-    let attributes = resolve_attributes(pd.attrs_start_idx, namespaces.clone(), &mut pd.tmp_attrs, doc)?;
+    let attributes = resolve_attributes(pd.attrs_start_idx, namespaces.clone(),
+                                        &mut pd.tmp_attrs, doc)?;
     pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
 
-    let tag_ns_uri = doc.namespaces.get_by_prefix(namespaces.clone(), tag_name.prefix.as_str());
+    let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(),
+                                      tag_name.prefix, tag_name.prefix.as_str())?;
     match end_token {
         xmlparser::ElementEnd::Empty => {
             doc.append(*parent_id,
@@ -580,7 +594,7 @@ fn resolve_attributes<'d>(
             // always has no value.'
             None
         } else {
-            doc.namespaces.get_by_prefix(namespaces.clone(), attr.prefix)
+            get_ns_by_prefix(doc, namespaces.clone(), attr.name, attr.prefix)?
         };
 
         let attr_name = ExpandedNameOwned { ns, name: attr.local };
@@ -843,6 +857,45 @@ fn _normalize_attribute(
     }
 
     Ok(())
+}
+
+fn get_ns_by_prefix(
+    doc: &Document,
+    range: Range,
+    token_span: StrSpan,
+    prefix: &str,
+) -> Result<Option<Uri>, Error> {
+    // Prefix CAN be empty when the default namespace was defined.
+    //
+    // Example:
+    // <e xmlns='http://www.w3.org'/>
+    let prefix_opt = if prefix.is_empty() { None } else { Some(prefix) };
+
+    let uri = doc.namespaces[range].iter()
+        .find(|ns| ns.name == prefix_opt)
+        .map(|ns| ns.uri.clone());
+
+    match uri {
+        Some(v) => Ok(Some(v)),
+        None => {
+            if !prefix.is_empty() {
+                // If an URI was not found and prefix IS NOT empty than
+                // we have an unknown namespace.
+                //
+                // Example:
+                // <e random:a='b'/>
+                let pos = err_pos_from_span(token_span);
+                Err(Error::UnknownNamespace(prefix.to_string(), pos))
+            } else {
+                // If an URI was not found and prefix IS empty than
+                // an element or an attribute doesn't have a namespace.
+                //
+                // Example:
+                // <e a='b'/>
+                Ok(None)
+            }
+        }
+    }
 }
 
 fn gen_qname_string(prefix: &str, local: &str) -> String {

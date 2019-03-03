@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `Error::UnknownNamespace`.
+
+### Fixed
+- Unknown namespace prefixes will cause an error now.
 
 ## [0.5.0] - 2018-02-27
 ### Added
