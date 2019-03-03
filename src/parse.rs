@@ -172,10 +172,8 @@ impl error::Error for Error {
 
 
 struct AttributeData<'d> {
-    /// Contains prefix or local name for error position.
-    name: StrSpan<'d>,
-    prefix: &'d str,
-    local: &'d str,
+    prefix: StrSpan<'d>,
+    local: StrSpan<'d>,
     value: Cow<'d, str>,
     range: Range,
     value_range: Range,
@@ -262,7 +260,7 @@ impl<'d> TagNameSpan<'d> {
     }
 
     fn new(prefix: StrSpan<'d>, name: StrSpan<'d>, span: StrSpan<'d>) -> Self {
-        Self { span, prefix, name }
+        Self { prefix, name, span }
     }
 }
 
@@ -390,13 +388,11 @@ fn process_attribute<'d>(
     pd: &mut ParserData<'d>,
     doc: &mut Document<'d>,
 ) -> Result<(), Error> {
-    let prefix_str = prefix.as_str();
-    let local_str = local.as_str();
     let range = token_span.range();
     let value_range = value.range();
     let value = normalize_attribute(entity_depth, value, &pd.entities, &mut pd.buffer)?;
 
-    if prefix_str == "xmlns" {
+    if prefix.as_str() == "xmlns" {
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value == NS_XMLNS_URI {
             let pos = err_pos_from_qname(prefix, local);
@@ -408,7 +404,7 @@ fn process_attribute<'d>(
         // The prefix 'xml' is by definition bound to the namespace name
         // http://www.w3.org/XML/1998/namespace.
         // It MUST NOT be bound to any other namespace name.
-        if local_str == "xml" {
+        if local.as_str() == "xml" {
             if !is_xml_ns_uri {
                 let pos = err_pos_from_span(prefix);
                 return Err(Error::InvalidXmlPrefixUri(pos));
@@ -422,16 +418,16 @@ fn process_attribute<'d>(
         }
 
         // Check for duplicated namespaces.
-        if doc.namespaces.exists(pd.ns_start_idx, Some(local_str)) {
+        if doc.namespaces.exists(pd.ns_start_idx, Some(local.as_str())) {
             let pos = err_pos_from_qname(prefix, local);
-            return Err(Error::DuplicatedNamespace(local_str.to_string(), pos));
+            return Err(Error::DuplicatedNamespace(local.as_str().to_string(), pos));
         }
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces.push_ns(Some(local_str), value.into());
+            doc.namespaces.push_ns(Some(local.as_str()), value.into());
         }
-    } else if local_str == "xmlns" {
+    } else if local.as_str() == "xmlns" {
         // The xml namespace MUST NOT be declared as the default namespace.
         if value == NS_XML_URI {
             let pos = err_pos_from_span(local);
@@ -446,9 +442,8 @@ fn process_attribute<'d>(
 
         doc.namespaces.push_ns(None, value.into());
     } else {
-        let name = if prefix.is_empty() { local } else { prefix };
         pd.tmp_attrs.push(AttributeData {
-            name, prefix: prefix_str, local: local_str, value, range, value_range
+            prefix, local, value, range, value_range
         });
     }
 
@@ -483,8 +478,7 @@ fn process_element<'d>(
     pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
 
-    let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(),
-                                      tag_name.prefix, tag_name.prefix.as_str())?;
+    let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
     match end_token {
         xmlparser::ElementEnd::Empty => {
             doc.append(*parent_id,
@@ -585,7 +579,7 @@ fn resolve_attributes<'d>(
     }
 
     for attr in tmp_attrs {
-        let ns = if attr.prefix == "xml" {
+        let ns = if attr.prefix.as_str() == "xml" {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace.
             Some(doc.namespaces.xml_uri())
@@ -594,14 +588,14 @@ fn resolve_attributes<'d>(
             // always has no value.'
             None
         } else {
-            get_ns_by_prefix(doc, namespaces.clone(), attr.name, attr.prefix)?
+            get_ns_by_prefix(doc, namespaces.clone(), attr.prefix)?
         };
 
-        let attr_name = ExpandedNameOwned { ns, name: attr.local };
+        let attr_name = ExpandedNameOwned { ns, name: attr.local.as_str() };
 
         // Check for duplicated attributes.
         if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
-            let pos = err_pos_from_span(attr.name);
+            let pos = err_pos_from_qname(attr.prefix, attr.local);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
@@ -862,14 +856,13 @@ fn _normalize_attribute(
 fn get_ns_by_prefix(
     doc: &Document,
     range: Range,
-    token_span: StrSpan,
-    prefix: &str,
+    prefix: StrSpan,
 ) -> Result<Option<Uri>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
     //
     // Example:
     // <e xmlns='http://www.w3.org'/>
-    let prefix_opt = if prefix.is_empty() { None } else { Some(prefix) };
+    let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
 
     let uri = doc.namespaces[range].iter()
         .find(|ns| ns.name == prefix_opt)
@@ -884,8 +877,8 @@ fn get_ns_by_prefix(
                 //
                 // Example:
                 // <e random:a='b'/>
-                let pos = err_pos_from_span(token_span);
-                Err(Error::UnknownNamespace(prefix.to_string(), pos))
+                let pos = err_pos_from_span(prefix);
+                Err(Error::UnknownNamespace(prefix.as_str().to_string(), pos))
             } else {
                 // If an URI was not found and prefix IS empty than
                 // an element or an attribute doesn't have a namespace.
