@@ -13,8 +13,6 @@ License: ISC.
 [parsing doc]: https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md
 */
 
-#![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
-
 #![doc(html_root_url = "https://docs.rs/roxmltree/0.6.0")]
 
 #![forbid(unsafe_code)]
@@ -64,17 +62,17 @@ type Range = std::ops::Range<usize>;
 /// [`Node::node_type()`]: struct.Node.html#method.node_type
 /// [`Node::text()`]: struct.Node.html#method.text
 /// [`Node::tail()`]: struct.Node.html#method.tail
-pub struct Document<'d> {
+pub struct Document<'input> {
     /// An original data.
     ///
     /// Required for `text_pos` methods.
-    text: &'d str,
-    nodes: Vec<NodeData<'d>>,
-    attrs: Vec<Attribute<'d>>,
-    namespaces: Namespaces<'d>,
+    text: &'input str,
+    nodes: Vec<NodeData<'input>>,
+    attrs: Vec<Attribute<'input>>,
+    namespaces: Namespaces<'input>,
 }
 
-impl<'d> Document<'d> {
+impl<'input> Document<'input> {
     /// Returns the root node.
     ///
     /// # Examples
@@ -84,7 +82,7 @@ impl<'d> Document<'d> {
     /// assert!(doc.root().is_root());
     /// assert!(doc.root().first_child().unwrap().has_tag_name("e"));
     /// ```
-    pub fn root<'a>(&'a self) -> Node<'a, 'd> {
+    pub fn root<'a>(&'a self) -> Node<'a, 'input> {
         Node { id: NodeId(0), d: &self.nodes[0], doc: self }
     }
 
@@ -134,7 +132,7 @@ impl<'d> Document<'d> {
     }
 }
 
-impl<'d> fmt::Debug for Document<'d> {
+impl<'input> fmt::Debug for Document<'input> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         if !self.root().has_children() {
             return write!(f, "Document []");
@@ -222,9 +220,9 @@ pub enum NodeType {
 /// A processing instruction.
 #[derive(Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
-pub struct PI<'d> {
-    pub target: &'d str,
-    pub value: Option<&'d str>,
+pub struct PI<'input> {
+    pub target: &'input str,
+    pub value: Option<&'input str>,
 }
 
 
@@ -235,38 +233,38 @@ pub struct PI<'d> {
 struct NodeId(usize);
 
 
-enum NodeKind<'d> {
+enum NodeKind<'input> {
     Root,
     Element {
-        tag_name: ExpandedNameOwned<'d>,
+        tag_name: ExpandedNameOwned<'input>,
         attributes: Range,
         namespaces: Range,
     },
-    PI(PI<'d>),
-    Comment(&'d str),
-    Text(Cow<'d, str>),
+    PI(PI<'input>),
+    Comment(&'input str),
+    Text(Cow<'input, str>),
 }
 
 
-struct NodeData<'d> {
+struct NodeData<'input> {
     parent: Option<NodeId>,
     prev_sibling: Option<NodeId>,
     next_sibling: Option<NodeId>,
     children: Option<(NodeId, NodeId)>,
-    kind: NodeKind<'d>,
+    kind: NodeKind<'input>,
     range: Range,
 }
 
 
 /// An attribute.
-pub struct Attribute<'d> {
-    name: ExpandedNameOwned<'d>,
-    value: Cow<'d, str>,
+pub struct Attribute<'input> {
+    name: ExpandedNameOwned<'input>,
+    value: Cow<'input, str>,
     range: Range,
     value_range: Range,
 }
 
-impl<'d> Attribute<'d> {
+impl<'input> Attribute<'input> {
     /// Returns attribute's namespace URI.
     ///
     /// # Examples
@@ -344,13 +342,13 @@ impl<'d> Attribute<'d> {
     }
 }
 
-impl<'d> PartialEq for Attribute<'d> {
-    fn eq(&self, other: &Attribute<'d>) -> bool {
+impl<'input> PartialEq for Attribute<'input> {
+    fn eq(&self, other: &Attribute<'input>) -> bool {
         self.name == other.name && self.value == other.value
     }
 }
 
-impl<'d> fmt::Debug for Attribute<'d> {
+impl<'input> fmt::Debug for Attribute<'input> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "Attribute {{ name: {:?}, value: {:?} }}",
                self.name, self.value)
@@ -362,12 +360,12 @@ impl<'d> fmt::Debug for Attribute<'d> {
 ///
 /// Contains URI and *prefix* pair.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Namespace<'d> {
-    name: Option<&'d str>,
+pub struct Namespace<'input> {
+    name: Option<&'input str>,
     uri: Uri,
 }
 
-impl<'d> Namespace<'d> {
+impl<'input> Namespace<'input> {
     /// Returns namespace name/prefix.
     ///
     /// # Examples
@@ -408,10 +406,10 @@ impl<'d> Namespace<'d> {
 }
 
 
-struct Namespaces<'d>(Vec<Namespace<'d>>);
+struct Namespaces<'input>(Vec<Namespace<'input>>);
 
-impl<'d> Namespaces<'d> {
-    fn push_ns(&mut self, name: Option<&'d str>, uri: String) {
+impl<'input> Namespaces<'input> {
+    fn push_ns(&mut self, name: Option<&'input str>, uri: String) {
         debug_assert_ne!(name, Some(""));
 
         self.0.push(Namespace {
@@ -429,8 +427,8 @@ impl<'d> Namespaces<'d> {
     }
 }
 
-impl<'d> Deref for Namespaces<'d> {
-    type Target = Vec<Namespace<'d>>;
+impl<'input> Deref for Namespaces<'input> {
+    type Target = Vec<Namespace<'input>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -470,18 +468,18 @@ impl fmt::Debug for Uri {
 
 
 #[derive(Clone, PartialEq)]
-struct ExpandedNameOwned<'d> {
+struct ExpandedNameOwned<'input> {
     ns: Option<Uri>,
-    name: &'d str,
+    name: &'input str,
 }
 
-impl<'d> ExpandedNameOwned<'d> {
+impl<'input> ExpandedNameOwned<'input> {
     fn as_ref(&self) -> ExpandedName {
         ExpandedName { uri: self.ns.as_ref().map(Uri::as_str), name: self.name }
     }
 }
 
-impl<'d> fmt::Debug for ExpandedNameOwned<'d> {
+impl<'input> fmt::Debug for ExpandedNameOwned<'input> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self.ns {
             Some(ref ns) => write!(f, "{{{}}}{}", ns.as_str(), self.name),
@@ -495,12 +493,12 @@ impl<'d> fmt::Debug for ExpandedNameOwned<'d> {
 ///
 /// Contains an namespace URI and name pair.
 #[derive(Clone, Copy, PartialEq)]
-pub struct ExpandedName<'d> {
-    uri: Option<&'d str>,
-    name: &'d str,
+pub struct ExpandedName<'input> {
+    uri: Option<&'input str>,
+    name: &'input str,
 }
 
-impl<'d> ExpandedName<'d> {
+impl<'input> ExpandedName<'input> {
     /// Returns a namespace URI.
     ///
     /// # Examples
@@ -510,7 +508,7 @@ impl<'d> ExpandedName<'d> {
     ///
     /// assert_eq!(doc.root_element().tag_name().namespace(), Some("http://www.w3.org"));
     /// ```
-    pub fn namespace(&self) -> Option<&'d str> {
+    pub fn namespace(&self) -> Option<&'input str> {
         self.uri
     }
 
@@ -523,12 +521,12 @@ impl<'d> ExpandedName<'d> {
     ///
     /// assert_eq!(doc.root_element().tag_name().name(), "e");
     /// ```
-    pub fn name(&self) -> &'d str {
+    pub fn name(&self) -> &'input str {
         self.name
     }
 }
 
-impl<'d> fmt::Debug for ExpandedName<'d> {
+impl<'input> fmt::Debug for ExpandedName<'input> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self.namespace() {
             Some(ns) => write!(f, "{{{}}}{}", ns, self.name),
@@ -537,8 +535,8 @@ impl<'d> fmt::Debug for ExpandedName<'d> {
     }
 }
 
-impl<'d> From<&'d str> for ExpandedName<'d> {
-    fn from(v: &'d str) -> Self {
+impl<'input> From<&'input str> for ExpandedName<'input> {
+    fn from(v: &'input str) -> Self {
         ExpandedName {
             uri: None,
             name: v,
@@ -546,8 +544,8 @@ impl<'d> From<&'d str> for ExpandedName<'d> {
     }
 }
 
-impl<'d> From<(&'d str, &'d str)> for ExpandedName<'d> {
-    fn from(v: (&'d str, &'d str)) -> Self {
+impl<'input> From<(&'input str, &'input str)> for ExpandedName<'input> {
+    fn from(v: (&'input str, &'input str)) -> Self {
         ExpandedName {
             uri: Some(v.0),
             name: v.1,
@@ -558,19 +556,19 @@ impl<'d> From<(&'d str, &'d str)> for ExpandedName<'d> {
 
 /// A node.
 #[derive(Clone, Copy)]
-pub struct Node<'a, 'd: 'a> {
+pub struct Node<'a, 'input: 'a> {
     /// Node ID.
     id: NodeId,
 
     /// Tree containing the node.
-    doc: &'a Document<'d>,
+    doc: &'a Document<'input>,
 
-    d: &'a NodeData<'d>,
+    d: &'a NodeData<'input>,
 }
 
-impl<'a, 'd> Eq for Node<'a, 'd> {}
+impl<'a, 'input> Eq for Node<'a, 'input> {}
 
-impl<'a, 'd> PartialEq for Node<'a, 'd> {
+impl<'a, 'input> PartialEq for Node<'a, 'input> {
     fn eq(&self, other: &Self) -> bool {
            self.id == other.id
         && self.doc as *const _ == other.doc as *const _
@@ -578,7 +576,7 @@ impl<'a, 'd> PartialEq for Node<'a, 'd> {
     }
 }
 
-impl<'a, 'd: 'a> Node<'a, 'd> {
+impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns node's type.
     pub fn node_type(&self) -> NodeType {
         match self.d.kind {
@@ -616,7 +614,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     }
 
     /// Returns node's document.
-    pub fn document(&self) -> &'a Document<'d> {
+    pub fn document(&self) -> &'a Document<'input> {
         self.doc
     }
 
@@ -800,7 +798,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     /// The same as [`attribute()`], but returns the `Attribute` itself instead of a value string.
     ///
     /// [`attribute()`]: struct.Node.html#method.attribute
-    pub fn attribute_node<N>(&self, name: N) -> Option<&'a Attribute<'d>>
+    pub fn attribute_node<N>(&self, name: N) -> Option<&'a Attribute<'input>>
         where N: Into<ExpandedName<'a>>
     {
         let name = name.into();
@@ -840,7 +838,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().attributes().len(), 2);
     /// ```
-    pub fn attributes(&self) -> &'a [Attribute<'d>] {
+    pub fn attributes(&self) -> &'a [Attribute<'input>] {
         match self.d.kind {
             NodeKind::Element { ref attributes, .. } => &self.doc.attrs[attributes.clone()],
             _ => &[],
@@ -858,7 +856,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     ///
     /// assert_eq!(doc.root_element().namespaces().len(), 1);
     /// ```
-    pub fn namespaces(&self) -> &'a [Namespace<'d>] {
+    pub fn namespaces(&self) -> &'a [Namespace<'input>] {
         match self.d.kind {
             NodeKind::Element { ref namespaces, .. } => {
                 &self.doc.namespaces[namespaces.clone()]
@@ -945,14 +943,14 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     }
 
     /// Returns node as Processing Instruction.
-    pub fn pi(&self) -> Option<PI<'d>> {
+    pub fn pi(&self) -> Option<PI<'input>> {
         match self.d.kind {
             NodeKind::PI(pi) => Some(pi),
             _ => None,
         }
     }
 
-    fn gen_node(&self, id: NodeId) -> Node<'a, 'd> {
+    fn gen_node(&self, id: NodeId) -> Node<'a, 'input> {
         Node { id, d: &self.doc.nodes[id.0], doc: self.doc }
     }
 
@@ -1007,42 +1005,42 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     }
 
     /// Returns an iterator over ancestor nodes.
-    pub fn ancestors(&self) -> Ancestors<'a, 'd> {
+    pub fn ancestors(&self) -> Ancestors<'a, 'input> {
         Ancestors(self.parent())
     }
 
     /// Returns an iterator over previous sibling nodes.
-    pub fn prev_siblings(&self) -> PrevSiblings<'a, 'd> {
+    pub fn prev_siblings(&self) -> PrevSiblings<'a, 'input> {
         PrevSiblings(self.prev_sibling())
     }
 
     /// Returns an iterator over next sibling nodes.
-    pub fn next_siblings(&self) -> NextSiblings<'a, 'd> {
+    pub fn next_siblings(&self) -> NextSiblings<'a, 'input> {
         NextSiblings(self.next_sibling())
     }
 
     /// Returns an iterator over first children nodes.
-    pub fn first_children(&self) -> FirstChildren<'a, 'd> {
+    pub fn first_children(&self) -> FirstChildren<'a, 'input> {
         FirstChildren(self.first_child())
     }
 
     /// Returns an iterator over last children nodes.
-    pub fn last_children(&self) -> LastChildren<'a, 'd> {
+    pub fn last_children(&self) -> LastChildren<'a, 'input> {
         LastChildren(self.last_child())
     }
 
     /// Returns an iterator over children nodes.
-    pub fn children(&self) -> Children<'a, 'd> {
+    pub fn children(&self) -> Children<'a, 'input> {
         Children { front: self.first_child(), back: self.last_child() }
     }
 
     /// Returns an iterator which traverses the subtree starting at this node.
-    pub fn traverse(&self) -> Traverse<'a, 'd> {
+    pub fn traverse(&self) -> Traverse<'a, 'input> {
         Traverse { root: *self, edge: None }
     }
 
     /// Returns an iterator over this node and its descendants.
-    pub fn descendants(&self) -> Descendants<'a, 'd> {
+    pub fn descendants(&self) -> Descendants<'a, 'input> {
         Descendants(self.traverse())
     }
 
@@ -1052,7 +1050,7 @@ impl<'a, 'd: 'a> Node<'a, 'd> {
     }
 }
 
-impl<'a, 'd: 'a> fmt::Debug for Node<'a, 'd> {
+impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self.d.kind {
             NodeKind::Root => write!(f, "Root"),
@@ -1074,10 +1072,10 @@ macro_rules! axis_iterators {
         $(
             #[$m]
             #[derive(Clone)]
-            pub struct $i<'a, 'd: 'a>(Option<Node<'a, 'd>>);
+            pub struct $i<'a, 'input: 'a>(Option<Node<'a, 'input>>);
 
-            impl<'a, 'd: 'a> Iterator for $i<'a, 'd> {
-                type Item = Node<'a, 'd>;
+            impl<'a, 'input: 'a> Iterator for $i<'a, 'input> {
+                type Item = Node<'a, 'input>;
                 fn next(&mut self) -> Option<Self::Item> {
                     let node = self.0.take();
                     self.0 = node.as_ref().and_then($f);
@@ -1108,13 +1106,13 @@ axis_iterators! {
 
 /// Iterator over children.
 #[derive(Clone)]
-pub struct Children<'a, 'd: 'a> {
-    front: Option<Node<'a, 'd>>,
-    back: Option<Node<'a, 'd>>,
+pub struct Children<'a, 'input: 'a> {
+    front: Option<Node<'a, 'input>>,
+    back: Option<Node<'a, 'input>>,
 }
 
-impl<'a, 'd: 'a> Iterator for Children<'a, 'd> {
-    type Item = Node<'a, 'd>;
+impl<'a, 'input: 'a> Iterator for Children<'a, 'input> {
+    type Item = Node<'a, 'input>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.front == self.back {
@@ -1129,7 +1127,7 @@ impl<'a, 'd: 'a> Iterator for Children<'a, 'd> {
     }
 }
 
-impl<'a, 'd: 'a> DoubleEndedIterator for Children<'a, 'd> {
+impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.back == self.front {
             let node = self.back.take();
@@ -1146,23 +1144,23 @@ impl<'a, 'd: 'a> DoubleEndedIterator for Children<'a, 'd> {
 
 /// Open or close edge of a node.
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Edge<'a, 'd: 'a> {
+pub enum Edge<'a, 'input: 'a> {
     /// Open.
-    Open(Node<'a, 'd>),
+    Open(Node<'a, 'input>),
     /// Close.
-    Close(Node<'a, 'd>),
+    Close(Node<'a, 'input>),
 }
 
 
 /// Iterator which traverses a subtree.
 #[derive(Clone)]
-pub struct Traverse<'a, 'd: 'a> {
-    root: Node<'a, 'd>,
-    edge: Option<Edge<'a, 'd>>,
+pub struct Traverse<'a, 'input: 'a> {
+    root: Node<'a, 'input>,
+    edge: Option<Edge<'a, 'input>>,
 }
 
-impl<'a, 'd: 'a> Iterator for Traverse<'a, 'd> {
-    type Item = Edge<'a, 'd>;
+impl<'a, 'input: 'a> Iterator for Traverse<'a, 'input> {
+    type Item = Edge<'a, 'input>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.edge {
@@ -1193,10 +1191,10 @@ impl<'a, 'd: 'a> Iterator for Traverse<'a, 'd> {
 
 /// Iterator over a node and its descendants.
 #[derive(Clone)]
-pub struct Descendants<'a, 'd: 'a>(Traverse<'a, 'd>);
+pub struct Descendants<'a, 'input: 'a>(Traverse<'a, 'input>);
 
-impl<'a, 'd: 'a> Iterator for Descendants<'a, 'd> {
-    type Item = Node<'a, 'd>;
+impl<'a, 'input: 'a> Iterator for Descendants<'a, 'input> {
+    type Item = Node<'a, 'input>;
 
     fn next(&mut self) -> Option<Self::Item> {
         for edge in &mut self.0 {

@@ -171,15 +171,15 @@ impl error::Error for Error {
 }
 
 
-struct AttributeData<'d> {
-    prefix: StrSpan<'d>,
-    local: StrSpan<'d>,
-    value: Cow<'d, str>,
+struct AttributeData<'input> {
+    prefix: StrSpan<'input>,
+    local: StrSpan<'input>,
+    value: Cow<'input, str>,
     range: Range,
     value_range: Range,
 }
 
-impl<'d> Document<'d> {
+impl<'input> Document<'input> {
     /// Parses the input XML string.
     ///
     /// We do not support `&[u8]` or `Reader` because the input must be an already allocated
@@ -195,7 +195,7 @@ impl<'d> Document<'d> {
         parse(text)
     }
 
-    fn append(&mut self, parent_id: NodeId, kind: NodeKind<'d>, range: Range) -> NodeId {
+    fn append(&mut self, parent_id: NodeId, kind: NodeKind<'input>, range: Range) -> NodeId {
         let new_child_id = NodeId(self.nodes.len());
         self.nodes.push(NodeData {
             parent: Some(parent_id),
@@ -229,28 +229,28 @@ impl<'d> Document<'d> {
     }
 }
 
-struct Entity<'d>  {
-    name: &'d str,
-    value: StrSpan<'d>,
+struct Entity<'input>  {
+    name: &'input str,
+    value: StrSpan<'input>,
 }
 
-struct ParserData<'d> {
+struct ParserData<'input> {
     attrs_start_idx: usize,
     ns_start_idx: usize,
-    tmp_attrs: Vec<AttributeData<'d>>,
-    entities: Vec<Entity<'d>>,
+    tmp_attrs: Vec<AttributeData<'input>>,
+    entities: Vec<Entity<'input>>,
     buffer: TextBuffer,
     after_text: bool,
 }
 
 #[derive(Clone, Copy)]
-struct TagNameSpan<'d> {
-    prefix: StrSpan<'d>,
-    name: StrSpan<'d>,
-    span: StrSpan<'d>,
+struct TagNameSpan<'input> {
+    prefix: StrSpan<'input>,
+    name: StrSpan<'input>,
+    span: StrSpan<'input>,
 }
 
-impl<'d> TagNameSpan<'d> {
+impl<'input> TagNameSpan<'input> {
     fn new_null() -> Self {
         Self {
             prefix: StrSpan::from(""),
@@ -259,7 +259,7 @@ impl<'d> TagNameSpan<'d> {
         }
     }
 
-    fn new(prefix: StrSpan<'d>, name: StrSpan<'d>, span: StrSpan<'d>) -> Self {
+    fn new(prefix: StrSpan<'input>, name: StrSpan<'input>, span: StrSpan<'input>) -> Self {
         Self { prefix, name, span }
     }
 }
@@ -314,13 +314,13 @@ fn parse(text: &str) -> Result<Document, Error> {
     Ok(doc)
 }
 
-fn process_tokens<'d>(
-    parser: xmlparser::Tokenizer<'d>,
+fn process_tokens<'input>(
+    parser: xmlparser::Tokenizer<'input>,
     entity_depth: u8,
     mut parent_id: NodeId,
-    tag_name: &mut TagNameSpan<'d>,
-    pd: &mut ParserData<'d>,
-    doc: &mut Document<'d>,
+    tag_name: &mut TagNameSpan<'input>,
+    pd: &mut ParserData<'input>,
+    doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     for token in parser {
         let token = token?;
@@ -379,14 +379,14 @@ fn process_tokens<'d>(
     Ok(())
 }
 
-fn process_attribute<'d>(
+fn process_attribute<'input>(
     entity_depth: u8,
-    prefix: StrSpan<'d>,
-    local: StrSpan<'d>,
-    value: StrSpan<'d>,
-    token_span: StrSpan<'d>,
-    pd: &mut ParserData<'d>,
-    doc: &mut Document<'d>,
+    prefix: StrSpan<'input>,
+    local: StrSpan<'input>,
+    value: StrSpan<'input>,
+    token_span: StrSpan<'input>,
+    pd: &mut ParserData<'input>,
+    doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     let range = token_span.range();
     let value_range = value.range();
@@ -450,13 +450,13 @@ fn process_attribute<'d>(
     Ok(())
 }
 
-fn process_element<'d>(
-    tag_name: TagNameSpan<'d>,
-    end_token: xmlparser::ElementEnd<'d>,
-    token_span: StrSpan<'d>,
+fn process_element<'input>(
+    tag_name: TagNameSpan<'input>,
+    end_token: xmlparser::ElementEnd<'input>,
+    token_span: StrSpan<'input>,
     parent_id: &mut NodeId,
-    pd: &mut ParserData<'d>,
-    doc: &mut Document<'d>,
+    pd: &mut ParserData<'input>,
+    doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     if tag_name.name.is_empty() {
         // May occur in XML like this:
@@ -568,11 +568,11 @@ fn resolve_namespaces(
     }
 }
 
-fn resolve_attributes<'d>(
+fn resolve_attributes<'input>(
     start_idx: usize,
     namespaces: Range,
-    tmp_attrs: &mut [AttributeData<'d>],
-    doc: &mut Document<'d>,
+    tmp_attrs: &mut [AttributeData<'input>],
+    doc: &mut Document<'input>,
 ) -> Result<Range, Error> {
     if tmp_attrs.is_empty() {
         return Ok(0..0);
@@ -611,12 +611,12 @@ fn resolve_attributes<'d>(
     Ok(start_idx..doc.attrs.len())
 }
 
-fn process_text<'d>(
-    text: StrSpan<'d>,
+fn process_text<'input>(
+    text: StrSpan<'input>,
     parent_id: NodeId,
     entity_depth: u8,
-    pd: &mut ParserData<'d>,
-    doc: &mut Document<'d>,
+    pd: &mut ParserData<'input>,
+    doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
@@ -689,12 +689,12 @@ fn process_text<'d>(
     Ok(())
 }
 
-fn append_text<'d>(
-    text: Cow<'d, str>,
+fn append_text<'input>(
+    text: Cow<'input, str>,
     parent_id: NodeId,
     range: Range,
     after_text: bool,
-    doc: &mut Document<'d>,
+    doc: &mut Document<'input>,
 ) {
     if after_text {
         // Prepend to a previous text node.
@@ -761,12 +761,12 @@ fn parse_next_chunk<'a>(
 }
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
-fn normalize_attribute<'d>(
+fn normalize_attribute<'input>(
     entity_depth: u8,
-    text: StrSpan<'d>,
+    text: StrSpan<'input>,
     entities: &[Entity],
     buffer: &mut TextBuffer,
-) -> Result<Cow<'d, str>, Error> {
+) -> Result<Cow<'input, str>, Error> {
     if is_normalization_required(&text) {
         buffer.clear();
         _normalize_attribute(text, entities, entity_depth, buffer)?;
