@@ -478,9 +478,9 @@ fn process_element<'input>(
     pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
 
-    let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
     match end_token {
         xmlparser::ElementEnd::Empty => {
+            let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
             doc.append(*parent_id,
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
@@ -518,6 +518,7 @@ fn process_element<'input>(
             }
         }
         xmlparser::ElementEnd::Open => {
+            let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
             *parent_id = doc.append(*parent_id,
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
