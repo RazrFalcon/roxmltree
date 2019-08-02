@@ -257,6 +257,7 @@ struct NodeData<'input> {
 
 
 /// An attribute.
+#[derive(Clone)]
 pub struct Attribute<'input> {
     name: ExpandedNameOwned<'input>,
     value: Cow<'input, str>,
