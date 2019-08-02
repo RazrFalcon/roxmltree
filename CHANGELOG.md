@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `Node::prev_sibling_element` and `Node::next_sibling_element`.
+
 ### Changed
 - `Attribute` is cloneable now.
 

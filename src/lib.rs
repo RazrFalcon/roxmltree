@@ -970,9 +970,19 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         self.d.prev_sibling.map(|id| self.gen_node(id))
     }
 
+    /// Returns the previous sibling element of this node.
+    pub fn prev_sibling_element(&self) -> Option<Self> {
+        self.prev_siblings().filter(|n| n.is_element()).nth(0)
+    }
+
     /// Returns the next sibling of this node.
     pub fn next_sibling(&self) -> Option<Self> {
         self.d.next_sibling.map(|id| self.gen_node(id))
+    }
+
+    /// Returns the next sibling element of this node.
+    pub fn next_sibling_element(&self) -> Option<Self> {
+        self.next_siblings().filter(|n| n.is_element()).nth(0)
     }
 
     /// Returns the first child of this node.
