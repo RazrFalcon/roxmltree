@@ -170,7 +170,7 @@ fn parent_element() {
 
     // or
 
-    assert!(rect.ancestors().filter(|n| n.is_element()).nth(0).unwrap().has_tag_name("svg"));
+    assert!(rect.ancestors().skip(1).filter(|n| n.is_element()).nth(0).unwrap().has_tag_name("svg"));
 }
 
 // Node.contains

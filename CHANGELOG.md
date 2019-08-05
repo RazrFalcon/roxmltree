@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `Node::prev_sibling_element` and `Node::next_sibling_element`.
 
 ### Changed
+- **breaking** `Node::ancestors` includes a current node now.
 - `Attribute` is cloneable now.
 
 ## [0.6.1] - 2019-06-18

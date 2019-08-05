@@ -962,7 +962,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     /// Returns the parent element of this node.
     pub fn parent_element(&self) -> Option<Self> {
-        self.ancestors().filter(|n| n.is_element()).nth(0)
+        self.ancestors().skip(1).filter(|n| n.is_element()).nth(0)
     }
 
     /// Returns the previous sibling of this node.
@@ -1015,9 +1015,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         self.d.children.is_some()
     }
 
-    /// Returns an iterator over ancestor nodes.
+    /// Returns an iterator over ancestor nodes starting at this node.
     pub fn ancestors(&self) -> Ancestors<'a, 'input> {
-        Ancestors(self.parent())
+        Ancestors(Some(*self))
     }
 
     /// Returns an iterator over previous sibling nodes.
