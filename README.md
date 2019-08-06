@@ -44,7 +44,7 @@ Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/bl
 | Language                        | Rust             | C                   | Rust             | Rust             | Rust             | Rust             |
 | Size overhead<sup>4</sup>       | **~73KiB**       | ~1.4MiB<sup>5</sup> | ~80KiB           | ~96KiB           | ~135KiB          | ~110KiB          |
 | Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 18               | 2                | 14               |
-| Tested version                  | 0.6.0            | 2.9.8               | 0.8.0            | 0.5.0            | 0.3.0            | 0.7.0            |
+| Tested version                  | 0.7.0            | 2.9.8               | 0.8.0            | 0.5.0            | 0.3.0            | 0.7.0            |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | BSD-3-Clause     | MIT              | MIT              |
 
 Legend:
@@ -77,23 +77,23 @@ Notes:
 ## Performance
 
 ```text
-test large_roxmltree     ... bench:   5,660,398 ns/iter (+/- 104,723)
-test large_sdx_document  ... bench:   9,562,290 ns/iter (+/- 45,585)
-test large_xmltree       ... bench:  32,797,800 ns/iter (+/- 134,016)
-test large_treexml       ... bench:  31,380,063 ns/iter (+/- 71,732)
-test large_elementtree   ... bench:  32,121,979 ns/iter (+/- 264,842)
+test large_roxmltree     ... bench:   5,575,373 ns/iter (+/- 54,817)
+test large_sdx_document  ... bench:   9,452,579 ns/iter (+/- 37,298)
+test large_xmltree       ... bench:  28,383,408 ns/iter (+/- 46,793)
+test large_treexml       ... bench:  28,992,626 ns/iter (+/- 122,244)
+test large_elementtree   ... bench:  29,991,730 ns/iter (+/- 58,134)
 
-test medium_roxmltree    ... bench:   1,094,562 ns/iter (+/- 6,030)
-test medium_sdx_document ... bench:   3,791,252 ns/iter (+/- 41,929)
-test medium_treexml      ... bench:  10,975,247 ns/iter (+/- 22,692)
-test medium_xmltree      ... bench:  11,601,320 ns/iter (+/- 46,216)
-test medium_elementtree  ... bench:  11,550,227 ns/iter (+/- 17,991)
+test medium_roxmltree    ... bench:   1,085,323 ns/iter (+/- 32,921)
+test medium_sdx_document ... bench:   3,619,042 ns/iter (+/- 8,863)
+test medium_xmltree      ... bench:  10,181,629 ns/iter (+/- 13,994)
+test medium_treexml      ... bench:  10,338,760 ns/iter (+/- 11,040)
+test medium_elementtree  ... bench:  10,840,762 ns/iter (+/- 16,162)
 
-test tiny_roxmltree      ... bench:       7,697 ns/iter (+/- 41)
-test tiny_sdx_document   ... bench:      28,031 ns/iter (+/- 101)
-test tiny_xmltree        ... bench:      47,199 ns/iter (+/- 110)
-test tiny_treexml        ... bench:      50,399 ns/iter (+/- 55)
-test tiny_elementtree    ... bench:      51,569 ns/iter (+/- 165)
+test tiny_roxmltree      ... bench:       7,381 ns/iter (+/- 34)
+test tiny_sdx_document   ... bench:      27,464 ns/iter (+/- 91)
+test tiny_xmltree        ... bench:      43,838 ns/iter (+/- 107)
+test tiny_treexml        ... bench:      44,794 ns/iter (+/- 263)
+test tiny_elementtree    ... bench:      45,431 ns/iter (+/- 175)
 ```
 
 *roxmltree* uses [xmlparser] internally,
@@ -102,14 +102,14 @@ and *treexml* use the [xml-rs] crate.
 Here is a comparison between *xmlparser* and *xml-rs*:
 
 ```text
-test large_xmlparser     ... bench:   2,485,710 ns/iter (+/- 1,246)
-test large_xmlrs         ... bench:  28,252,304 ns/iter (+/- 27,852)
+test large_xmlparser     ... bench:   2,349,936 ns/iter (+/- 17,752)
+test large_xmlrs         ... bench:  25,582,284 ns/iter (+/- 76,500)
 
-test medium_xmlparser    ... bench:     624,192 ns/iter (+/- 1,040)
-test medium_xmlrs        ... bench:  10,237,568 ns/iter (+/- 13,497)
+test medium_xmlparser    ... bench:     558,500 ns/iter (+/- 315)
+test medium_xmlrs        ... bench:   9,368,598 ns/iter (+/- 10,995)
 
-test tiny_xmlparser      ... bench:       4,986 ns/iter (+/- 84)
-test tiny_xmlrs          ... bench:      45,832 ns/iter (+/- 50)
+test tiny_xmlparser      ... bench:       4,712 ns/iter (+/- 14)
+test tiny_xmlrs          ... bench:      39,293 ns/iter (+/- 63)
 ```
 
 You can try it yourself by running `cargo bench` in the `benches` dir.
