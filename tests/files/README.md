@@ -48,7 +48,9 @@
 - ns_012 - namespace propagation
 - ns_013 - namespace from entity
 - ns_014 - no namespaces
-- ns_015 - duplicated namespaces with different prefixes
+- ns_015 - duplicated namespaces with different prefixes and a child element without prefix
+- ns_016 - an empty element with namespace on parent
+- ns_017 - duplicated namespaces with different prefixes and a child element with prefix
 - ns_err_001 - invalid `xml` URI
 - ns_err_002 - reserved URI
 - ns_err_003 - reserved URI
@@ -60,6 +62,8 @@
 - ns_err_009 - `xmlns` cannot be used as an element prefix
 - ns_err_010 - an element with an unknown namespace
 - ns_err_011 - an attribute with an unknown namespace
+- ns_err_012 - closing tag with missing namespace prefix
+- ns_err_013 - closing tag with missing namespace prefix and default namespace
 - text_001 - single space text
 - text_002 - single escaped space text
 - text_003 - escaped text

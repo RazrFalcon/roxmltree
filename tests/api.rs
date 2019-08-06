@@ -197,7 +197,6 @@ fn lifetimes() {
     let _ = f(&doc, |d| d.root().tag_name().namespace());
     let _ = f(&doc, |d| d.root().tag_name().name());
     let _ = f(&doc, |d| d.root().default_namespace());
-    let _ = f(&doc, |d| d.root().resolve_tag_name_prefix());
     let _ = f(&doc, |d| d.root().lookup_prefix(""));
     let _ = f(&doc, |d| d.root().lookup_namespace_uri(None));
     let _ = f(&doc, |d| d.root().attribute("a"));

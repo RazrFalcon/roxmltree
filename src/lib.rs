@@ -471,12 +471,16 @@ impl fmt::Debug for Uri {
 #[derive(Clone, PartialEq)]
 struct ExpandedNameOwned<'input> {
     ns: Option<Uri>,
+    prefix: &'input str, // Used only for closing tags matching during parsing.
     name: &'input str,
 }
 
 impl<'input> ExpandedNameOwned<'input> {
     fn as_ref(&self) -> ExpandedName {
-        ExpandedName { uri: self.ns.as_ref().map(Uri::as_str), name: self.name }
+        ExpandedName {
+            uri: self.ns.as_ref().map(Uri::as_str),
+            name: self.name,
+        }
     }
 }
 
@@ -513,7 +517,7 @@ impl<'input> ExpandedName<'input> {
         self.uri
     }
 
-    /// Returns a name.
+    /// Returns a local name.
     ///
     /// # Examples
     ///
@@ -684,47 +688,6 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     pub fn default_namespace(&self) -> Option<&'a str> {
         self.namespaces().iter().find(|ns| ns.name.is_none()).map(|v| v.uri.as_str())
-    }
-
-    /// Returns element's namespace prefix.
-    ///
-    /// Returns `None`:
-    /// - if the current node is not an element
-    /// - if the current element has a default namespace
-    /// - if the current element has no namespace
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("<n:e xmlns:n='http://www.w3.org'/>").unwrap();
-    ///
-    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), Some("n"));
-    /// ```
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("<e xmlns:n='http://www.w3.org'/>").unwrap();
-    ///
-    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), None);
-    /// ```
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
-    ///
-    /// assert_eq!(doc.root_element().resolve_tag_name_prefix(), None);
-    /// ```
-    pub fn resolve_tag_name_prefix(&self) -> Option<&'a str> {
-        if !self.is_element() {
-            return None;
-        }
-
-        let tag_ns = self.tag_name();
-
-        if self.default_namespace() == tag_ns.namespace() {
-            return None;
-        }
-
-        self.namespaces().iter().find(|ns| Some(ns.uri()) == tag_ns.namespace())
-            .map(|v| v.name).unwrap_or(None)
     }
 
     /// Returns a prefix for a given namespace URI.

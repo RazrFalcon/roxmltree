@@ -19,7 +19,6 @@ use {
     Document,
     ExpandedNameOwned,
     Namespaces,
-    Node,
     NodeData,
     NodeId,
     NodeKind,
@@ -222,10 +221,6 @@ impl<'input> Document<'input> {
         );
 
         new_child_id
-    }
-
-    fn get(&self, id: NodeId) -> Node {
-        Node { id, d: &self.nodes[id.0], doc: self }
     }
 }
 
@@ -485,6 +480,7 @@ fn process_element<'input>(
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
                         ns: tag_ns_uri,
+                        prefix: tag_name.prefix.as_str(),
                         name: tag_name.name.as_str(),
                     },
                     attributes,
@@ -499,12 +495,9 @@ fn process_element<'input>(
 
             doc.nodes[parent_id.0].range.end = token_span.end();
             if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.0].kind {
-                let parent_node = doc.get(*parent_id);
-                let parent_prefix = parent_node.resolve_tag_name_prefix().unwrap_or("");
-
-                if prefix != parent_prefix || local != tag_name.name {
+                if prefix != tag_name.prefix || local != tag_name.name {
                     return Err(Error::UnexpectedCloseTag {
-                        expected: gen_qname_string(parent_prefix, tag_name.name),
+                        expected: gen_qname_string(tag_name.prefix, tag_name.name),
                         actual: gen_qname_string(prefix, local),
                         pos: err_pos_from_span(token_span),
                     });
@@ -523,6 +516,7 @@ fn process_element<'input>(
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
                         ns: tag_ns_uri,
+                        prefix: tag_name.prefix.as_str(),
                         name: tag_name.name.as_str(),
                     },
                     attributes,
@@ -592,7 +586,9 @@ fn resolve_attributes<'input>(
             get_ns_by_prefix(doc, namespaces.clone(), attr.prefix)?
         };
 
-        let attr_name = ExpandedNameOwned { ns, name: attr.local.as_str() };
+        // We do not store attribute prefixes since `ExpandedNameOwned::prefix`
+        // is used only for closing tags matching during parsing.
+        let attr_name = ExpandedNameOwned { ns, prefix: "", name: attr.local.as_str() };
 
         // Check for duplicated attributes.
         if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
