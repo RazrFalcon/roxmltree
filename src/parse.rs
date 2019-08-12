@@ -92,6 +92,7 @@ pub enum Error {
 
 impl Error {
     /// Returns the error position.
+    #[inline]
     pub fn pos(&self) -> TextPos {
         match *self {
             Error::InvalidXmlPrefixUri(pos) => pos,
@@ -112,6 +113,7 @@ impl Error {
 }
 
 impl From<xmlparser::Error> for Error {
+    #[inline]
     fn from(e: xmlparser::Error) -> Self {
         Error::ParserError(e)
     }
@@ -164,6 +166,7 @@ impl fmt::Display for Error {
 }
 
 impl error::Error for Error {
+    #[inline]
     fn description(&self) -> &str {
         "an XML parsing error"
     }
@@ -190,6 +193,7 @@ impl<'input> Document<'input> {
     /// let doc = roxmltree::Document::parse("<e/>").unwrap();
     /// assert_eq!(doc.descendants().count(), 2); // root node + `e` element node
     /// ```
+    #[inline]
     pub fn parse(text: &str) -> Result<Document, Error> {
         parse(text)
     }
@@ -246,6 +250,7 @@ struct TagNameSpan<'input> {
 }
 
 impl<'input> TagNameSpan<'input> {
+    #[inline]
     fn new_null() -> Self {
         Self {
             prefix: StrSpan::from(""),
@@ -254,6 +259,7 @@ impl<'input> TagNameSpan<'input> {
         }
     }
 
+    #[inline]
     fn new(prefix: StrSpan<'input>, name: StrSpan<'input>, span: StrSpan<'input>) -> Self {
         Self { prefix, name, span }
     }
@@ -773,6 +779,7 @@ fn normalize_attribute<'input>(
     }
 }
 
+#[inline]
 fn is_normalization_required(text: &StrSpan) -> bool {
     // We assume that `&` indicates an entity or a character reference.
     // But in rare cases it can be just an another character.
@@ -888,6 +895,7 @@ fn get_ns_by_prefix(
     }
 }
 
+#[inline]
 fn gen_qname_string(prefix: &str, local: &str) -> String {
     if prefix.is_empty() {
         local.to_string()
@@ -896,10 +904,12 @@ fn gen_qname_string(prefix: &str, local: &str) -> String {
     }
 }
 
+#[inline]
 fn err_pos_from_span(text: StrSpan) -> TextPos {
     Stream::from(text).gen_text_pos()
 }
 
+#[inline]
 fn err_pos_from_qname(prefix: StrSpan, local: StrSpan) -> TextPos {
     let err_span = if prefix.is_empty() { local } else { prefix };
     err_pos_from_span(err_span)
@@ -914,6 +924,7 @@ mod internals {
     }
 
     impl CharToBytes {
+        #[inline]
         pub fn new(c: char) -> Self {
             let mut buf = [0xFF; 4];
             c.encode_utf8(&mut buf);
@@ -928,6 +939,7 @@ mod internals {
     impl Iterator for CharToBytes {
         type Item = u8;
 
+        #[inline]
         fn next(&mut self) -> Option<Self::Item> {
             if self.idx < 4 {
                 let b = self.buf[self.idx as usize];
@@ -950,12 +962,14 @@ mod internals {
     }
 
     impl TextBuffer {
+        #[inline]
         pub fn new() -> Self {
             TextBuffer {
                 buf: Vec::with_capacity(32),
             }
         }
 
+        #[inline]
         pub fn push_raw(&mut self, c: u8) {
             self.buf.push(c);
         }
@@ -995,14 +1009,17 @@ mod internals {
             }
         }
 
+        #[inline]
         pub fn clear(&mut self) {
             self.buf.clear();
         }
 
+        #[inline]
         pub fn is_empty(&self) -> bool {
             self.buf.is_empty()
         }
 
+        #[inline]
         pub fn to_str(&self) -> &str {
             use std::str;
 
