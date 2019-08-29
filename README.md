@@ -2,6 +2,7 @@
 [![Build Status](https://travis-ci.org/RazrFalcon/roxmltree.svg?branch=master)](https://travis-ci.org/RazrFalcon/roxmltree)
 [![Crates.io](https://img.shields.io/crates/v/roxmltree.svg)](https://crates.io/crates/roxmltree)
 [![Documentation](https://docs.rs/roxmltree/badge.svg)](https://docs.rs/roxmltree)
+[![Rust 1.18+](https://img.shields.io/badge/rust-1.18+-orange.svg)](https://www.rust-lang.org)
 
 Represents an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
 
@@ -141,10 +142,6 @@ Notes:
 This library uses Rust's idiomatic API based on iterators.
 In case you are more familiar with browser/JS DOM APIs - you can check out
 [tests/dom-api.rs](tests/dom-api.rs) to see how it can be converted into a Rust one.
-
-## Dependency
-
-[Rust](https://www.rust-lang.org/) >= 1.18
 
 ## License
 
