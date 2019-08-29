@@ -1,12 +1,8 @@
 extern crate roxmltree;
-extern crate rustc_test;
 #[macro_use] extern crate pretty_assertions;
 
 use roxmltree::*;
 
-use rustc_test::{TestDesc, TestDescAndFn, DynTestName, DynTestFn};
-
-use std::env;
 use std::path;
 use std::fs;
 use std::io::Read;
@@ -41,9 +37,7 @@ static IGNORE: &[&str] = &[
 
 
 #[test]
-fn run() {
-    let mut tests = Vec::new();
-
+fn compare_ast() {
     for entry in fs::read_dir("tests/files").unwrap() {
         let entry = entry.unwrap();
 
@@ -53,20 +47,8 @@ fn run() {
 
         let file_name = entry.path().file_name().unwrap().to_str().unwrap().to_string();
         if !IGNORE.contains(&file_name.as_str()) {
-            tests.push(create_test(entry.path()));
+            actual_test(entry.path());
         }
-    }
-
-    let args: Vec<String> = env::args().collect();
-    rustc_test::test_main(&args[..1], tests);
-}
-
-fn create_test(path: path::PathBuf) -> TestDescAndFn {
-    let name = path.file_name().unwrap().to_str().unwrap().to_string();
-
-    TestDescAndFn {
-        desc: TestDesc::new(DynTestName(name)),
-        testfn: DynTestFn(Box::new(move || actual_test(path.clone()))),
     }
 }
 
