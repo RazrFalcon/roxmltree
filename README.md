@@ -78,19 +78,19 @@ Notes:
 ## Performance
 
 ```text
-test large_roxmltree     ... bench:   5,575,373 ns/iter (+/- 54,817)
+test large_roxmltree     ... bench:   5,147,695 ns/iter (+/- 75,762)
 test large_sdx_document  ... bench:   9,452,579 ns/iter (+/- 37,298)
 test large_xmltree       ... bench:  28,383,408 ns/iter (+/- 46,793)
 test large_treexml       ... bench:  28,992,626 ns/iter (+/- 122,244)
 test large_elementtree   ... bench:  29,991,730 ns/iter (+/- 58,134)
 
-test medium_roxmltree    ... bench:   1,085,323 ns/iter (+/- 32,921)
+test medium_roxmltree    ... bench:     935,837 ns/iter (+/- 1,001)
 test medium_sdx_document ... bench:   3,619,042 ns/iter (+/- 8,863)
 test medium_xmltree      ... bench:  10,181,629 ns/iter (+/- 13,994)
 test medium_treexml      ... bench:  10,338,760 ns/iter (+/- 11,040)
 test medium_elementtree  ... bench:  10,840,762 ns/iter (+/- 16,162)
 
-test tiny_roxmltree      ... bench:       7,381 ns/iter (+/- 34)
+test tiny_roxmltree      ... bench:       6,346 ns/iter (+/- 129)
 test tiny_sdx_document   ... bench:      27,464 ns/iter (+/- 91)
 test tiny_xmltree        ... bench:      43,838 ns/iter (+/- 107)
 test tiny_treexml        ... bench:      44,794 ns/iter (+/- 263)
@@ -103,13 +103,13 @@ and *treexml* use the [xml-rs] crate.
 Here is a comparison between *xmlparser* and *xml-rs*:
 
 ```text
-test large_xmlparser     ... bench:   2,349,936 ns/iter (+/- 17,752)
+test large_xmlparser     ... bench:   1,961,131 ns/iter (+/- 66,145)
 test large_xmlrs         ... bench:  25,582,284 ns/iter (+/- 76,500)
 
-test medium_xmlparser    ... bench:     558,500 ns/iter (+/- 315)
+test medium_xmlparser    ... bench:     451,180 ns/iter (+/- 1,523)
 test medium_xmlrs        ... bench:   9,368,598 ns/iter (+/- 10,995)
 
-test tiny_xmlparser      ... bench:       4,712 ns/iter (+/- 14)
+test tiny_xmlparser      ... bench:       3,756 ns/iter (+/- 32)
 test tiny_xmlrs          ... bench:      39,293 ns/iter (+/- 63)
 ```
 
