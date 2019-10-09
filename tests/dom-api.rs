@@ -103,7 +103,7 @@ fn first_element_child() {
 
     // or
 
-    let elem = svg_elem.children().filter(|n| n.is_element()).nth(0).unwrap();
+    let elem = svg_elem.children().find(|n| n.is_element()).unwrap();
     assert!(elem.has_tag_name("rect"));
 }
 
@@ -143,7 +143,7 @@ fn get_element_by_id() {
 ";
 
     let doc = Document::parse(data).unwrap();
-    let elem = doc.descendants().filter(|n| n.attribute("id") == Some("rect1")).nth(0).unwrap();
+    let elem = doc.descendants().find(|n| n.attribute("id") == Some("rect1")).unwrap();
     assert!(elem.has_tag_name("rect"));
 }
 
@@ -165,12 +165,12 @@ fn parent_element() {
 ";
 
     let doc = Document::parse(data).unwrap();
-    let rect = doc.descendants().filter(|n| n.has_tag_name("rect")).nth(0).unwrap();
+    let rect = doc.descendants().find(|n| n.has_tag_name("rect")).unwrap();
     assert!(rect.parent_element().unwrap().has_tag_name("svg"));
 
     // or
 
-    assert!(rect.ancestors().skip(1).filter(|n| n.is_element()).nth(0).unwrap().has_tag_name("svg"));
+    assert!(rect.ancestors().skip(1).find(|n| n.is_element()).unwrap().has_tag_name("svg"));
 }
 
 // Node.contains

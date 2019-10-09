@@ -6,6 +6,13 @@
 
 Represents an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
 
+```rust
+// Find element by id.
+let doc = roxmltree::Document::parse("<rect id='rect1'/>").unwrap();
+let elem = doc.descendants().find(|n| n.attribute("id") == Some("rect1")).unwrap();
+assert!(elem.has_tag_name("rect"));
+```
+
 ## Why read-only?
 
 Because in some cases all you need is to retrieve some data from an XML document.
