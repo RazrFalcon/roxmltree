@@ -100,9 +100,9 @@ impl<'input> Document<'input> {
     /// assert!(doc.root_element().has_tag_name("e"));
     /// ```
     #[inline]
-    pub fn root_element(&self) -> Node {
-        // `unwrap` is safe, because the `Document` is guarantee to have at least one element.
-        self.root().first_element_child().unwrap()
+    pub fn root_element<'a>(&'a self) -> Node<'a, 'input> {
+        // `expect` is safe, because the `Document` is guarantee to have at least one element.
+        self.root().first_element_child().expect("XML documents must contain a root element")
     }
 
     /// Returns an iterator over document's descendant nodes.
