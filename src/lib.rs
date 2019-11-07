@@ -101,7 +101,7 @@ impl<'input> Document<'input> {
     /// ```
     #[inline]
     pub fn root_element<'a>(&'a self) -> Node<'a, 'input> {
-        // `unwrap` is safe, because the `Document` is guarantee to have at least one element.
+        // `expect` is safe, because the `Document` is guarantee to have at least one element.
         self.root().first_element_child().expect("XML documents must contain a root element")
     }
 
