@@ -148,10 +148,6 @@ impl<'input> fmt::Debug for Document<'input> {
                 writeln!($f, $fmt)?;
             };
             ($depth:expr, $f:expr, $fmt:expr, $($arg:tt)*) => {
-                // The `depth + 1` call below causes this macro to expand into a
-                // syntax that trips a Clippy lint, but the suggested fix is
-                // incorrect for this case.
-                #[allow(clippy::range_plus_one)]
                 for _ in 0..$depth { write!($f, "    ")?; }
                 writeln!($f, $fmt, $($arg)*)?;
             };
