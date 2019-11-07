@@ -100,7 +100,7 @@ impl<'input> Document<'input> {
     /// assert!(doc.root_element().has_tag_name("e"));
     /// ```
     #[inline]
-    pub fn root_element(&self) -> Node {
+    pub fn root_element<'a>(&'a self) -> Node<'a, 'input> {
         // `unwrap` is safe, because the `Document` is guarantee to have at least one element.
         self.root().first_element_child().unwrap()
     }
