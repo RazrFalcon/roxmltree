@@ -689,8 +689,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert!(!doc.root_element().has_tag_name("b"));
     /// assert!(!doc.root_element().has_tag_name(("http://www.w4.org", "e")));
     /// ```
-    pub fn has_tag_name<N>(&self, name: N) -> bool
-        where N: Into<ExpandedName<'a>>
+    pub fn has_tag_name<'n, N>(&self, name: N) -> bool
+    where
+        N: Into<ExpandedName<'n>>,
     {
         let name = name.into();
 
@@ -784,8 +785,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().attribute("a"), Some("b"));
     /// assert_eq!(doc.root_element().attribute(("http://www.w3.org", "a")), Some("c"));
     /// ```
-    pub fn attribute<N>(&self, name: N) -> Option<&'a str>
-        where N: Into<ExpandedName<'a>>
+    pub fn attribute<'n, N>(&self, name: N) -> Option<&'a str>
+    where
+        N: Into<ExpandedName<'n>>,
     {
         let name = name.into();
         self.attributes().iter().find(|a| a.name.as_ref() == name).map(|a| a.value.as_ref())
@@ -796,8 +798,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// The same as [`attribute()`], but returns the `Attribute` itself instead of a value string.
     ///
     /// [`attribute()`]: struct.Node.html#method.attribute
-    pub fn attribute_node<N>(&self, name: N) -> Option<&'a Attribute<'input>>
-        where N: Into<ExpandedName<'a>>
+    pub fn attribute_node<'n, N>(&self, name: N) -> Option<&'a Attribute<'input>>
+    where
+        N: Into<ExpandedName<'n>>,
     {
         let name = name.into();
         self.attributes().iter().find(|a| a.name.as_ref() == name)
@@ -818,8 +821,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert!(!doc.root_element().has_attribute("b"));
     /// assert!(!doc.root_element().has_attribute(("http://www.w4.org", "a")));
     /// ```
-    pub fn has_attribute<N>(&self, name: N) -> bool
-        where N: Into<ExpandedName<'a>>
+    pub fn has_attribute<'n, N>(&self, name: N) -> bool
+    where
+        N: Into<ExpandedName<'n>>,
     {
         let name = name.into();
         self.attributes().iter().any(|a| a.name.as_ref() == name)
