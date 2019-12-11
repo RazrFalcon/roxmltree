@@ -27,6 +27,7 @@ use {
     Uri,
 };
 
+// Note: update Error::EntityReferenceLoop documentation too.
 const ENTITY_DEPTH: u8 = 10;
 
 
@@ -72,6 +73,8 @@ pub enum Error {
     UnknownEntityReference(String, TextPos),
 
     /// A possible entity reference loop.
+    ///
+    /// The current depth limit is 10.
     EntityReferenceLoop(TextPos),
 
     /// An element has a duplicated attributes.
