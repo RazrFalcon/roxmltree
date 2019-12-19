@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `Error::MalformedEntityReference`
+
+### Changed
+- Malformed entity reference is an error now.
 
 ## [0.7.3] - 2019-11-14
 ### Changed

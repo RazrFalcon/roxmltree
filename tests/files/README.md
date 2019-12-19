@@ -34,6 +34,8 @@
 - entity_err_004 - reference to a close tag
 - entity_err_005 - billion laughs
 - entity_err_006 - billion laughs
+- entity_err_007 - malformed entity inside an attribute
+- entity_err_008 - malformed entity inside a character data/text
 - ns_001 - attributes with different namespaces
 - ns_002 - attribute is not affected by the default namespace
 - ns_003 - attributes with different namespaces

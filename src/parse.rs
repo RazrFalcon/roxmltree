@@ -72,6 +72,12 @@ pub enum Error {
     /// A reference to an entity that was not defined in the DTD.
     UnknownEntityReference(String, TextPos),
 
+    /// A malformed entity reference.
+    ///
+    /// A `&` character inside an attribute value or text indicates an entity reference.
+    /// Otherwise, the document is not well-formed.
+    MalformedEntityReference(TextPos),
+
     /// A possible entity reference loop.
     ///
     /// The current depth limit is 10.
@@ -107,6 +113,7 @@ impl Error {
             Error::UnexpectedCloseTag { pos, .. } => pos,
             Error::UnexpectedEntityCloseTag(pos) => pos,
             Error::UnknownEntityReference(ref _name, pos) => pos,
+            Error::MalformedEntityReference(pos) => pos,
             Error::EntityReferenceLoop(pos) => pos,
             Error::DuplicatedAttribute(ref _name, pos) => pos,
             Error::ParserError(ref err) => err.pos(),
@@ -148,6 +155,9 @@ impl fmt::Display for Error {
             }
             Error::UnexpectedEntityCloseTag(pos) => {
                 write!(f, "unexpected close tag at {}", pos)
+            }
+            Error::MalformedEntityReference(pos) => {
+                write!(f, "malformed entity reference at {}", pos)
             }
             Error::UnknownEntityReference(ref name, pos) => {
                 write!(f, "unknown entity reference '{}' at {}", name, pos)
@@ -756,8 +766,8 @@ fn parse_next_chunk<'a>(
                 }
             }
             None => {
-                s.advance(1);
-                Ok(NextChunk::Byte(c))
+                let pos = s.gen_text_pos_from(start);
+                return Err(Error::MalformedEntityReference(pos));
             }
         }
     } else {
@@ -851,8 +861,8 @@ fn _normalize_attribute(
                 }
             }
             None => {
-                s.advance(1);
-                buffer.push_from_attr(c, s.curr_byte().ok());
+                let pos = s.gen_text_pos_from(start);
+                return Err(Error::MalformedEntityReference(pos));
             }
         }
     }
