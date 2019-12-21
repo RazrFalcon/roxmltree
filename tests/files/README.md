@@ -5,6 +5,7 @@
 - attrs_003 - attribute value with escaped text
 - attrs_004 - attribute value with escaped text
 - attrs_005 - attribute value with \r\n
+- attrs_006 - escaped `<`
 - attrs_err_001 - duplicated attributes
 - attrs_err_002 - duplicated attributes via namespaces
 - cdata_001 - simple case
@@ -36,6 +37,7 @@
 - entity_err_006 - billion laughs
 - entity_err_007 - malformed entity inside an attribute
 - entity_err_008 - malformed entity inside a character data/text
+- entity_err_009 - escaped `<` inside an attribute inside an entity is an error
 - ns_001 - attributes with different namespaces
 - ns_002 - attribute is not affected by the default namespace
 - ns_003 - attributes with different namespaces

@@ -22,7 +22,7 @@ travis-ci = { repository = "RazrFalcon/roxmltree" }
 doctest = true
 
 [dependencies]
-xmlparser = "0.10"
+xmlparser = { git = "https://github.com/RazrFalcon/xmlparser", rev = "a16ae6b" }
 
 [dev-dependencies]
 pretty_assertions = "0.5"

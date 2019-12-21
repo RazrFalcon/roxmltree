@@ -83,6 +83,9 @@ pub enum Error {
     /// The current depth limit is 10.
     EntityReferenceLoop(TextPos),
 
+    /// Attribute value cannot have a `<` character.
+    InvalidAttributeValue(TextPos),
+
     /// An element has a duplicated attributes.
     ///
     /// This also includes namespaces resolving.
@@ -115,6 +118,7 @@ impl Error {
             Error::UnknownEntityReference(ref _name, pos) => pos,
             Error::MalformedEntityReference(pos) => pos,
             Error::EntityReferenceLoop(pos) => pos,
+            Error::InvalidAttributeValue(pos) => pos,
             Error::DuplicatedAttribute(ref _name, pos) => pos,
             Error::ParserError(ref err) => err.pos(),
             _ => TextPos::new(1, 1)
@@ -164,6 +168,9 @@ impl fmt::Display for Error {
             }
             Error::EntityReferenceLoop(pos) => {
                 write!(f, "a possible entity reference loop is detected at {}", pos)
+            }
+            Error::InvalidAttributeValue(pos) => {
+                write!(f, "unescaped '<' found at {}", pos)
             }
             Error::DuplicatedAttribute(ref name, pos) => {
                 write!(f, "attribute '{}' at {} is already defined", name, pos)
@@ -835,6 +842,12 @@ fn _normalize_attribute(
             Some(Reference::Char(ch)) => {
                 for b in CharToBytes::new(ch) {
                     if entity_depth > 0 {
+                        // Escaped `<` inside an ENTITY is an error.
+                        // Escaped `<` outside an ENTITY is ok.
+                        if b == b'<' {
+                            return Err(Error::InvalidAttributeValue(s.gen_text_pos_from(start)));
+                        }
+
                         buffer.push_from_attr(b, None);
                     } else {
                         // Characters not from entity should be added as is.

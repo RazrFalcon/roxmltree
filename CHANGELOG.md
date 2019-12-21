@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - Malformed entity reference is an error now.
+- Escaped `<` in attribute inside an ENTITY is an error now.
 
 ## [0.7.3] - 2019-11-14
 ### Changed
