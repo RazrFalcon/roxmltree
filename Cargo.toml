@@ -1,7 +1,7 @@
 [package]
 name = "roxmltree"
 # When updating version, also modify html_root_url in the lib.rs
-version = "0.7.3"
+version = "0.8.0"
 authors = ["Evgeniy Reizner <razrfalcon@gmail.com>"]
 keywords = ["xml", "parser", "tree", "dom"]
 categories = ["parser-implementations"]
@@ -22,7 +22,7 @@ travis-ci = { repository = "RazrFalcon/roxmltree" }
 doctest = true
 
 [dependencies]
-xmlparser = { git = "https://github.com/RazrFalcon/xmlparser", rev = "a16ae6b" }
+xmlparser = "0.12"
 
 [dev-dependencies]
 pretty_assertions = "0.5"

@@ -10,6 +10,7 @@ extern crate sxd_document;
 extern crate elementtree;
 extern crate treexml;
 extern crate xml;
+extern crate quick_xml;
 
 use std::fs;
 use std::env;
@@ -87,6 +88,42 @@ fn large_xmlrs(bencher: &mut Bencher) {
             let _ = event.unwrap();
         }
     })
+}
+
+
+fn parse_via_quick_xml(text: &str) {
+    let mut r = quick_xml::Reader::from_str(text);
+    r.check_comments(true);
+    let mut buf = Vec::new();
+    let mut ns_buf = Vec::new();
+    loop {
+        match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+            Ok((_, quick_xml::events::Event::Start(_))) |
+            Ok((_, quick_xml::events::Event::Empty(_))) => (),
+            Ok((_, quick_xml::events::Event::Text(ref e))) => {
+                e.unescaped().unwrap();
+                ()
+            }
+            Ok((_, quick_xml::events::Event::Eof)) => break,
+            _ => (),
+        }
+        buf.clear();
+    }
+}
+
+fn tiny_quick_xml(bencher: &mut Bencher) {
+    let text = load_string("fonts.conf");
+    bencher.iter(|| parse_via_quick_xml(&text))
+}
+
+fn medium_quick_xml(bencher: &mut Bencher) {
+    let text = load_string("medium.svg");
+    bencher.iter(|| parse_via_quick_xml(&text))
+}
+
+fn large_quick_xml(bencher: &mut Bencher) {
+    let text = load_string("large.plist");
+    bencher.iter(|| parse_via_quick_xml(&text))
 }
 
 
@@ -177,5 +214,5 @@ benchmark_group!(elementtree, tiny_elementtree, medium_elementtree, large_elemen
 benchmark_group!(treexml, tiny_treexml, medium_treexml, large_treexml);
 benchmark_group!(xmlparser, tiny_xmlparser, medium_xmlparser, large_xmlparser);
 benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs);
-benchmark_main!(roxmltree, xmltree, sdx, elementtree, treexml, xmlparser, xmlrs);
-// benchmark_main!(roxmltree, xmlparser);
+benchmark_group!(quick_xml, tiny_quick_xml, medium_quick_xml, large_quick_xml);
+benchmark_main!(roxmltree, xmltree, sdx, elementtree, treexml, xmlparser, xmlrs, quick_xml);

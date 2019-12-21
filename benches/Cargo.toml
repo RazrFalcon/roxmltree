@@ -5,13 +5,14 @@ workspace = ".."
 
 [dependencies]
 roxmltree = { path = "../" }
-xmlparser = "0.10"
+xmlparser = "0.12"
 bencher = "0.1"
-xmltree = "0.8"
+xmltree = "0.9"
 sxd-document = "0.3"
 elementtree = "0.5"
 treexml = "0.7"
 xml-rs = "0.8"
+quick-xml = "0.17"
 
 [[bench]]
 name = "benchmark"
