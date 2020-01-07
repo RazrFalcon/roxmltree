@@ -28,7 +28,7 @@ use std::rc::Rc;
 pub use xmlparser::TextPos;
 
 mod parse;
-pub use parse::*;
+pub use crate::parse::*;
 
 
 /// The <http://www.w3.org/XML/1998/namespace> URI.

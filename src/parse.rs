@@ -12,7 +12,7 @@ use xmlparser::{
     TextPos,
 };
 
-use {
+use crate::{
     NS_XML_URI,
     NS_XMLNS_URI,
     Attribute,
@@ -366,7 +366,7 @@ fn process_tokens<'input>(
             }
             xmlparser::Token::ElementStart { prefix, local, span } => {
                 if prefix.as_str() == "xmlns" {
-                    let pos = err_pos_from_span(prefix);
+                    let pos = err_pos_from_span(doc.text, prefix);
                     return Err(Error::InvalidElementNamePrefix(pos));
                 }
 
@@ -411,12 +411,12 @@ fn process_attribute<'input>(
 ) -> Result<(), Error> {
     let range = token_span.range();
     let value_range = value.range();
-    let value = normalize_attribute(entity_depth, value, &pd.entities, &mut pd.buffer)?;
+    let value = normalize_attribute(doc.text, entity_depth, value, &pd.entities, &mut pd.buffer)?;
 
     if prefix.as_str() == "xmlns" {
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value == NS_XMLNS_URI {
-            let pos = err_pos_from_qname(prefix, local);
+            let pos = err_pos_from_qname(doc.text, prefix, local);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
@@ -427,20 +427,20 @@ fn process_attribute<'input>(
         // It MUST NOT be bound to any other namespace name.
         if local.as_str() == "xml" {
             if !is_xml_ns_uri {
-                let pos = err_pos_from_span(prefix);
+                let pos = err_pos_from_span(doc.text, prefix);
                 return Err(Error::InvalidXmlPrefixUri(pos));
             }
         } else {
             // The xml namespace MUST NOT be bound to a non-xml prefix.
             if is_xml_ns_uri {
-                let pos = err_pos_from_span(prefix);
+                let pos = err_pos_from_span(doc.text, prefix);
                 return Err(Error::UnexpectedXmlUri(pos));
             }
         }
 
         // Check for duplicated namespaces.
         if doc.namespaces.exists(pd.ns_start_idx, Some(local.as_str())) {
-            let pos = err_pos_from_qname(prefix, local);
+            let pos = err_pos_from_qname(doc.text, prefix, local);
             return Err(Error::DuplicatedNamespace(local.as_str().to_string(), pos));
         }
 
@@ -451,13 +451,13 @@ fn process_attribute<'input>(
     } else if local.as_str() == "xmlns" {
         // The xml namespace MUST NOT be declared as the default namespace.
         if value == NS_XML_URI {
-            let pos = err_pos_from_span(local);
+            let pos = err_pos_from_span(doc.text, local);
             return Err(Error::UnexpectedXmlUri(pos));
         }
 
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value == NS_XMLNS_URI {
-            let pos = err_pos_from_span(local);
+            let pos = err_pos_from_span(doc.text, local);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
@@ -485,7 +485,7 @@ fn process_element<'input>(
         // <root>&p;</root>
 
         if let xmlparser::ElementEnd::Close(..) = end_token {
-            return Err(Error::UnexpectedEntityCloseTag(err_pos_from_span(token_span)));
+            return Err(Error::UnexpectedEntityCloseTag(err_pos_from_span(doc.text, token_span)));
         } else {
             unreachable!("should be already checked by the xmlparser");
         }
@@ -525,7 +525,7 @@ fn process_element<'input>(
                     return Err(Error::UnexpectedCloseTag {
                         expected: gen_qname_string(tag_name.prefix, tag_name.name),
                         actual: gen_qname_string(prefix, local),
-                        pos: err_pos_from_span(token_span),
+                        pos: err_pos_from_span(doc.text, token_span),
                     });
                 }
             }
@@ -618,7 +618,7 @@ fn resolve_attributes<'input>(
 
         // Check for duplicated attributes.
         if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
-            let pos = err_pos_from_qname(attr.prefix, attr.local);
+            let pos = err_pos_from_qname(doc.text, attr.prefix, attr.local);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
@@ -659,7 +659,7 @@ fn process_text<'input>(
 
     let mut entity_depth = entity_depth;
     let mut is_as_is = false; // TODO: explain
-    let mut s = Stream::from(text);
+    let mut s = Stream::from_substr(doc.text, text.range());
     while !s.at_end() {
         match parse_next_chunk(&mut s, &pd.entities)? {
             NextChunk::Byte(c) => {
@@ -694,9 +694,7 @@ fn process_text<'input>(
                     _append_text(parent_id, text.range(), pd, doc);
                 }
 
-                let mut parser = xmlparser::Tokenizer::from(fragment);
-                parser.enable_fragment_mode();
-
+                let parser = xmlparser::Tokenizer::from_fragment(doc.text, fragment.range());
                 let mut tag_name = TagNameSpan::new_null();
                 entity_depth += 1; // TODO: explain
                 process_tokens(parser, entity_depth, parent_id, &mut tag_name, pd, doc)?;
@@ -785,6 +783,7 @@ fn parse_next_chunk<'a>(
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
 fn normalize_attribute<'input>(
+    input: &'input str,
     entity_depth: u8,
     text: StrSpan<'input>,
     entities: &[Entity],
@@ -792,7 +791,7 @@ fn normalize_attribute<'input>(
 ) -> Result<Cow<'input, str>, Error> {
     if is_normalization_required(&text) {
         buffer.clear();
-        _normalize_attribute(text, entities, entity_depth, buffer)?;
+        _normalize_attribute(input, text, entities, entity_depth, buffer)?;
         Ok(Cow::Owned(buffer.to_str().to_owned()))
     } else {
         Ok(Cow::Borrowed(text.as_str()))
@@ -818,6 +817,7 @@ fn is_normalization_required(text: &StrSpan) -> bool {
 }
 
 fn _normalize_attribute(
+    input: &str,
     text: StrSpan,
     entities: &[Entity],
     entity_depth: u8,
@@ -825,7 +825,7 @@ fn _normalize_attribute(
 ) -> Result<(), Error> {
     let mut entity_depth = entity_depth;
 
-    let mut s = Stream::from(text);
+    let mut s = Stream::from_substr(input, text.range());
     while !s.at_end() {
         // Safe, because we already checked that the stream is not at the end.
         let c = s.curr_byte_unchecked();
@@ -865,7 +865,7 @@ fn _normalize_attribute(
                 match entities.iter().find(|e| e.name == name) {
                     Some(entity) => {
                         entity_depth += 1;
-                        _normalize_attribute(entity.value, entities, entity_depth, buffer)?;
+                        _normalize_attribute(input, entity.value, entities, entity_depth, buffer)?;
                     }
                     None => {
                         let pos = s.gen_text_pos_from(start);
@@ -907,7 +907,7 @@ fn get_ns_by_prefix(
                 //
                 // Example:
                 // <e random:a='b'/>
-                let pos = err_pos_from_span(prefix);
+                let pos = err_pos_from_span(doc.text, prefix);
                 Err(Error::UnknownNamespace(prefix.as_str().to_string(), pos))
             } else {
                 // If an URI was not found and prefix IS empty than
@@ -931,14 +931,14 @@ fn gen_qname_string(prefix: &str, local: &str) -> String {
 }
 
 #[inline]
-fn err_pos_from_span(text: StrSpan) -> TextPos {
-    Stream::from(text).gen_text_pos()
+fn err_pos_from_span(input: &str, text: StrSpan) -> TextPos {
+    Stream::from_substr(input, text.range()).gen_text_pos()
 }
 
 #[inline]
-fn err_pos_from_qname(prefix: StrSpan, local: StrSpan) -> TextPos {
+fn err_pos_from_qname(input: &str, prefix: StrSpan, local: StrSpan) -> TextPos {
     let err_span = if prefix.is_empty() { local } else { prefix };
-    err_pos_from_span(err_span)
+    err_pos_from_span(input, err_span)
 }
 
 

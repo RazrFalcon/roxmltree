@@ -1,6 +1,5 @@
 [package]
 name = "roxmltree"
-# When updating version, also modify html_root_url in the lib.rs
 version = "0.8.0"
 authors = ["Evgeniy Reizner <razrfalcon@gmail.com>"]
 keywords = ["xml", "parser", "tree", "dom"]
@@ -10,6 +9,7 @@ description = "Represent an XML as a read-only tree."
 repository = "https://github.com/RazrFalcon/roxmltree"
 documentation = "https://docs.rs/roxmltree/"
 readme = "README.md"
+edition = "2018"
 
 [workspace]
 members = ["benches"]
@@ -18,11 +18,8 @@ exclude = ["testing-tools"]
 [badges]
 travis-ci = { repository = "RazrFalcon/roxmltree" }
 
-[lib]
-doctest = true
-
 [dependencies]
-xmlparser = "0.12"
+xmlparser = "0.13"
 
 [dev-dependencies]
 pretty_assertions = "0.5"
