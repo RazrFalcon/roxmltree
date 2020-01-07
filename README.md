@@ -2,7 +2,7 @@
 [![Build Status](https://travis-ci.org/RazrFalcon/roxmltree.svg?branch=master)](https://travis-ci.org/RazrFalcon/roxmltree)
 [![Crates.io](https://img.shields.io/crates/v/roxmltree.svg)](https://crates.io/crates/roxmltree)
 [![Documentation](https://docs.rs/roxmltree/badge.svg)](https://docs.rs/roxmltree)
-[![Rust 1.18+](https://img.shields.io/badge/rust-1.18+-orange.svg)](https://www.rust-lang.org)
+[![Rust 1.31+](https://img.shields.io/badge/rust-1.31+-orange.svg)](https://www.rust-lang.org)
 
 Represents an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
 
@@ -52,7 +52,7 @@ Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/bl
 | Language                        | Rust             | C                   | Rust             | Rust             | Rust             | Rust             |
 | Size overhead<sup>4</sup>       | **~60KiB**       | ~1.4MiB<sup>5</sup> | ~80KiB           | ~96KiB           | ~135KiB          | ~110KiB          |
 | Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 18               | 2                | 14               |
-| Tested version                  | 0.8.0            | 2.9.8               | 0.10.0           | 0.5.0            | 0.3.0            | 0.7.0            |
+| Tested version                  | 0.9.0            | 2.9.8               | 0.10.0           | 0.5.0            | 0.3.0            | 0.7.0            |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | BSD-3-Clause     | MIT              | MIT              |
 
 Legend:
