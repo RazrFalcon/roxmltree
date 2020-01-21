@@ -23,7 +23,7 @@ extern crate xmlparser;
 use std::borrow::Cow;
 use std::fmt;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub use xmlparser::TextPos;
 
@@ -469,12 +469,12 @@ impl<'input> Deref for Namespaces<'input> {
 }
 
 
-struct Uri(Rc<String>);
+struct Uri(Arc<String>);
 
 impl Uri {
     #[inline]
     fn new(text: String) -> Self {
-        Uri(Rc::new(text))
+        Uri(Arc::new(text))
     }
 
     #[inline]
@@ -486,7 +486,7 @@ impl Uri {
 impl Clone for Uri {
     #[inline]
     fn clone(&self) -> Self {
-        Uri(Rc::clone(&self.0))
+        Uri(Arc::clone(&self.0))
     }
 }
 
