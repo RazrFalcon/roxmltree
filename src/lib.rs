@@ -24,6 +24,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt;
 use std::num::NonZeroUsize;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
 pub use xmlparser::TextPos;
@@ -629,6 +630,14 @@ impl<'a, 'input> Ord for Node<'a, 'input> {
             },
             _ => id_cmp
         }
+    }
+}
+
+impl<'a, 'input> Hash for Node<'a, 'input> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.0.hash(state);
+        (self.doc as *const Document).hash(state);
+        (self.d as *const NodeData).hash(state);
     }
 }
 
