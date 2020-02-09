@@ -1,19 +1,12 @@
-extern crate roxmltree;
-
-use std::fs;
-use std::env;
-use std::io::Read;
-use std::process;
-
 fn main() {
-    let args: Vec<_> = env::args().collect();
+    let args: Vec<_> = std::env::args().collect();
 
     if args.len() != 2 {
         println!("Usage:\n\tcargo run --example print_pos -- input.xml");
-        process::exit(1);
+        std::process::exit(1);
     }
 
-    let text = load_file(&args[1]);
+    let text = std::fs::read_to_string(&args[1]).unwrap();
     let doc = match roxmltree::Document::parse(&text) {
         Ok(doc) => doc,
         Err(e) => {
@@ -28,11 +21,4 @@ fn main() {
             println!("{:?} at {}", node.tag_name(), doc.text_pos_at(node.range().start));
         }
     }
-}
-
-fn load_file(path: &str) -> String {
-    let mut file = fs::File::open(&path).unwrap();
-    let mut text = String::new();
-    file.read_to_string(&mut text).unwrap();
-    text
 }

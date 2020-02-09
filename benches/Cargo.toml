@@ -1,18 +1,18 @@
 [package]
 name = "benchmark"
 version = "0.1.0"
+edition = "2018"
 workspace = ".."
 
 [dependencies]
-roxmltree = { path = "../" }
-xmlparser = "0.13"
 bencher = "0.1"
-xmltree = "0.10"
-sxd-document = "0.3"
-elementtree = "0.5"
-treexml = "0.7"
-xml-rs = "0.8"
+minidom = "0.11.1"
 quick-xml = "0.17"
+roxmltree = { path = "../" }
+sxd-document = "0.3"
+xml-rs = "0.8"
+xmlparser = "0.13"
+xmltree = "0.10"
 
 [[bench]]
 name = "benchmark"

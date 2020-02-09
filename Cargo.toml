@@ -13,7 +13,7 @@ edition = "2018"
 
 [workspace]
 members = ["benches"]
-exclude = ["testing-tools"]
+exclude = ["test-apps", "testing-tools"]
 
 [badges]
 travis-ci = { repository = "RazrFalcon/roxmltree" }

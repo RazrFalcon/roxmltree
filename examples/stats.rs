@@ -1,25 +1,19 @@
-extern crate roxmltree;
-
 use std::collections::HashSet;
-use std::fs;
-use std::env;
-use std::io::Read;
-use std::process;
 
 fn main() {
-    let args: Vec<_> = env::args().collect();
+    let args: Vec<_> = std::env::args().collect();
 
     if args.len() != 2 {
         println!("Usage:\n\tcargo run --example stats -- input.xml");
-        process::exit(1);
+        std::process::exit(1);
     }
 
-    let text = load_file(&args[1]);
+    let text = std::fs::read_to_string(&args[1]).unwrap();
     let doc = match roxmltree::Document::parse(&text) {
         Ok(v) => v,
         Err(e) => {
             println!("Error: {}.", e);
-            process::exit(1);
+            std::process::exit(1);
         }
     };
 
@@ -53,11 +47,4 @@ fn main() {
     for node in doc.root().descendants().filter(|n| n.is_comment()) {
         println!("{:?}", node.text().unwrap());
     }
-}
-
-fn load_file(path: &str) -> String {
-    let mut file = fs::File::open(&path).unwrap();
-    let mut text = String::new();
-    file.read_to_string(&mut text).unwrap();
-    text
 }

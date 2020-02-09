@@ -1,42 +1,9 @@
-#![allow(dead_code)]
-
-#[macro_use]
-extern crate bencher;
-
-extern crate roxmltree;
-extern crate xmlparser;
-extern crate xmltree;
-extern crate sxd_document;
-extern crate elementtree;
-extern crate treexml;
-extern crate xml;
-extern crate quick_xml;
-
-use std::fs;
-use std::env;
-use std::io::Read;
-
 use bencher::Bencher;
-
-fn load_string(path: &str) -> String {
-    let path = env::current_dir().unwrap().join(path);
-    let mut file = fs::File::open(&path).unwrap();
-    let mut text = String::new();
-    file.read_to_string(&mut text).unwrap();
-    text
-}
-
-fn load_data(path: &str) -> Vec<u8> {
-    let path = env::current_dir().unwrap().join(path);
-    let mut file = fs::File::open(&path).unwrap();
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf).unwrap();
-    buf
-}
+use bencher::{benchmark_group, benchmark_main};
 
 
 fn tiny_xmlparser(bencher: &mut Bencher) {
-    let text = load_string("fonts.conf");
+    let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| {
         for t in xmlparser::Tokenizer::from(text.as_str()) {
             let _ = t.unwrap();
@@ -45,7 +12,7 @@ fn tiny_xmlparser(bencher: &mut Bencher) {
 }
 
 fn medium_xmlparser(bencher: &mut Bencher) {
-    let text = load_string("medium.svg");
+    let text = std::fs::read_to_string("medium.svg").unwrap();
     bencher.iter(|| {
         for t in xmlparser::Tokenizer::from(text.as_str()) {
             let _ = t.unwrap();
@@ -54,7 +21,7 @@ fn medium_xmlparser(bencher: &mut Bencher) {
 }
 
 fn large_xmlparser(bencher: &mut Bencher) {
-    let text = load_string("large.plist");
+    let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| {
         for t in xmlparser::Tokenizer::from(text.as_str()) {
             let _ = t.unwrap();
@@ -64,7 +31,7 @@ fn large_xmlparser(bencher: &mut Bencher) {
 
 
 fn tiny_xmlrs(bencher: &mut Bencher) {
-    let text = load_string("fonts.conf");
+    let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| {
         for event in xml::EventReader::new(text.as_bytes()) {
             let _ = event.unwrap();
@@ -73,7 +40,7 @@ fn tiny_xmlrs(bencher: &mut Bencher) {
 }
 
 fn medium_xmlrs(bencher: &mut Bencher) {
-    let text = load_string("medium.svg");
+    let text = std::fs::read_to_string("medium.svg").unwrap();
     bencher.iter(|| {
         for event in xml::EventReader::new(text.as_bytes()) {
             let _ = event.unwrap();
@@ -82,7 +49,7 @@ fn medium_xmlrs(bencher: &mut Bencher) {
 }
 
 fn large_xmlrs(bencher: &mut Bencher) {
-    let text = load_string("large.plist");
+    let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| {
         for event in xml::EventReader::new(text.as_bytes()) {
             let _ = event.unwrap();
@@ -112,107 +79,96 @@ fn parse_via_quick_xml(text: &str) {
 }
 
 fn tiny_quick_xml(bencher: &mut Bencher) {
-    let text = load_string("fonts.conf");
+    let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| parse_via_quick_xml(&text))
 }
 
 fn medium_quick_xml(bencher: &mut Bencher) {
-    let text = load_string("medium.svg");
+    let text = std::fs::read_to_string("medium.svg").unwrap();
     bencher.iter(|| parse_via_quick_xml(&text))
 }
 
 fn large_quick_xml(bencher: &mut Bencher) {
-    let text = load_string("large.plist");
+    let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| parse_via_quick_xml(&text))
 }
 
 
 fn tiny_roxmltree(bencher: &mut Bencher) {
-    let text = load_string("fonts.conf");
+    let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
 fn medium_roxmltree(bencher: &mut Bencher) {
-    let text = load_string("medium.svg");
+    let text = std::fs::read_to_string("medium.svg").unwrap();
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
 fn large_roxmltree(bencher: &mut Bencher) {
-    let text = load_string("large.plist");
+    let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
 
 fn tiny_xmltree(bencher: &mut Bencher) {
-    let text = load_string("fonts.conf");
+    let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
 }
 
 fn medium_xmltree(bencher: &mut Bencher) {
-    let text = load_string("medium.svg");
+    let text = std::fs::read_to_string("medium.svg").unwrap();
     bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
 }
 
 fn large_xmltree(bencher: &mut Bencher) {
-    let text = load_string("large.plist");
+    let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
 }
 
 
 fn tiny_sdx_document(bencher: &mut Bencher) {
-    let text = load_string("fonts.conf");
+    let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
 
 fn medium_sdx_document(bencher: &mut Bencher) {
-    let text = load_string("medium.svg");
+    let text = std::fs::read_to_string("medium.svg").unwrap();
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
 
 fn large_sdx_document(bencher: &mut Bencher) {
-    let text = load_string("large.plist");
+    let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
 
 
-fn tiny_elementtree(bencher: &mut Bencher) {
-    let data = load_data("fonts.conf");
-    bencher.iter(|| elementtree::Element::from_reader(&data[..]).unwrap())
+fn tiny_minidom(bencher: &mut Bencher) {
+    let data = std::fs::read_to_string("fonts.conf").unwrap();
+    bencher.iter(|| {
+        let _root: minidom::Element = data.parse().unwrap();
+    })
 }
 
-fn medium_elementtree(bencher: &mut Bencher) {
-    let data = load_data("medium.svg");
-    bencher.iter(|| elementtree::Element::from_reader(&data[..]).unwrap())
+fn medium_minidom(bencher: &mut Bencher) {
+    let data = std::fs::read_to_string("medium.svg").unwrap();
+    bencher.iter(|| {
+        let _root: minidom::Element = data.parse().unwrap();
+    })
 }
 
-fn large_elementtree(bencher: &mut Bencher) {
-    let data = load_data("large.plist");
-    bencher.iter(|| elementtree::Element::from_reader(&data[..]).unwrap())
-}
-
-
-fn tiny_treexml(bencher: &mut Bencher) {
-    let data = load_data("fonts.conf");
-    bencher.iter(|| treexml::Document::parse(&data[..]).unwrap())
-}
-
-fn medium_treexml(bencher: &mut Bencher) {
-    let data = load_data("medium.svg");
-    bencher.iter(|| treexml::Document::parse(&data[..]).unwrap())
-}
-
-fn large_treexml(bencher: &mut Bencher) {
-    let data = load_data("large.plist");
-    bencher.iter(|| treexml::Document::parse(&data[..]).unwrap())
+fn large_minidom(bencher: &mut Bencher) {
+    let data = std::fs::read_to_string("large.plist").unwrap();
+    bencher.iter(|| {
+        let _root: minidom::Element = data.parse().unwrap();
+    })
 }
 
 
 benchmark_group!(roxmltree, tiny_roxmltree, medium_roxmltree, large_roxmltree);
 benchmark_group!(xmltree, tiny_xmltree, medium_xmltree, large_xmltree);
 benchmark_group!(sdx, tiny_sdx_document, medium_sdx_document, large_sdx_document);
-benchmark_group!(elementtree, tiny_elementtree, medium_elementtree, large_elementtree);
-benchmark_group!(treexml, tiny_treexml, medium_treexml, large_treexml);
+benchmark_group!(minidom, tiny_minidom, medium_minidom, large_minidom);
 benchmark_group!(xmlparser, tiny_xmlparser, medium_xmlparser, large_xmlparser);
 benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs);
 benchmark_group!(quick_xml, tiny_quick_xml, medium_quick_xml, large_quick_xml);
-benchmark_main!(roxmltree, xmltree, sdx, elementtree, treexml, xmlparser, xmlrs, quick_xml);
+benchmark_main!(roxmltree, xmltree, sdx, minidom, xmlparser, xmlrs, quick_xml);
