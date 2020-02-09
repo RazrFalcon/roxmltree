@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+- A better entity loop detection. A document can have an unlimited
+  number of references at zero depth now.
 
 ## [0.9.0] - 2020-01-07
 ### Changed

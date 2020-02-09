@@ -29,6 +29,8 @@
 - entity_010 - entity reference to an element with an entity reference
 - entity_011 - character and entity references in attributes
 - entity_012 - mixed entity references in text
+- entity_013 - many entity references in text
+- entity_014 - many entity references in attribute
 - entity_err_001 - unknown entity reference
 - entity_err_002 - recursive entity references
 - entity_err_003 - reference to a close tag

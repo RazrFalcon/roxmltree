@@ -27,9 +27,6 @@ use crate::{
     Uri,
 };
 
-// Note: update Error::EntityReferenceLoop documentation too.
-const ENTITY_DEPTH: u8 = 10;
-
 
 /// A list of all possible errors.
 #[derive(Debug)]
@@ -80,7 +77,7 @@ pub enum Error {
 
     /// A possible entity reference loop.
     ///
-    /// The current depth limit is 10.
+    /// The current depth limit is 10. The max number of references per reference is 255.
     EntityReferenceLoop(TextPos),
 
     /// Attribute value cannot have a `<` character.
@@ -285,6 +282,84 @@ impl<'input> TagNameSpan<'input> {
     }
 }
 
+
+/// An entity loop detector.
+///
+/// Limits:
+/// - Entities depth is 10.
+/// - Maximum number of entity references per entity reference is 255.
+///
+/// Basically, if a text or an attribute has an entity reference and this reference
+/// has more than 10 nested references - this is an error.
+///
+/// This is useful for simple loops like:
+///
+/// ```text
+/// <!ENTITY a '&b;'>
+/// <!ENTITY b '&a;'>
+/// ```
+///
+/// And, if a text or an attribute has an entity reference and it references more
+/// than 255 references - this is an error.
+///
+/// This is useful for cases like billion laughs attack, where depth can be pretty small,
+/// but the number of references is exponentially increasing:
+///
+/// ```text
+/// <!ENTITY lol "lol">
+/// <!ENTITY lol1 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+/// <!ENTITY lol2 "&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;">
+/// <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+/// <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
+/// ```
+#[derive(Default)]
+struct LoopDetector {
+    /// References depth.
+    depth: u8,
+    /// Number of references resolved by the root reference.
+    references: u8,
+}
+
+impl LoopDetector {
+    #[inline]
+    fn inc_depth(&mut self, s: &Stream) -> Result<(), Error> {
+        if self.depth < 10 {
+            self.depth += 1;
+            Ok(())
+        } else {
+            Err(Error::EntityReferenceLoop(s.gen_text_pos()))
+        }
+    }
+
+    #[inline]
+    fn dec_depth(&mut self) {
+        if self.depth > 0 {
+            self.depth -= 1;
+        }
+
+        // Reset references count after reaching zero depth.
+        if self.depth == 0 {
+            self.references = 0;
+        }
+    }
+
+    #[inline]
+    fn inc_references(&mut self, s: &Stream) -> Result<(), Error> {
+        if self.depth == 0 {
+            // Allow infinite amount of references at zero depth.
+            Ok(())
+        } else {
+            if self.references == std::u8::MAX {
+                return Err(Error::EntityReferenceLoop(s.gen_text_pos()));
+            }
+
+            self.references += 1;
+            Ok(())
+        }
+    }
+}
+
+
 fn parse(text: &str) -> Result<Document, Error> {
     let mut pd = ParserData {
         attrs_start_idx: 0,
@@ -322,7 +397,7 @@ fn parse(text: &str) -> Result<Document, Error> {
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
     let mut tag_name = TagNameSpan::new_null();
-    process_tokens(parser, 0, parent_id, &mut tag_name, &mut pd, &mut doc)?;
+    process_tokens(parser, parent_id, &mut LoopDetector::default(), &mut tag_name, &mut pd, &mut doc)?;
 
     if !doc.root().children().any(|n| n.is_element()) {
         return Err(Error::NoRootNode);
@@ -337,8 +412,8 @@ fn parse(text: &str) -> Result<Document, Error> {
 
 fn process_tokens<'input>(
     parser: xmlparser::Tokenizer<'input>,
-    entity_depth: u8,
     mut parent_id: NodeId,
+    loop_detector: &mut LoopDetector,
     tag_name: &mut TagNameSpan<'input>,
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
@@ -357,7 +432,7 @@ fn process_tokens<'input>(
                 doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range());
             }
             xmlparser::Token::Text { text } => {
-                process_text(text, parent_id, entity_depth, pd, doc)?;
+                process_text(text, parent_id, loop_detector, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
                 let cow_str = Cow::Borrowed(text.as_str());
@@ -373,7 +448,7 @@ fn process_tokens<'input>(
                 *tag_name = TagNameSpan::new(prefix, local, span);
             }
             xmlparser::Token::Attribute { prefix, local, value, span } => {
-                process_attribute(entity_depth, prefix, local, value, span, pd, doc)?;
+                process_attribute(prefix, local, value, span, loop_detector, pd, doc)?;
             }
             xmlparser::Token::ElementEnd { end, span } => {
                 process_element(*tag_name, end, span, &mut parent_id, pd, doc)?;
@@ -401,17 +476,17 @@ fn process_tokens<'input>(
 }
 
 fn process_attribute<'input>(
-    entity_depth: u8,
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
     value: StrSpan<'input>,
     token_span: StrSpan<'input>,
+    loop_detector: &mut LoopDetector,
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     let range = token_span.range();
     let value_range = value.range();
-    let value = normalize_attribute(doc.text, entity_depth, value, &pd.entities, &mut pd.buffer)?;
+    let value = normalize_attribute(doc.text, value, &pd.entities, loop_detector, &mut pd.buffer)?;
 
     if prefix.as_str() == "xmlns" {
         // The xmlns namespace MUST NOT be declared as the default namespace.
@@ -637,7 +712,7 @@ fn resolve_attributes<'input>(
 fn process_text<'input>(
     text: StrSpan<'input>,
     parent_id: NodeId,
-    entity_depth: u8,
+    loop_detector: &mut LoopDetector,
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
@@ -657,7 +732,6 @@ fn process_text<'input>(
 
     pd.buffer.clear();
 
-    let mut entity_depth = entity_depth;
     let mut is_as_is = false; // TODO: explain
     let mut s = Stream::from_substr(doc.text, text.range());
     while !s.at_end() {
@@ -672,11 +746,11 @@ fn process_text<'input>(
             }
             NextChunk::Char(c) => {
                 for b in CharToBytes::new(c) {
-                    if entity_depth > 0 {
+                    if loop_detector.depth > 0 {
                         pd.buffer.push_from_text(b, s.at_end());
                     } else {
                         // Characters not from entity should be added as is.
-                        // Not sure why... At least `lxml` produces the same results.
+                        // Not sure why... At least `lxml` produces the same result.
                         pd.buffer.push_raw(b);
                         is_as_is = true;
                     }
@@ -685,20 +759,19 @@ fn process_text<'input>(
             NextChunk::Text(fragment) => {
                 is_as_is = false;
 
-                if entity_depth > ENTITY_DEPTH {
-                    let pos = s.gen_text_pos();
-                    return Err(Error::EntityReferenceLoop(pos));
-                }
-
                 if !pd.buffer.is_empty() {
                     _append_text(parent_id, text.range(), pd, doc);
                 }
 
+                loop_detector.inc_references(&s)?;
+                loop_detector.inc_depth(&s)?;
+
                 let parser = xmlparser::Tokenizer::from_fragment(doc.text, fragment.range());
                 let mut tag_name = TagNameSpan::new_null();
-                entity_depth += 1; // TODO: explain
-                process_tokens(parser, entity_depth, parent_id, &mut tag_name, pd, doc)?;
+                process_tokens(parser, parent_id, loop_detector, &mut tag_name, pd, doc)?;
                 pd.buffer.clear();
+
+                loop_detector.dec_depth();
             }
         }
     }
@@ -784,14 +857,14 @@ fn parse_next_chunk<'a>(
 // https://www.w3.org/TR/REC-xml/#AVNormalize
 fn normalize_attribute<'input>(
     input: &'input str,
-    entity_depth: u8,
     text: StrSpan<'input>,
     entities: &[Entity],
+    loop_detector: &mut LoopDetector,
     buffer: &mut TextBuffer,
 ) -> Result<Cow<'input, str>, Error> {
     if is_normalization_required(&text) {
         buffer.clear();
-        _normalize_attribute(input, text, entities, entity_depth, buffer)?;
+        _normalize_attribute(input, text, entities, loop_detector, buffer)?;
         Ok(Cow::Owned(buffer.to_str().to_owned()))
     } else {
         Ok(Cow::Borrowed(text.as_str()))
@@ -820,11 +893,9 @@ fn _normalize_attribute(
     input: &str,
     text: StrSpan,
     entities: &[Entity],
-    entity_depth: u8,
+    loop_detector: &mut LoopDetector,
     buffer: &mut TextBuffer,
 ) -> Result<(), Error> {
-    let mut entity_depth = entity_depth;
-
     let mut s = Stream::from_substr(input, text.range());
     while !s.at_end() {
         // Safe, because we already checked that the stream is not at the end.
@@ -841,7 +912,7 @@ fn _normalize_attribute(
         match s.try_consume_reference() {
             Some(Reference::Char(ch)) => {
                 for b in CharToBytes::new(ch) {
-                    if entity_depth > 0 {
+                    if loop_detector.depth > 0 {
                         // Escaped `<` inside an ENTITY is an error.
                         // Escaped `<` outside an ENTITY is ok.
                         if b == b'<' {
@@ -857,15 +928,12 @@ fn _normalize_attribute(
                 }
             }
             Some(Reference::Entity(name)) => {
-                if entity_depth > ENTITY_DEPTH {
-                    let pos = s.gen_text_pos();
-                    return Err(Error::EntityReferenceLoop(pos));
-                }
-
                 match entities.iter().find(|e| e.name == name) {
                     Some(entity) => {
-                        entity_depth += 1;
-                        _normalize_attribute(input, entity.value, entities, entity_depth, buffer)?;
+                        loop_detector.inc_references(&s)?;
+                        loop_detector.inc_depth(&s)?;
+                        _normalize_attribute(input, entity.value, entities, loop_detector, buffer)?;
+                        loop_detector.dec_depth();
                     }
                     None => {
                         let pos = s.gen_text_pos_from(start);
