@@ -28,7 +28,7 @@ Sadly, XML can be parsed in many different ways. *roxmltree* tries to mimic the
 behavior of Python's [lxml](https://lxml.de/).
 But unlike *lxml*, *roxmltree* does support comments outside the root element.
 
-Fo more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md).
+For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md).
 
 ## Alternatives
 
