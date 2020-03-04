@@ -1031,32 +1031,32 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     /// Returns an iterator over ancestor nodes starting at this node.
     #[inline]
-    pub fn ancestors(&self) -> Ancestors<'a, 'input> {
-        Ancestors(Some(*self))
+    pub fn ancestors(&self) -> AxisIter<'a, 'input> {
+        AxisIter { node: Some(*self), next: Node::parent }
     }
 
     /// Returns an iterator over previous sibling nodes.
     #[inline]
-    pub fn prev_siblings(&self) -> PrevSiblings<'a, 'input> {
-        PrevSiblings(self.prev_sibling())
+    pub fn prev_siblings(&self) -> AxisIter<'a, 'input> {
+        AxisIter { node: Some(*self), next: Node::prev_sibling }
     }
 
     /// Returns an iterator over next sibling nodes.
     #[inline]
-    pub fn next_siblings(&self) -> NextSiblings<'a, 'input> {
-        NextSiblings(self.next_sibling())
+    pub fn next_siblings(&self) -> AxisIter<'a, 'input> {
+        AxisIter { node: Some(*self), next: Node::next_sibling }
     }
 
     /// Returns an iterator over first children nodes.
     #[inline]
-    pub fn first_children(&self) -> FirstChildren<'a, 'input> {
-        FirstChildren(self.first_child())
+    pub fn first_children(&self) -> AxisIter<'a, 'input> {
+        AxisIter { node: Some(*self), next: Node::first_child }
     }
 
     /// Returns an iterator over last children nodes.
     #[inline]
-    pub fn last_children(&self) -> LastChildren<'a, 'input> {
-        LastChildren(self.last_child())
+    pub fn last_children(&self) -> AxisIter<'a, 'input> {
+        AxisIter { node: Some(*self), next: Node::last_child }
     }
 
     /// Returns an iterator over children nodes.
@@ -1101,42 +1101,23 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
     }
 }
 
-macro_rules! axis_iterators {
-    ($(#[$m:meta] $i:ident($f:path);)*) => {
-        $(
-            #[$m]
-            #[derive(Clone)]
-            pub struct $i<'a, 'input: 'a>(Option<Node<'a, 'input>>);
 
-            impl<'a, 'input: 'a> Iterator for $i<'a, 'input> {
-                type Item = Node<'a, 'input>;
-
-                #[inline]
-                fn next(&mut self) -> Option<Self::Item> {
-                    let node = self.0.take();
-                    self.0 = node.as_ref().and_then($f);
-                    node
-                }
-            }
-        )*
-    };
+/// Iterator over specified axis.
+#[derive(Clone)]
+pub struct AxisIter<'a, 'input: 'a> {
+    node: Option<Node<'a, 'input>>,
+    next: fn(&Node<'a, 'input>) -> Option<Node<'a, 'input>>,
 }
 
-axis_iterators! {
-    /// Iterator over ancestors.
-    Ancestors(Node::parent);
+impl<'a, 'input: 'a> Iterator for AxisIter<'a, 'input> {
+    type Item = Node<'a, 'input>;
 
-    /// Iterator over previous siblings.
-    PrevSiblings(Node::prev_sibling);
-
-    /// Iterator over next siblings.
-    NextSiblings(Node::next_sibling);
-
-    /// Iterator over first children.
-    FirstChildren(Node::first_child);
-
-    /// Iterator over last children.
-    LastChildren(Node::last_child);
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let node = self.node.take();
+        self.node = node.as_ref().and_then(self.next);
+        node
+    }
 }
 
 

@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+- `Ancestors`, `PrevSiblings`, `NextSiblings`, `FirstChildren` and `LastChildren`
+  were replaced with `AxisIter`.
 
 ## [0.9.1] - 2020-02-09
 ### Changed
