@@ -34,31 +34,31 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 
 | Feature/Crate                   | roxmltree        | [libxml2]           | [xmltree]        | [sxd-document]   | [minidom]        |
 | ------------------------------- | :--------------: | :-----------------: | :--------------: | :--------------: | :--------------: |
-| Element namespace resolving     | ✔                | ✔                   | ✔                | ~<sup>1</sup>    | ✔                |
-| Attribute namespace resolving   | ✔                | ✔                   |                  | ✔                | ✔                |
-| [Entity references]             | ✔                | ✔                   | ⚠                | ⚠                | ⚠                |
-| [Character references]          | ✔                | ✔                   | ✔                | ✔                | ✔                |
-| [Attribute-Value normalization] | ✔                | ✔                   |                  |                  |                  |
-| Comments                        | ✔                | ✔                   |                  | ✔                | ✔                |
-| Processing instructions         | ✔                | ✔                   | ✔                | ✔                |                  |
-| UTF-8 BOM                       | ✔                | ✔                   | ⚠                | ⚠                | ✔                |
-| Non UTF-8 input                 |                  | ✔                   |                  |                  |                  |
-| Complete DTD support            |                  | ✔                   |                  |                  |                  |
-| Position preserving<sup>2</sup> | ✔                | ✔                   |                  |                  |                  |
-| HTML support                    |                  | ✔                   |                  |                  |                  |
-| Tree modification               |                  | ✔                   | ✔                | ✔                | ✔                |
-| Writing                         |                  | ✔                   | ✔                | ✔                | ✔                |
-| No **unsafe**                   | ✔                |                     | ✔                |                  | ~<sup>3</sup>    |
-| Language                        | Rust             | C                   | Rust             | Rust              | Rust            |
-| Size overhead<sup>4</sup>       | ~67KiB           | ~1.4MiB<sup>4</sup> | ~118KiB          | ~138KiB           | **~63KiB**      |
-| Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                 | 2               |
-| Tested version                  | 0.9.1            | 2.9.8               | 0.10.0           | 0.3.2             | 0.11.1          |
-| License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT               | MIT             |
+| Element namespace resolving     | ✓                | ✓                   | ✓                | ~<sup>1</sup>    | ✓                |
+| Attribute namespace resolving   | ✓                | ✓                   |                  | ✓                | ✓                |
+| [Entity references]             | ✓                | ✓                   | ×                | ×                | ×                |
+| [Character references]          | ✓                | ✓                   | ✓                | ✓                | ✓                |
+| [Attribute-Value normalization] | ✓                | ✓                   |                  |                  |                  |
+| Comments                        | ✓                | ✓                   |                  | ✓                | ✓                |
+| Processing instructions         | ✓                | ✓                   | ✓                | ✓                |                  |
+| UTF-8 BOM                       | ✓                | ✓                   | ×                | ×                | ✓                |
+| Non UTF-8 input                 |                  | ✓                   |                  |                  |                  |
+| Complete DTD support            |                  | ✓                   |                  |                  |                  |
+| Position preserving<sup>2</sup> | ✓                | ✓                   |                  |                  |                  |
+| HTML support                    |                  | ✓                   |                  |                  |                  |
+| Tree modification               |                  | ✓                   | ✓                | ✓                | ✓                |
+| Writing                         |                  | ✓                   | ✓                | ✓                | ✓                |
+| No **unsafe**                   | ✓                |                     | ✓                |                  | ~<sup>3</sup>    |
+| Language                        | Rust             | C                   | Rust             | Rust             | Rust             |
+| Size overhead<sup>4</sup>       | ~67KiB           | ~1.4MiB<sup>5</sup> | ~118KiB          | ~138KiB          | **~63KiB**       |
+| Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                | 2                |
+| Tested version                  | 0.9.1            | 2.9.8               | 0.10.0           | 0.3.2            | 0.11.1           |
+| License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              | MIT              |
 
 Legend:
 
-- ✔ - supported
-- ⚠ - parsing error
+- ✓ - supported
+- × - parsing error
 - ~ - partial
 - *nothing* - not supported
 
