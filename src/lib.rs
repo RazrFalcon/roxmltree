@@ -134,6 +134,21 @@ impl<'input> Document<'input> {
     pub fn text_pos_at(&self, pos: usize) -> TextPos {
         xmlparser::Stream::from(self.text).gen_text_pos_from(pos)
     }
+
+    /// Returns the raw text of the original document.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use roxmltree::*;
+    ///
+    /// let doc = Document::parse("<e/>").unwrap();
+    ///
+    /// assert_eq!(doc.raw_text(), "<e/>");
+    #[inline]
+    pub fn raw_text(&self) -> &'input str {
+        self.text
+    }
 }
 
 impl<'input> fmt::Debug for Document<'input> {
