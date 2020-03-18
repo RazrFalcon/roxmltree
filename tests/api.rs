@@ -207,10 +207,3 @@ fn lifetimes() {
     let _ = f(&doc, |d| d.root().tail());
     let _ = f(&doc, |d| d.root().pi());
 }
-
-#[test]
-fn input_text() {
-    let doc = roxmltree::Document::parse("<e/>").unwrap();
-
-    assert_eq!(doc.input_text(), "<e/>");
-}
