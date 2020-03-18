@@ -135,7 +135,7 @@ impl<'input> Document<'input> {
         xmlparser::Stream::from(self.text).gen_text_pos_from(pos)
     }
 
-    /// Returns the raw text of the original document.
+    /// Returns the input text of the original document.
     ///
     /// # Examples
     ///
@@ -146,7 +146,7 @@ impl<'input> Document<'input> {
     ///
     /// assert_eq!(doc.raw_text(), "<e/>");
     #[inline]
-    pub fn raw_text(&self) -> &'input str {
+    pub fn input_text(&self) -> &'input str {
         self.text
     }
 }
