@@ -13,7 +13,7 @@ License: ISC.
 [parsing doc]: https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md
 */
 
-#![doc(html_root_url = "https://docs.rs/roxmltree/0.9.1")]
+#![doc(html_root_url = "https://docs.rs/roxmltree/0.10.0")]
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -145,6 +145,7 @@ impl<'input> Document<'input> {
     /// let doc = Document::parse("<e/>").unwrap();
     ///
     /// assert_eq!(doc.input_text(), "<e/>");
+    /// ```
     #[inline]
     pub fn input_text(&self) -> &'input str {
         self.text

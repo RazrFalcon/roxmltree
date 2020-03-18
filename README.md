@@ -52,7 +52,7 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | Language                        | Rust             | C                   | Rust             | Rust             | Rust             |
 | Size overhead<sup>4</sup>       | ~67KiB           | ~1.4MiB<sup>5</sup> | ~118KiB          | ~138KiB          | **~63KiB**       |
 | Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                | 2                |
-| Tested version                  | 0.9.1            | 2.9.8               | 0.10.0           | 0.3.2            | 0.11.1           |
+| Tested version                  | 0.10.0           | 2.9.8               | 0.10.0           | 0.3.2            | 0.11.1           |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              | MIT              |
 
 Legend:
