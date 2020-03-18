@@ -389,7 +389,7 @@ fn parse(text: &str) -> Result<Document, Error> {
         next_sibling: None,
         children: None,
         kind: NodeKind::Root,
-        range: 0..0,
+        range: 0..text.len(),
     });
 
     doc.namespaces.push_ns(Some("xml"), NS_XML_URI.to_string());

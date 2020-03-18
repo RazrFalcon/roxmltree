@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - `Ancestors`, `PrevSiblings`, `NextSiblings`, `FirstChildren` and `LastChildren`
   were replaced with `AxisIter`.
+  
+### Fixed
+- Root node range.
 
 ## [0.9.1] - 2020-02-09
 ### Changed
