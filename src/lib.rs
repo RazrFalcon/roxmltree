@@ -144,7 +144,7 @@ impl<'input> Document<'input> {
     ///
     /// let doc = Document::parse("<e/>").unwrap();
     ///
-    /// assert_eq!(doc.raw_text(), "<e/>");
+    /// assert_eq!(doc.input_text(), "<e/>");
     #[inline]
     pub fn input_text(&self) -> &'input str {
         self.text
