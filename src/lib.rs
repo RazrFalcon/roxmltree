@@ -13,7 +13,7 @@ License: ISC.
 [parsing doc]: https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md
 */
 
-#![doc(html_root_url = "https://docs.rs/roxmltree/0.10.0")]
+#![doc(html_root_url = "https://docs.rs/roxmltree/0.10.1")]
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

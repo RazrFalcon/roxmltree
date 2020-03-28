@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.10.1] - 2020-03-28
 ### Fixed
 - `Node::prev_sibling_element` and `Node::next_sibling_element`
   were returning the current node.
@@ -129,7 +131,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `ExpandedName::has_namespace`. `ExpandedName::namespace` will return `Option` now.
 - `Error::NestedEntityReference`.
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.0..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.1..HEAD
+[0.10.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.8.0...v0.9.0
