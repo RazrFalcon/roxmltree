@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Fixed
+- `Node::prev_sibling_element` and `Node::next_sibling_element`
+  were returning the current node.
+
 ## [0.10.0] - 2020-03-18
 ### Added
 - `Document::input_text`

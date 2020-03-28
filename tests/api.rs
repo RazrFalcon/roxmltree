@@ -185,6 +185,42 @@ fn text_pos_03() {
 }
 
 #[test]
+fn next_sibling_element_01() {
+    let data = "<root><a/><b/><c/></root>";
+
+    let doc = roxmltree::Document::parse(data).unwrap();
+
+    let root = doc.root_element();
+    let a = root.first_element_child().unwrap();
+    let b = a.next_sibling_element().unwrap();
+    let c = b.next_sibling_element().unwrap();
+    assert!(c.next_sibling_element().is_none());
+
+    assert_eq!(root.tag_name().name(), "root");
+    assert_eq!(a.tag_name().name(), "a");
+    assert_eq!(b.tag_name().name(), "b");
+    assert_eq!(c.tag_name().name(), "c");
+}
+
+#[test]
+fn next_prev_element_01() {
+    let data = "<root><a/><b/><c/></root>";
+
+    let doc = roxmltree::Document::parse(data).unwrap();
+
+    let root = doc.root_element();
+    let c = root.last_element_child().unwrap();
+    let b = c.prev_sibling_element().unwrap();
+    let a = b.prev_sibling_element().unwrap();
+    assert!(a.prev_sibling_element().is_none());
+
+    assert_eq!(root.tag_name().name(), "root");
+    assert_eq!(a.tag_name().name(), "a");
+    assert_eq!(b.tag_name().name(), "b");
+    assert_eq!(c.tag_name().name(), "c");
+}
+
+#[test]
 fn lifetimes() {
     fn f<'a, 'd, F, R>(doc: &'a roxmltree::Document<'d>, fun: F) -> R
         where F: Fn(&'a roxmltree::Document<'d>) -> R
