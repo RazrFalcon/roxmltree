@@ -23,7 +23,6 @@ extern crate xmlparser;
 use std::borrow::Cow;
 use std::fmt;
 use std::ops::Deref;
-use std::rc::Rc;
 
 pub use xmlparser::TextPos;
 
@@ -300,7 +299,7 @@ impl<'input> Attribute<'input> {
     /// ```
     #[inline]
     pub fn namespace(&self) -> Option<&str> {
-        self.name.ns.as_ref().map(Uri::as_str)
+        self.name.ns.as_ref().map(Cow::as_ref)
     }
 
     /// Returns attribute's name.
@@ -389,7 +388,7 @@ impl<'input> fmt::Debug for Attribute<'input> {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Namespace<'input> {
     name: Option<&'input str>,
-    uri: Uri,
+    uri: Cow<'input, str>,
 }
 
 impl<'input> Namespace<'input> {
@@ -430,7 +429,7 @@ impl<'input> Namespace<'input> {
     /// ```
     #[inline]
     pub fn uri(&self) -> &str {
-        self.uri.as_str()
+        self.uri.as_ref()
     }
 }
 
@@ -439,18 +438,9 @@ struct Namespaces<'input>(Vec<Namespace<'input>>);
 
 impl<'input> Namespaces<'input> {
     #[inline]
-    fn push_ns(&mut self, name: Option<&'input str>, uri: String) {
+    fn push_ns(&mut self, name: Option<&'input str>, uri: Cow<'input, str>) {
         debug_assert_ne!(name, Some(""));
-
-        self.0.push(Namespace {
-            name,
-            uri: Uri::new(uri),
-        });
-    }
-
-    #[inline]
-    fn xml_uri(&self) -> Uri {
-        self[0].uri.clone()
+        self.0.push(Namespace { name, uri });
     }
 
     #[inline]
@@ -469,44 +459,9 @@ impl<'input> Deref for Namespaces<'input> {
 }
 
 
-struct Uri(Rc<String>);
-
-impl Uri {
-    #[inline]
-    fn new(text: String) -> Self {
-        Uri(Rc::new(text))
-    }
-
-    #[inline]
-    fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl Clone for Uri {
-    #[inline]
-    fn clone(&self) -> Self {
-        Uri(Rc::clone(&self.0))
-    }
-}
-
-impl PartialEq for Uri {
-    #[inline]
-    fn eq(&self, other: &Uri) -> bool {
-        self.0.as_str() == other.0.as_str()
-    }
-}
-
-impl fmt::Debug for Uri {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-
 #[derive(Clone, PartialEq)]
 struct ExpandedNameOwned<'input> {
-    ns: Option<Uri>,
+    ns: Option<Cow<'input, str>>,
     prefix: &'input str, // Used only for closing tags matching during parsing.
     name: &'input str,
 }
@@ -515,7 +470,7 @@ impl<'input> ExpandedNameOwned<'input> {
     #[inline]
     fn as_ref(&self) -> ExpandedName {
         ExpandedName {
-            uri: self.ns.as_ref().map(Uri::as_str),
+            uri: self.ns.as_ref().map(Cow::as_ref),
             name: self.name,
         }
     }
@@ -524,7 +479,7 @@ impl<'input> ExpandedNameOwned<'input> {
 impl<'input> fmt::Debug for ExpandedNameOwned<'input> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self.ns {
-            Some(ref ns) => write!(f, "{{{}}}{}", ns.as_str(), self.name),
+            Some(ref ns) => write!(f, "{{{}}}{}", ns.as_ref(), self.name),
             None => write!(f, "{}", self.name),
         }
     }
@@ -738,7 +693,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().default_namespace(), None);
     /// ```
     pub fn default_namespace(&self) -> Option<&'a str> {
-        self.namespaces().iter().find(|ns| ns.name.is_none()).map(|v| v.uri.as_str())
+        self.namespaces().iter().find(|ns| ns.name.is_none()).map(|v| v.uri.as_ref())
     }
 
     /// Returns a prefix for a given namespace URI.
@@ -761,7 +716,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
             return Some("xml");
         }
 
-        self.namespaces().iter().find(|ns| ns.uri.as_str() == uri).map(|v| v.name).unwrap_or(None)
+        self.namespaces().iter().find(|ns| ns.uri == uri).map(|v| v.name).unwrap_or(None)
     }
 
     /// Returns an URI for a given prefix.
@@ -780,7 +735,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().lookup_namespace_uri(None), Some("http://www.w3.org"));
     /// ```
     pub fn lookup_namespace_uri(&self, prefix: Option<&'a str>) -> Option<&'a str> {
-        self.namespaces().iter().find(|ns| ns.name == prefix).map(|v| v.uri.as_str())
+        self.namespaces().iter().find(|ns| ns.name == prefix).map(|v| v.uri.as_ref())
     }
 
     /// Returns element's attribute value.

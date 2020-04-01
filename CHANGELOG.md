@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `Node` can be access from multiple threads now.
 
 ## [0.10.1] - 2020-03-28
 ### Fixed

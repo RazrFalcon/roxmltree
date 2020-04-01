@@ -24,7 +24,6 @@ use crate::{
     NodeKind,
     PI,
     Range,
-    Uri,
 };
 
 
@@ -392,7 +391,7 @@ fn parse(text: &str) -> Result<Document, Error> {
         range: 0..text.len(),
     });
 
-    doc.namespaces.push_ns(Some("xml"), NS_XML_URI.to_string());
+    doc.namespaces.push_ns(Some("xml"), Cow::Borrowed(NS_XML_URI));
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
@@ -521,7 +520,7 @@ fn process_attribute<'input>(
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces.push_ns(Some(local.as_str()), value.into());
+            doc.namespaces.push_ns(Some(local.as_str()), value);
         }
     } else if local.as_str() == "xmlns" {
         // The xml namespace MUST NOT be declared as the default namespace.
@@ -536,7 +535,7 @@ fn process_attribute<'input>(
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        doc.namespaces.push_ns(None, value.into());
+        doc.namespaces.push_ns(None, value);
     } else {
         pd.tmp_attrs.push(AttributeData {
             prefix, local, value, range, value_range
@@ -678,7 +677,7 @@ fn resolve_attributes<'input>(
         let ns = if attr.prefix.as_str() == "xml" {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace.
-            Some(doc.namespaces.xml_uri())
+            Some(Cow::Borrowed(NS_XML_URI))
         } else if attr.prefix.is_empty() {
             // 'The namespace name for an unprefixed attribute name
             // always has no value.'
@@ -951,11 +950,11 @@ fn _normalize_attribute(
     Ok(())
 }
 
-fn get_ns_by_prefix(
-    doc: &Document,
+fn get_ns_by_prefix<'input>(
+    doc: &Document<'input>,
     range: Range,
     prefix: StrSpan,
-) -> Result<Option<Uri>, Error> {
+) -> Result<Option<Cow<'input, str>>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
     //
     // Example:
