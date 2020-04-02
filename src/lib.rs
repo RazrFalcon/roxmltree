@@ -3,9 +3,9 @@ Represent an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
 
 The root point of the documentations is [`Document::parse`].
 
-You can find more details in the [README] and [parsing doc].
+You can find more details in the [README] and the [parsing doc].
 
-The tree structure itself is a heavily modified <https://github.com/programble/ego-tree>
+The tree structure itself is a heavily modified <https://github.com/causal-agent/ego-tree>
 License: ISC.
 
 [`Document::parse`]: struct.Document.html#method.parse
@@ -219,14 +219,14 @@ impl<'input> fmt::Debug for Document<'input> {
 }
 
 
-/// List of supported node types.
+/// A list of supported node types.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum NodeType {
     /// The root node of the `Document`.
     Root,
     /// An element node.
     ///
-    /// Only an element can have tag name and attributes.
+    /// Only an element can have a tag name and attributes.
     Element,
     /// A processing instruction.
     PI,
@@ -246,7 +246,7 @@ pub struct PI<'input> {
 }
 
 
-/// Node ID.
+/// A node ID.
 ///
 /// Index into a `Tree`-internal `Vec`.
 ///
