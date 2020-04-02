@@ -941,7 +941,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     /// Returns the parent element of this node.
     pub fn parent_element(&self) -> Option<Self> {
-        self.ancestors().skip(1).filter(|n| n.is_element()).nth(0)
+        self.ancestors().skip(1).find(|n| n.is_element())
     }
 
     /// Returns the previous sibling of this node.
@@ -952,7 +952,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     /// Returns the previous sibling element of this node.
     pub fn prev_sibling_element(&self) -> Option<Self> {
-        self.prev_siblings().skip(1).filter(|n| n.is_element()).nth(0)
+        self.prev_siblings().skip(1).find(|n| n.is_element())
     }
 
     /// Returns the next sibling of this node.
@@ -963,7 +963,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     /// Returns the next sibling element of this node.
     pub fn next_sibling_element(&self) -> Option<Self> {
-        self.next_siblings().skip(1).filter(|n| n.is_element()).nth(0)
+        self.next_siblings().skip(1).find(|n| n.is_element())
     }
 
     /// Returns the first child of this node.
@@ -974,7 +974,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     /// Returns the first element child of this node.
     pub fn first_element_child(&self) -> Option<Self> {
-        self.children().filter(|n| n.is_element()).nth(0)
+        self.children().find(|n| n.is_element())
     }
 
     /// Returns the last child of this node.

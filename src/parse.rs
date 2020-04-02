@@ -795,7 +795,7 @@ fn append_text<'input>(
             if let NodeKind::Text(ref mut prev_text) = node.kind {
                 match *prev_text {
                     Cow::Borrowed(..) => {
-                        *prev_text = Cow::Owned(prev_text.to_string() + text.borrow());
+                        *prev_text = Cow::Owned((*prev_text).to_string() + text.borrow());
                     }
                     Cow::Owned(ref mut s) => {
                         s.push_str(text.borrow());
@@ -844,7 +844,7 @@ fn parse_next_chunk<'a>(
             }
             None => {
                 let pos = s.gen_text_pos_from(start);
-                return Err(Error::MalformedEntityReference(pos));
+                Err(Error::MalformedEntityReference(pos))
             }
         }
     } else {
