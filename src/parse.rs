@@ -215,7 +215,7 @@ impl<'input> Document<'input> {
     }
 
     fn append(&mut self, parent_id: NodeId, kind: NodeKind<'input>, range: Range) -> NodeId {
-        let new_child_id = NodeId(self.nodes.len());
+        let new_child_id = NodeId::new(self.nodes.len());
         self.nodes.push(NodeData {
             parent: Some(parent_id),
             prev_sibling: None,
@@ -225,15 +225,15 @@ impl<'input> Document<'input> {
             range,
         });
 
-        let last_child_id = self.nodes[parent_id.0].children.map(|(_, id)| id);
-        self.nodes[new_child_id.0].prev_sibling = last_child_id;
+        let last_child_id = self.nodes[parent_id.get()].children.map(|(_, id)| id);
+        self.nodes[new_child_id.get()].prev_sibling = last_child_id;
 
         if let Some(id) = last_child_id {
-            self.nodes[id.0].next_sibling = Some(new_child_id);
+            self.nodes[id.get()].next_sibling = Some(new_child_id);
         }
 
-        self.nodes[parent_id.0].children = Some(
-            if let Some((first_child_id, _)) = self.nodes[parent_id.0].children {
+        self.nodes[parent_id.get()].children = Some(
+            if let Some((first_child_id, _)) = self.nodes[parent_id.get()].children {
                 (first_child_id, new_child_id)
             } else {
                 (new_child_id, new_child_id)
@@ -593,8 +593,8 @@ fn process_element<'input>(
             let prefix = prefix.as_str();
             let local = local.as_str();
 
-            doc.nodes[parent_id.0].range.end = token_span.end();
-            if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.0].kind {
+            doc.nodes[parent_id.get()].range.end = token_span.end();
+            if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get()].kind {
                 if prefix != tag_name.prefix || local != tag_name.name {
                     return Err(Error::UnexpectedCloseTag {
                         expected: gen_qname_string(tag_name.prefix, tag_name.name),
@@ -604,7 +604,7 @@ fn process_element<'input>(
                 }
             }
 
-            if let Some(id) = doc.nodes[parent_id.0].parent {
+            if let Some(id) = doc.nodes[parent_id.get()].parent {
                 *parent_id = id;
             } else {
                 unreachable!("should be already checked by the xmlparser");
@@ -635,11 +635,11 @@ fn resolve_namespaces(
     parent_id: NodeId,
     doc: &mut Document,
 ) -> Range {
-    let mut tmp_parent_id = parent_id.0;
+    let mut tmp_parent_id = parent_id.get();
     while tmp_parent_id != 0 {
         let curr_id = tmp_parent_id;
         tmp_parent_id = match doc.nodes[tmp_parent_id].parent {
-            Some(id) => id.0,
+            Some(id) => id.get(),
             None => 0,
         };
 

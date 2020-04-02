@@ -22,6 +22,7 @@ extern crate xmlparser;
 
 use std::borrow::Cow;
 use std::fmt;
+use std::num::NonZeroUsize;
 use std::ops::Deref;
 
 pub use xmlparser::TextPos;
@@ -83,7 +84,7 @@ impl<'input> Document<'input> {
     /// ```
     #[inline]
     pub fn root<'a>(&'a self) -> Node<'a, 'input> {
-        Node { id: NodeId(0), d: &self.nodes[0], doc: self }
+        Node { id: NodeId::new(0), d: &self.nodes[0], doc: self }
     }
 
     /// Returns the root element of the document.
@@ -248,8 +249,22 @@ pub struct PI<'input> {
 /// Node ID.
 ///
 /// Index into a `Tree`-internal `Vec`.
+///
+/// By using `NonZeroUsize` we can fit `Option<NodeId>` into a single byte.
 #[derive(Clone, Copy, PartialEq)]
-struct NodeId(usize);
+struct NodeId(NonZeroUsize);
+
+impl NodeId {
+    #[inline]
+    fn new(n: usize) -> Self {
+        NodeId(NonZeroUsize::new(n + 1).unwrap())
+    }
+
+    #[inline]
+    fn get(self) -> usize {
+        self.0.get() - 1
+    }
+}
 
 
 enum NodeKind<'input> {
@@ -872,7 +887,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
             NodeKind::Element { .. } => {
                 match self.first_child() {
                     Some(child) if child.is_text() => {
-                        match self.doc.nodes[child.id.0].kind {
+                        match self.doc.nodes[child.id.get()].kind {
                             NodeKind::Text(ref text) => Some(text),
                             _ => None
                         }
@@ -910,7 +925,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
         match self.next_sibling().map(|n| n.id) {
             Some(id) => {
-                match self.doc.nodes[id.0].kind {
+                match self.doc.nodes[id.get()].kind {
                     NodeKind::Text(ref text) => Some(text),
                     _ => None
                 }
@@ -930,7 +945,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     #[inline]
     fn gen_node(&self, id: NodeId) -> Node<'a, 'input> {
-        Node { id, d: &self.doc.nodes[id.0], doc: self.doc }
+        Node { id, d: &self.doc.nodes[id.get()], doc: self.doc }
     }
 
     /// Returns the parent of this node.
