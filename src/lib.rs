@@ -284,7 +284,7 @@ enum NodeKind<'input> {
 struct NodeData<'input> {
     parent: Option<NodeId>,
     prev_sibling: Option<NodeId>,
-    next_sibling: Option<NodeId>,
+    next_subtree: Option<NodeId>,
     last_child: Option<NodeId>,
     kind: NodeKind<'input>,
     range: Range,
@@ -1012,7 +1012,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the next sibling of this node.
     #[inline]
     pub fn next_sibling(&self) -> Option<Self> {
-        self.d.next_sibling.map(|id| self.gen_node(id))
+        self.d.next_subtree
+            .map(|id| self.gen_node(id))
+            .and_then(|node| {
+                let possibly_self = node.d.prev_sibling
+                    .expect("next_subtree will always have a previous sibling");
+                if possibly_self == self.id { Some(node) } else { None }
+            })
     }
 
     /// Returns the next sibling element of this node.
@@ -1045,7 +1051,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns true if this node has siblings.
     #[inline]
     pub fn has_siblings(&self) -> bool {
-        self.d.prev_sibling.is_some() || self.d.next_sibling.is_some()
+        self.d.prev_sibling.is_some() || self.next_sibling().is_some()
     }
 
     /// Returns true if this node has children.
@@ -1090,16 +1096,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         Children { front: self.first_child(), back: self.last_child() }
     }
 
-    /// Returns an iterator which traverses the subtree starting at this node.
-    #[inline]
-    pub fn traverse(&self) -> Traverse<'a, 'input> {
-        Traverse { root: *self, edge: None }
-    }
-
     /// Returns an iterator over this node and its descendants.
     #[inline]
     pub fn descendants(&self) -> Descendants<'a, 'input> {
-        Descendants(self.traverse())
+        Descendants::new(*self)
     }
 
     /// Returns node's range in bytes in the original document.
@@ -1186,69 +1186,36 @@ impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
 }
 
 
-/// Open or close edge of a node.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Edge<'a, 'input: 'a> {
-    /// Open.
-    Open(Node<'a, 'input>),
-    /// Close.
-    Close(Node<'a, 'input>),
-}
-
-
-/// Iterator which traverses a subtree.
+/// Iterator over a node and its descendants.
 #[derive(Clone)]
-pub struct Traverse<'a, 'input: 'a> {
-    root: Node<'a, 'input>,
-    edge: Option<Edge<'a, 'input>>,
+pub struct Descendants<'a, 'input> {
+    start: Node<'a, 'input>,
+    current: NodeId,
+    until: NodeId,
 }
 
-impl<'a, 'input: 'a> Iterator for Traverse<'a, 'input> {
-    type Item = Edge<'a, 'input>;
-
+impl<'a, 'input> Descendants<'a, 'input> {
     #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.edge {
-            Some(Edge::Open(node)) => {
-                self.edge = Some(match node.first_child() {
-                    Some(first_child) => Edge::Open(first_child),
-                    None => Edge::Close(node),
-                });
-            }
-            Some(Edge::Close(node)) => {
-                if node == self.root {
-                    self.edge = None;
-                } else if let Some(next_sibling) = node.next_sibling() {
-                    self.edge = Some(Edge::Open(next_sibling));
-                } else {
-                    self.edge = node.parent().map(Edge::Close);
-                }
-            }
-            None => {
-                self.edge = Some(Edge::Open(self.root));
-            }
+    fn new(start: Node<'a, 'input>) -> Self {
+        Self {
+            start,
+            current: start.id,
+            until: start.d.next_subtree.unwrap_or_else(|| NodeId::new(start.doc.nodes.len()))
         }
-
-        self.edge
     }
 }
 
-
-/// Iterator over a node and its descendants.
-#[derive(Clone)]
-pub struct Descendants<'a, 'input: 'a>(Traverse<'a, 'input>);
-
-impl<'a, 'input: 'a> Iterator for Descendants<'a, 'input> {
+impl<'a, 'input> Iterator for Descendants<'a, 'input> {
     type Item = Node<'a, 'input>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        for edge in &mut self.0 {
-            if let Edge::Open(node) = edge {
-                return Some(node);
-            }
-        }
-
-        None
+        let next = if self.current == self.until {
+            None
+        } else {
+            Some(self.start.gen_node(self.current))
+        };
+        self.current = NodeId::new(self.current.get() + 1);
+        next
     }
 }

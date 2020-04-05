@@ -214,12 +214,18 @@ impl<'input> Document<'input> {
         parse(text)
     }
 
-    fn append(&mut self, parent_id: NodeId, kind: NodeKind<'input>, range: Range) -> NodeId {
+    fn append(&mut self, parent_id: NodeId, kind: NodeKind<'input>, range: Range, pd: &mut ParserData) -> NodeId {
         let new_child_id = NodeId::new(self.nodes.len());
+
+        let appending_element = match kind {
+            NodeKind::Element {..} => true,
+            _ => false
+        };
+
         self.nodes.push(NodeData {
             parent: Some(parent_id),
             prev_sibling: None,
-            next_sibling: None,
+            next_subtree: None,
             last_child: None,
             kind,
             range,
@@ -229,8 +235,13 @@ impl<'input> Document<'input> {
         self.nodes[new_child_id.get()].prev_sibling = last_child_id;
         self.nodes[parent_id.get()].last_child = Some(new_child_id);
 
-        if let Some(id) = last_child_id {
-            self.nodes[id.get()].next_sibling = Some(new_child_id);
+        pd.awaiting_subtree.iter().for_each(|id| {
+            self.nodes[id.get()].next_subtree = Some(new_child_id);
+        });
+        pd.awaiting_subtree.clear();
+
+        if !appending_element {
+            pd.awaiting_subtree.push(NodeId::new(self.nodes.len() - 1));
         }
 
         new_child_id
@@ -246,6 +257,7 @@ struct ParserData<'input> {
     attrs_start_idx: usize,
     ns_start_idx: usize,
     tmp_attrs: Vec<AttributeData<'input>>,
+    awaiting_subtree: Vec<NodeId>,
     entities: Vec<Entity<'input>>,
     buffer: TextBuffer,
     after_text: bool,
@@ -358,6 +370,7 @@ fn parse(text: &str) -> Result<Document, Error> {
         ns_start_idx: 1,
         tmp_attrs: Vec::with_capacity(16),
         entities: Vec::new(),
+        awaiting_subtree: Vec::new(),
         buffer: TextBuffer::new(),
         after_text: false,
     };
@@ -378,7 +391,7 @@ fn parse(text: &str) -> Result<Document, Error> {
     doc.nodes.push(NodeData {
         parent: None,
         prev_sibling: None,
-        next_sibling: None,
+        next_subtree: None,
         last_child: None,
         kind: NodeKind::Root,
         range: 0..text.len(),
@@ -418,17 +431,17 @@ fn process_tokens<'input>(
                     target: target.as_str(),
                     value: content.map(|v| v.as_str()),
                 });
-                doc.append(parent_id, pi, span.range());
+                doc.append(parent_id, pi, span.range(), pd);
             }
             xmlparser::Token::Comment { text, span } => {
-                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range());
+                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range(), pd);
             }
             xmlparser::Token::Text { text } => {
                 process_text(text, parent_id, loop_detector, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
                 let cow_str = Cow::Borrowed(text.as_str());
-                append_text(cow_str, parent_id, span.range(), pd.after_text, doc);
+                append_text(cow_str, parent_id, span.range(), pd.after_text, doc, pd);
                 pd.after_text = true;
             }
             xmlparser::Token::ElementStart { prefix, local, span } => {
@@ -569,7 +582,7 @@ fn process_element<'input>(
     match end_token {
         xmlparser::ElementEnd::Empty => {
             let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
-            doc.append(*parent_id,
+            let new_element_id = doc.append(*parent_id,
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
                         ns: tag_ns_uri,
@@ -579,8 +592,10 @@ fn process_element<'input>(
                     attributes,
                     namespaces,
                 },
-                tag_name.span.start()..token_span.end()
+                tag_name.span.start()..token_span.end(),
+                pd
             );
+            pd.awaiting_subtree.push(new_element_id);
         }
         xmlparser::ElementEnd::Close(prefix, local) => {
             let prefix = prefix.as_str();
@@ -596,6 +611,7 @@ fn process_element<'input>(
                     });
                 }
             }
+            pd.awaiting_subtree.push(*parent_id);
 
             if let Some(id) = doc.nodes[parent_id.get()].parent {
                 *parent_id = id;
@@ -615,7 +631,8 @@ fn process_element<'input>(
                     attributes,
                     namespaces,
                 },
-                tag_name.span.start()..token_span.end()
+                tag_name.span.start()..token_span.end(),
+                pd
             );
         }
     }
@@ -710,14 +727,14 @@ fn process_text<'input>(
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
-        append_text(Cow::Borrowed(text.as_str()), parent_id, text.range(), pd.after_text, doc);
+        append_text(Cow::Borrowed(text.as_str()), parent_id, text.range(), pd.after_text, doc, pd);
         pd.after_text = true;
         return Ok(());
     }
 
-    fn _append_text(parent_id: NodeId, range: Range, pd: &mut ParserData, doc: &mut Document) {
+    fn _append_text<'input>(parent_id: NodeId, range: Range, pd: &mut ParserData<'input>, doc: &mut Document<'input>) {
         let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
-        append_text(cow_text, parent_id, range, pd.after_text, doc);
+        append_text(cow_text, parent_id, range, pd.after_text, doc, pd);
         pd.after_text = true;
         pd.buffer.clear();
     }
@@ -781,6 +798,7 @@ fn append_text<'input>(
     range: Range,
     after_text: bool,
     doc: &mut Document<'input>,
+    pd: &mut ParserData<'input>
 ) {
     if after_text {
         // Prepend to a previous text node.
@@ -797,7 +815,7 @@ fn append_text<'input>(
             }
         }
     } else {
-        doc.append(parent_id, NodeKind::Text(text), range);
+        doc.append(parent_id, NodeKind::Text(text), range, pd);
     }
 }
 
