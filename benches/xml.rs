@@ -163,7 +163,46 @@ fn large_minidom(bencher: &mut Bencher) {
     })
 }
 
+fn roxmltree_iter_descendants_inexpensive_matches(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("large.plist").unwrap();
+    let doc = roxmltree::Document::parse(&text).unwrap();
+    let root = doc.root();
+    bencher.iter(|| {
+        root.descendants().filter(|node| {
+            node.tag_name().name() == "string"
+        }).count();
+    })
+}
 
+fn roxmltree_iter_descendants_expensive_matches(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("large.plist").unwrap();
+    let doc = roxmltree::Document::parse(&text).unwrap();
+    let root = doc.root();
+    bencher.iter(|| {
+        root.descendants().filter_map(|node| {
+            if node.is_text() && node.text().unwrap().contains("twitter") {
+                Some(node)
+            } else {
+                None
+            }
+        }).count();
+    })
+}
+
+fn roxmltree_iter_children(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("large.plist").unwrap();
+    let doc = roxmltree::Document::parse(&text).unwrap();
+    let root = doc.root();
+    let large_array = root.descendants().find(|node| node.tag_name().name() == "array").unwrap();
+    bencher.iter(|| {
+        large_array.children().count();
+    })
+}
+
+benchmark_group!(iter,
+    roxmltree_iter_descendants_inexpensive_matches,
+    roxmltree_iter_descendants_expensive_matches,
+    roxmltree_iter_children);
 benchmark_group!(roxmltree, tiny_roxmltree, medium_roxmltree, large_roxmltree);
 benchmark_group!(xmltree, tiny_xmltree, medium_xmltree, large_xmltree);
 benchmark_group!(sdx, tiny_sdx_document, medium_sdx_document, large_sdx_document);
@@ -171,4 +210,4 @@ benchmark_group!(minidom, tiny_minidom, medium_minidom, large_minidom);
 benchmark_group!(xmlparser, tiny_xmlparser, medium_xmlparser, large_xmlparser);
 benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs);
 benchmark_group!(quick_xml, tiny_quick_xml, medium_quick_xml, large_quick_xml);
-benchmark_main!(roxmltree, xmltree, sdx, minidom, xmlparser, xmlrs, quick_xml);
+benchmark_main!(roxmltree, xmltree, sdx, minidom, xmlparser, xmlrs, quick_xml, iter);
