@@ -21,6 +21,7 @@ License: ISC.
 extern crate xmlparser;
 
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::ops::Deref;
@@ -570,7 +571,25 @@ impl<'input> From<(&'input str, &'input str)> for ExpandedName<'input> {
 }
 
 
-/// A node.
+/// A node in a document.
+///
+/// ### Document Order
+/// The impl of the `Ord` traits for Node is based on the concept of "document-order".
+/// In layman's terms, document-order is the order in which one would see each element if
+/// one opened a document in a text editor or web browser and scrolled down.
+/// Document-order convention is followed in XPath, CSS Counters, and DOM selectors API
+/// to ensure consistent results from selection.
+/// One difference in roxmltree is that there is the notion of more than one document
+/// in existence at a time. While Nodes within the same document are in document-order,
+/// Nodes in different documents will be grouped together, but not in any particular
+/// order.
+/// As an example, if we have a Document `a` with Nodes `[a0, a1, a2]` and a
+/// Document `b` with Nodes `[b0, b1]`, these Nodes in order could be either
+/// `[a0, a1, a2, b0, b1]` or `[b0, b1, a0, a1, a2]` and roxmltree makes no
+/// guarantee which it will be.
+/// Document-order is defined here in the [W3C XPath Recommendation](https://www.w3.org/TR/xpath-3/#id-document-order)
+/// The use of document-order in DOM Selectors is described here in the
+/// [W3C Selectors API Level 1](https://www.w3.org/TR/selectors-api/#the-apis)
 #[derive(Clone, Copy)]
 pub struct Node<'a, 'input: 'a> {
     /// Node ID.
@@ -590,6 +609,26 @@ impl<'a, 'input> PartialEq for Node<'a, 'input> {
            self.id == other.id
         && self.doc as *const _ == other.doc as *const _
         && self.d as *const _ == other.d as *const _
+    }
+}
+
+impl<'a, 'input> PartialOrd for Node<'a, 'input> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a, 'input> Ord for Node<'a, 'input> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let id_cmp = self.id.0.cmp(&other.id.0);
+        match id_cmp {
+            Ordering::Equal => {
+                let this_doc_ptr = self.doc as *const Document;
+                let other_doc_ptr = other.doc as *const Document;
+                this_doc_ptr.cmp(&other_doc_ptr)
+            },
+            _ => id_cmp
+        }
     }
 }
 
