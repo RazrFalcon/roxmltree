@@ -220,25 +220,18 @@ impl<'input> Document<'input> {
             parent: Some(parent_id),
             prev_sibling: None,
             next_sibling: None,
-            children: None,
+            last_child: None,
             kind,
             range,
         });
 
-        let last_child_id = self.nodes[parent_id.get()].children.map(|(_, id)| id);
+        let last_child_id = self.nodes[parent_id.get()].last_child;
         self.nodes[new_child_id.get()].prev_sibling = last_child_id;
+        self.nodes[parent_id.get()].last_child = Some(new_child_id);
 
         if let Some(id) = last_child_id {
             self.nodes[id.get()].next_sibling = Some(new_child_id);
         }
-
-        self.nodes[parent_id.get()].children = Some(
-            if let Some((first_child_id, _)) = self.nodes[parent_id.get()].children {
-                (first_child_id, new_child_id)
-            } else {
-                (new_child_id, new_child_id)
-            }
-        );
 
         new_child_id
     }
@@ -386,7 +379,7 @@ fn parse(text: &str) -> Result<Document, Error> {
         parent: None,
         prev_sibling: None,
         next_sibling: None,
-        children: None,
+        last_child: None,
         kind: NodeKind::Root,
         range: 0..text.len(),
     });

@@ -284,7 +284,7 @@ struct NodeData<'input> {
     parent: Option<NodeId>,
     prev_sibling: Option<NodeId>,
     next_sibling: Option<NodeId>,
-    children: Option<(NodeId, NodeId)>,
+    last_child: Option<NodeId>,
     kind: NodeKind<'input>,
     range: Range,
 }
@@ -984,7 +984,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the first child of this node.
     #[inline]
     pub fn first_child(&self) -> Option<Self> {
-        self.d.children.map(|(id, _)| self.gen_node(id))
+        self.d.last_child.map(|_| self.gen_node(NodeId::new(self.id.get() + 1)))
     }
 
     /// Returns the first element child of this node.
@@ -995,7 +995,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the last child of this node.
     #[inline]
     pub fn last_child(&self) -> Option<Self> {
-        self.d.children.map(|(_, id)| self.gen_node(id))
+        self.d.last_child.map(|id| self.gen_node(id))
     }
 
     /// Returns the last element child of this node.
@@ -1012,7 +1012,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns true if this node has children.
     #[inline]
     pub fn has_children(&self) -> bool {
-        self.d.children.is_some()
+        self.d.last_child.is_some()
     }
 
     /// Returns an iterator over ancestor nodes starting at this node.
