@@ -221,6 +221,23 @@ fn next_prev_element_01() {
 }
 
 #[test]
+fn nodes_document_order() {
+    let data = "<root><a/><b/><c/></root>";
+
+    let doc = roxmltree::Document::parse(data).unwrap();
+    let root = doc.root_element();
+    let a = root.first_element_child().unwrap();
+    let b = a.next_sibling_element().unwrap();
+    let c = b.next_sibling_element().unwrap();
+
+    let mut elems = vec![&b, &c, &a];
+    elems.sort();
+    assert!(elems[0] == &a);
+    assert!(elems[1] == &b);
+    assert!(elems[2] == &c);
+}
+
+#[test]
 fn lifetimes() {
     fn f<'a, 'd, F, R>(doc: &'a roxmltree::Document<'d>, fun: F) -> R
         where F: Fn(&'a roxmltree::Document<'d>) -> R

@@ -85,6 +85,8 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 
 ## Performance
 
+### Parsing
+
 ```text
 test large_roxmltree     ... bench:   3,344,633 ns/iter (+/- 9,063)
 test large_minidom       ... bench:   5,101,156 ns/iter (+/- 98,146)
@@ -122,9 +124,25 @@ test tiny_xmlparser      ... bench:       2,578 ns/iter (+/- 931)
 test tiny_xmlrs          ... bench:      27,343 ns/iter (+/- 3,299)
 ```
 
-You can try it yourself by running `cargo bench` in the `benches` dir.
+### Iteration
 
-Notes:
+```text
+test minidom_iter_descendants_expensive     ... bench:   1,004,545 ns/iter (+/- 178,395)
+test roxmltree_iter_descendants_expensive   ... bench:     694,561 ns/iter (+/- 139,937)
+test xmltree_iter_descendants_expensive     ... bench:     624,414 ns/iter (+/- 158,466)
+
+test minidom_iter_descendants_inexpensive   ... bench:     299,906 ns/iter (+/- 77,093)
+test roxmltree_iter_descendants_inexpensive ... bench:      64,251 ns/iter (+/- 8,589)
+test xmltree_iter_descendants_inexpensive   ... bench:     264,602 ns/iter (+/- 112,251)
+```
+where expensive refers to the matching done on each element. In these
+benchmarks, 'expensive' means searching for any node in the document which
+contains a string. and 'inexpensive' means searching for any element with a
+particular name.
+
+### Notes
+
+You can try running the benchmarks yourself by running `cargo bench` in the `benches` dir.
 
 - Since all libraries have a different XML support, benchmarking is a bit pointless.
 - Tree crates may use different *xml-rs* crate versions.

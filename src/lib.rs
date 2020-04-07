@@ -21,6 +21,7 @@ License: ISC.
 extern crate xmlparser;
 
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::ops::Deref;
@@ -283,8 +284,8 @@ enum NodeKind<'input> {
 struct NodeData<'input> {
     parent: Option<NodeId>,
     prev_sibling: Option<NodeId>,
-    next_sibling: Option<NodeId>,
-    children: Option<(NodeId, NodeId)>,
+    next_subtree: Option<NodeId>,
+    last_child: Option<NodeId>,
     kind: NodeKind<'input>,
     range: Range,
 }
@@ -570,7 +571,25 @@ impl<'input> From<(&'input str, &'input str)> for ExpandedName<'input> {
 }
 
 
-/// A node.
+/// A node in a document.
+///
+/// ### Document Order
+/// The impl of the `Ord` traits for Node is based on the concept of "document-order".
+/// In layman's terms, document-order is the order in which one would see each element if
+/// one opened a document in a text editor or web browser and scrolled down.
+/// Document-order convention is followed in XPath, CSS Counters, and DOM selectors API
+/// to ensure consistent results from selection.
+/// One difference in roxmltree is that there is the notion of more than one document
+/// in existence at a time. While Nodes within the same document are in document-order,
+/// Nodes in different documents will be grouped together, but not in any particular
+/// order.
+/// As an example, if we have a Document `a` with Nodes `[a0, a1, a2]` and a
+/// Document `b` with Nodes `[b0, b1]`, these Nodes in order could be either
+/// `[a0, a1, a2, b0, b1]` or `[b0, b1, a0, a1, a2]` and roxmltree makes no
+/// guarantee which it will be.
+/// Document-order is defined here in the [W3C XPath Recommendation](https://www.w3.org/TR/xpath-3/#id-document-order)
+/// The use of document-order in DOM Selectors is described here in the
+/// [W3C Selectors API Level 1](https://www.w3.org/TR/selectors-api/#the-apis)
 #[derive(Clone, Copy)]
 pub struct Node<'a, 'input: 'a> {
     /// Node ID.
@@ -590,6 +609,26 @@ impl<'a, 'input> PartialEq for Node<'a, 'input> {
            self.id == other.id
         && self.doc as *const _ == other.doc as *const _
         && self.d as *const _ == other.d as *const _
+    }
+}
+
+impl<'a, 'input> PartialOrd for Node<'a, 'input> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a, 'input> Ord for Node<'a, 'input> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let id_cmp = self.id.0.cmp(&other.id.0);
+        match id_cmp {
+            Ordering::Equal => {
+                let this_doc_ptr = self.doc as *const Document;
+                let other_doc_ptr = other.doc as *const Document;
+                this_doc_ptr.cmp(&other_doc_ptr)
+            },
+            _ => id_cmp
+        }
     }
 }
 
@@ -973,7 +1012,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the next sibling of this node.
     #[inline]
     pub fn next_sibling(&self) -> Option<Self> {
-        self.d.next_sibling.map(|id| self.gen_node(id))
+        self.d.next_subtree
+            .map(|id| self.gen_node(id))
+            .and_then(|node| {
+                let possibly_self = node.d.prev_sibling
+                    .expect("next_subtree will always have a previous sibling");
+                if possibly_self == self.id { Some(node) } else { None }
+            })
     }
 
     /// Returns the next sibling element of this node.
@@ -984,7 +1029,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the first child of this node.
     #[inline]
     pub fn first_child(&self) -> Option<Self> {
-        self.d.children.map(|(id, _)| self.gen_node(id))
+        self.d.last_child.map(|_| self.gen_node(NodeId::new(self.id.get() + 1)))
     }
 
     /// Returns the first element child of this node.
@@ -995,7 +1040,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the last child of this node.
     #[inline]
     pub fn last_child(&self) -> Option<Self> {
-        self.d.children.map(|(_, id)| self.gen_node(id))
+        self.d.last_child.map(|id| self.gen_node(id))
     }
 
     /// Returns the last element child of this node.
@@ -1006,13 +1051,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns true if this node has siblings.
     #[inline]
     pub fn has_siblings(&self) -> bool {
-        self.d.prev_sibling.is_some() || self.d.next_sibling.is_some()
+        self.d.prev_sibling.is_some() || self.next_sibling().is_some()
     }
 
     /// Returns true if this node has children.
     #[inline]
     pub fn has_children(&self) -> bool {
-        self.d.children.is_some()
+        self.d.last_child.is_some()
     }
 
     /// Returns an iterator over ancestor nodes starting at this node.
@@ -1051,16 +1096,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         Children { front: self.first_child(), back: self.last_child() }
     }
 
-    /// Returns an iterator which traverses the subtree starting at this node.
-    #[inline]
-    pub fn traverse(&self) -> Traverse<'a, 'input> {
-        Traverse { root: *self, edge: None }
-    }
-
     /// Returns an iterator over this node and its descendants.
     #[inline]
     pub fn descendants(&self) -> Descendants<'a, 'input> {
-        Descendants(self.traverse())
+        Descendants::new(*self)
     }
 
     /// Returns node's range in bytes in the original document.
@@ -1147,69 +1186,36 @@ impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
 }
 
 
-/// Open or close edge of a node.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Edge<'a, 'input: 'a> {
-    /// Open.
-    Open(Node<'a, 'input>),
-    /// Close.
-    Close(Node<'a, 'input>),
-}
-
-
-/// Iterator which traverses a subtree.
+/// Iterator over a node and its descendants.
 #[derive(Clone)]
-pub struct Traverse<'a, 'input: 'a> {
-    root: Node<'a, 'input>,
-    edge: Option<Edge<'a, 'input>>,
+pub struct Descendants<'a, 'input> {
+    start: Node<'a, 'input>,
+    current: NodeId,
+    until: NodeId,
 }
 
-impl<'a, 'input: 'a> Iterator for Traverse<'a, 'input> {
-    type Item = Edge<'a, 'input>;
-
+impl<'a, 'input> Descendants<'a, 'input> {
     #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.edge {
-            Some(Edge::Open(node)) => {
-                self.edge = Some(match node.first_child() {
-                    Some(first_child) => Edge::Open(first_child),
-                    None => Edge::Close(node),
-                });
-            }
-            Some(Edge::Close(node)) => {
-                if node == self.root {
-                    self.edge = None;
-                } else if let Some(next_sibling) = node.next_sibling() {
-                    self.edge = Some(Edge::Open(next_sibling));
-                } else {
-                    self.edge = node.parent().map(Edge::Close);
-                }
-            }
-            None => {
-                self.edge = Some(Edge::Open(self.root));
-            }
+    fn new(start: Node<'a, 'input>) -> Self {
+        Self {
+            start,
+            current: start.id,
+            until: start.d.next_subtree.unwrap_or_else(|| NodeId::new(start.doc.nodes.len()))
         }
-
-        self.edge
     }
 }
 
-
-/// Iterator over a node and its descendants.
-#[derive(Clone)]
-pub struct Descendants<'a, 'input: 'a>(Traverse<'a, 'input>);
-
-impl<'a, 'input: 'a> Iterator for Descendants<'a, 'input> {
+impl<'a, 'input> Iterator for Descendants<'a, 'input> {
     type Item = Node<'a, 'input>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        for edge in &mut self.0 {
-            if let Edge::Open(node) = edge {
-                return Some(node);
-            }
-        }
-
-        None
+        let next = if self.current == self.until {
+            None
+        } else {
+            Some(self.start.gen_node(self.current))
+        };
+        self.current = NodeId::new(self.current.get() + 1);
+        next
     }
 }
