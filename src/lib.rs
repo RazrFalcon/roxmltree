@@ -602,9 +602,9 @@ pub struct Node<'a, 'input: 'a> {
     d: &'a NodeData<'input>,
 }
 
-impl<'a, 'input> Eq for Node<'a, 'input> {}
+impl Eq for Node<'_, '_> {}
 
-impl<'a, 'input> PartialEq for Node<'a, 'input> {
+impl PartialEq for Node<'_, '_> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
            self.id == other.id
@@ -613,13 +613,13 @@ impl<'a, 'input> PartialEq for Node<'a, 'input> {
     }
 }
 
-impl<'a, 'input> PartialOrd for Node<'a, 'input> {
+impl PartialOrd for Node<'_, '_> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a, 'input> Ord for Node<'a, 'input> {
+impl Ord for Node<'_, '_> {
     fn cmp(&self, other: &Self) -> Ordering {
         let id_cmp = self.id.0.cmp(&other.id.0);
         match id_cmp {
@@ -633,7 +633,7 @@ impl<'a, 'input> Ord for Node<'a, 'input> {
     }
 }
 
-impl<'a, 'input> Hash for Node<'a, 'input> {
+impl Hash for Node<'_, '_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.0.hash(state);
         (self.doc as *const Document).hash(state);
