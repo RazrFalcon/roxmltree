@@ -973,6 +973,32 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
     }
 
+    /// Returns all descendant text joined into a String.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// let doc = roxmltree::Document::parse("\
+    /// <root>
+    ///     text1
+    ///     <p/>
+    ///     text2
+    /// </root>
+    /// ").unwrap();
+    ///
+    /// let text = doc.root_element().deep_text();
+    /// assert_eq!(text, Some("\n    text1\n    \n    text2\n".to_owned()));
+    /// ```
+    #[inline]
+    pub fn deep_text(&self) -> Option<String> {
+        let joined: String = self.descendants()
+            .filter_map(|node| {
+                if node.is_text() { node.text() } else { None }
+            })
+            .collect();
+        if joined.is_empty() { None } else { Some(joined) }
+    }
+
     /// Returns node as Processing Instruction.
     #[inline]
     pub fn pi(&self) -> Option<PI<'input>> {
