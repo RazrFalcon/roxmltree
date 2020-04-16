@@ -89,6 +89,30 @@ impl<'input> Document<'input> {
         Node { id: NodeId::new(0), d: &self.nodes[0], doc: self }
     }
 
+    /// Returns the node of the tree with the given NodeId.
+    /// 
+    /// Note: NodeId::new(0) represents the root node
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// let doc = roxmltree::Document::parse("\
+    /// <p>
+    ///     text
+    /// </p>
+    /// ").unwrap();
+    /// 
+    /// use roxmltree::NodeId;
+    /// assert_eq!(doc.get_node(NodeId::new(0)).unwrap(), doc.root());
+    /// assert_eq!(doc.get_node(NodeId::new(1)), doc.descendants().find(|n| n.has_tag_name("p")));
+    /// assert_eq!(doc.get_node(NodeId::new(2)), doc.descendants().find(|n| n.is_text()));
+    /// assert_eq!(doc.get_node(NodeId::new(3)), None);
+    /// ```
+    #[inline]
+    pub fn get_node<'a>(&'a self, id: NodeId) -> Option<Node<'a, 'input>> {
+        self.nodes.get(id.get()).map(|data| Node { id, d: data, doc: self })
+    }
+
     /// Returns the root element of the document.
     ///
     /// Unlike `root`, will return a first element node.
@@ -251,19 +275,19 @@ pub struct PI<'input> {
 /// A node ID.
 ///
 /// Index into a `Tree`-internal `Vec`.
-///
-/// By using `NonZeroUsize` we can fit `Option<NodeId>` into a single byte.
-#[derive(Clone, Copy, PartialEq)]
-struct NodeId(NonZeroUsize);
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct NodeId(NonZeroUsize);
 
 impl NodeId {
+    /// Construct a NodeId from a usize
     #[inline]
-    fn new(n: usize) -> Self {
+    pub fn new(n: usize) -> Self {
         NodeId(NonZeroUsize::new(n + 1).unwrap())
     }
 
+    /// Get the usize representation of the NodeId
     #[inline]
-    fn get(self) -> usize {
+    pub fn get(self) -> usize {
         self.0.get() - 1
     }
 }
@@ -1115,6 +1139,12 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn range(&self) -> Range {
         self.d.range.clone()
+    }
+
+    /// Returns node's NodeId
+    #[inline]
+    pub fn id(&self) -> NodeId {
+        self.id
     }
 }
 
