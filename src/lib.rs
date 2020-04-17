@@ -89,6 +89,30 @@ impl<'input> Document<'input> {
         Node { id: NodeId::new(0), d: &self.nodes[0], doc: self }
     }
 
+    /// Returns the node of the tree with the given NodeId.
+    /// 
+    /// Note: NodeId::new(0) represents the root node
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// let doc = roxmltree::Document::parse("\
+    /// <p>
+    ///     text
+    /// </p>
+    /// ").unwrap();
+    /// 
+    /// use roxmltree::NodeId;
+    /// assert_eq!(doc.get_node(NodeId::new(0)).unwrap(), doc.root());
+    /// assert_eq!(doc.get_node(NodeId::new(1)), doc.descendants().find(|n| n.has_tag_name("p")));
+    /// assert_eq!(doc.get_node(NodeId::new(2)), doc.descendants().find(|n| n.is_text()));
+    /// assert_eq!(doc.get_node(NodeId::new(3)), None);
+    /// ```
+    #[inline]
+    pub fn get_node<'a>(&'a self, id: NodeId) -> Option<Node<'a, 'input>> {
+        self.nodes.get(id.get()).map(|data| Node { id, d: data, doc: self })
+    }
+
     /// Returns the root element of the document.
     ///
     /// Unlike `root`, will return a first element node.
@@ -251,19 +275,19 @@ pub struct PI<'input> {
 /// A node ID.
 ///
 /// Index into a `Tree`-internal `Vec`.
-///
-/// By using `NonZeroUsize` we can fit `Option<NodeId>` into a single byte.
-#[derive(Clone, Copy, PartialEq)]
-struct NodeId(NonZeroUsize);
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct NodeId(NonZeroUsize);
 
 impl NodeId {
+    /// Construct a NodeId from a usize
     #[inline]
-    fn new(n: usize) -> Self {
+    pub fn new(n: usize) -> Self {
         NodeId(NonZeroUsize::new(n + 1).unwrap())
     }
 
+    /// Get the usize representation of the NodeId
     #[inline]
-    fn get(self) -> usize {
+    pub fn get(self) -> usize {
         self.0.get() - 1
     }
 }
@@ -991,15 +1015,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
     }
 
-    #[inline]
-    fn gen_node(&self, id: NodeId) -> Node<'a, 'input> {
-        Node { id, d: &self.doc.nodes[id.get()], doc: self.doc }
-    }
-
     /// Returns the parent of this node.
     #[inline]
     pub fn parent(&self) -> Option<Self> {
-        self.d.parent.map(|id| self.gen_node(id))
+        self.d.parent.map(|id| self.doc.get_node(id).unwrap())
     }
 
     /// Returns the parent element of this node.
@@ -1010,7 +1029,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the previous sibling of this node.
     #[inline]
     pub fn prev_sibling(&self) -> Option<Self> {
-        self.d.prev_sibling.map(|id| self.gen_node(id))
+        self.d.prev_sibling.map(|id| self.doc.get_node(id).unwrap())
     }
 
     /// Returns the previous sibling element of this node.
@@ -1022,7 +1041,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn next_sibling(&self) -> Option<Self> {
         self.d.next_subtree
-            .map(|id| self.gen_node(id))
+            .map(|id| self.doc.get_node(id).unwrap())
             .and_then(|node| {
                 let possibly_self = node.d.prev_sibling
                     .expect("next_subtree will always have a previous sibling");
@@ -1038,7 +1057,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the first child of this node.
     #[inline]
     pub fn first_child(&self) -> Option<Self> {
-        self.d.last_child.map(|_| self.gen_node(NodeId::new(self.id.get() + 1)))
+        self.d.last_child.map(|_| self.doc.get_node(NodeId::new(self.id.get() + 1)).unwrap())
     }
 
     /// Returns the first element child of this node.
@@ -1049,7 +1068,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the last child of this node.
     #[inline]
     pub fn last_child(&self) -> Option<Self> {
-        self.d.last_child.map(|id| self.gen_node(id))
+        self.d.last_child.map(|id| self.doc.get_node(id).unwrap())
     }
 
     /// Returns the last element child of this node.
@@ -1115,6 +1134,12 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn range(&self) -> Range {
         self.d.range.clone()
+    }
+
+    /// Returns node's NodeId
+    #[inline]
+    pub fn id(&self) -> NodeId {
+        self.id
     }
 }
 
@@ -1198,7 +1223,7 @@ impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
 /// Iterator over a node and its descendants.
 #[derive(Clone)]
 pub struct Descendants<'a, 'input> {
-    start: Node<'a, 'input>,
+    doc: &'a Document<'input>,
     current: NodeId,
     until: NodeId,
 }
@@ -1207,7 +1232,7 @@ impl<'a, 'input> Descendants<'a, 'input> {
     #[inline]
     fn new(start: Node<'a, 'input>) -> Self {
         Self {
-            start,
+            doc: &start.doc,
             current: start.id,
             until: start.d.next_subtree.unwrap_or_else(|| NodeId::new(start.doc.nodes.len()))
         }
@@ -1222,7 +1247,7 @@ impl<'a, 'input> Iterator for Descendants<'a, 'input> {
         let next = if self.current == self.until {
             None
         } else {
-            Some(self.start.gen_node(self.current))
+            Some(self.doc.get_node(self.current).unwrap())
         };
         self.current = NodeId::new(self.current.get() + 1);
         next
