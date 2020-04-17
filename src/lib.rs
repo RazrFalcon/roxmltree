@@ -483,9 +483,9 @@ struct ExpandedNameOwned<'input> {
     name: &'input str,
 }
 
-impl<'input> ExpandedNameOwned<'input> {
+impl<'a, 'input> ExpandedNameOwned<'input> {
     #[inline]
-    fn as_ref(&self) -> ExpandedName {
+    fn as_ref(&'a self) -> ExpandedName<'a, 'input> {
         ExpandedName {
             uri: self.ns.as_ref().map(Cow::as_ref),
             name: self.name,
@@ -507,12 +507,12 @@ impl<'input> fmt::Debug for ExpandedNameOwned<'input> {
 ///
 /// Contains an namespace URI and name pair.
 #[derive(Clone, Copy, PartialEq)]
-pub struct ExpandedName<'input> {
-    uri: Option<&'input str>,
+pub struct ExpandedName<'a, 'input> {
+    uri: Option<&'a str>,
     name: &'input str,
 }
 
-impl<'input> ExpandedName<'input> {
+impl<'a, 'input> ExpandedName<'a, 'input> {
     /// Returns a namespace URI.
     ///
     /// # Examples
@@ -523,7 +523,7 @@ impl<'input> ExpandedName<'input> {
     /// assert_eq!(doc.root_element().tag_name().namespace(), Some("http://www.w3.org"));
     /// ```
     #[inline]
-    pub fn namespace(&self) -> Option<&'input str> {
+    pub fn namespace(&self) -> Option<&'a str> {
         self.uri
     }
 
@@ -542,7 +542,7 @@ impl<'input> ExpandedName<'input> {
     }
 }
 
-impl<'input> fmt::Debug for ExpandedName<'input> {
+impl<'a, 'input> fmt::Debug for ExpandedName<'a, 'input> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self.namespace() {
             Some(ns) => write!(f, "{{{}}}{}", ns, self.name),
@@ -551,7 +551,7 @@ impl<'input> fmt::Debug for ExpandedName<'input> {
     }
 }
 
-impl<'input> From<&'input str> for ExpandedName<'input> {
+impl<'a, 'input> From<&'input str> for ExpandedName<'a, 'input> {
     #[inline]
     fn from(v: &'input str) -> Self {
         ExpandedName {
@@ -561,9 +561,9 @@ impl<'input> From<&'input str> for ExpandedName<'input> {
     }
 }
 
-impl<'input> From<(&'input str, &'input str)> for ExpandedName<'input> {
+impl<'a, 'input> From<(&'a str, &'input str)> for ExpandedName<'a, 'input> {
     #[inline]
-    fn from(v: (&'input str, &'input str)) -> Self {
+    fn from(v: (&'a str, &'input str)) -> Self {
         ExpandedName {
             uri: Some(v.0),
             name: v.1,
@@ -703,7 +703,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().tag_name().name(), "e");
     /// ```
     #[inline]
-    pub fn tag_name(&self) -> ExpandedName<'a> {
+    pub fn tag_name(&self) -> ExpandedName<'a, 'input> {
         match self.d.kind {
             NodeKind::Element { ref tag_name, .. } => tag_name.as_ref(),
             _ => "".into()
@@ -725,7 +725,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     pub fn has_tag_name<'n, N>(&self, name: N) -> bool
     where
-        N: Into<ExpandedName<'n>>,
+        N: Into<ExpandedName<'a, 'n>>,
     {
         let name = name.into();
 
@@ -821,7 +821,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     pub fn attribute<'n, N>(&self, name: N) -> Option<&'a str>
     where
-        N: Into<ExpandedName<'n>>,
+        N: Into<ExpandedName<'n, 'input>>,
     {
         let name = name.into();
         self.attributes().iter().find(|a| a.name.as_ref() == name).map(|a| a.value.as_ref())
@@ -834,7 +834,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// [`attribute()`]: struct.Node.html#method.attribute
     pub fn attribute_node<'n, N>(&self, name: N) -> Option<&'a Attribute<'input>>
     where
-        N: Into<ExpandedName<'n>>,
+        N: Into<ExpandedName<'n, 'input>>,
     {
         let name = name.into();
         self.attributes().iter().find(|a| a.name.as_ref() == name)
@@ -857,7 +857,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     pub fn has_attribute<'n, N>(&self, name: N) -> bool
     where
-        N: Into<ExpandedName<'n>>,
+        N: Into<ExpandedName<'n, 'input>>,
     {
         let name = name.into();
         self.attributes().iter().any(|a| a.name.as_ref() == name)

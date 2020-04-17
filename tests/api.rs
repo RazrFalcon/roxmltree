@@ -263,3 +263,15 @@ fn lifetimes() {
     let _ = f(&doc, |d| d.root().tail());
     let _ = f(&doc, |d| d.root().pi());
 }
+
+#[test]
+fn tag_name_lifetime() {
+    fn get_tag_name<'a, 'input>(node: &'a Node<'a, 'input>) -> &'input str {
+        node.tag_name().name()
+    }
+
+    let data = "<e xmlns='http://www.w3.org' />";
+    let doc = roxmltree::Document::parse(data).unwrap();
+    let root = doc.root_element();
+    assert_eq!(get_tag_name(&root), "e");
+}
