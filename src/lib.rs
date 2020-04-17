@@ -1015,15 +1015,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
     }
 
-    #[inline]
-    fn gen_node(&self, id: NodeId) -> Node<'a, 'input> {
-        Node { id, d: &self.doc.nodes[id.get()], doc: self.doc }
-    }
-
     /// Returns the parent of this node.
     #[inline]
     pub fn parent(&self) -> Option<Self> {
-        self.d.parent.map(|id| self.gen_node(id))
+        self.d.parent.map(|id| self.doc.get_node(id).unwrap())
     }
 
     /// Returns the parent element of this node.
@@ -1034,7 +1029,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the previous sibling of this node.
     #[inline]
     pub fn prev_sibling(&self) -> Option<Self> {
-        self.d.prev_sibling.map(|id| self.gen_node(id))
+        self.d.prev_sibling.map(|id| self.doc.get_node(id).unwrap())
     }
 
     /// Returns the previous sibling element of this node.
@@ -1046,7 +1041,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn next_sibling(&self) -> Option<Self> {
         self.d.next_subtree
-            .map(|id| self.gen_node(id))
+            .map(|id| self.doc.get_node(id).unwrap())
             .and_then(|node| {
                 let possibly_self = node.d.prev_sibling
                     .expect("next_subtree will always have a previous sibling");
@@ -1062,7 +1057,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the first child of this node.
     #[inline]
     pub fn first_child(&self) -> Option<Self> {
-        self.d.last_child.map(|_| self.gen_node(NodeId::new(self.id.get() + 1)))
+        self.d.last_child.map(|_| self.doc.get_node(NodeId::new(self.id.get() + 1)).unwrap())
     }
 
     /// Returns the first element child of this node.
@@ -1073,7 +1068,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the last child of this node.
     #[inline]
     pub fn last_child(&self) -> Option<Self> {
-        self.d.last_child.map(|id| self.gen_node(id))
+        self.d.last_child.map(|id| self.doc.get_node(id).unwrap())
     }
 
     /// Returns the last element child of this node.
@@ -1228,7 +1223,7 @@ impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
 /// Iterator over a node and its descendants.
 #[derive(Clone)]
 pub struct Descendants<'a, 'input> {
-    start: Node<'a, 'input>,
+    doc: &'a Document<'input>,
     current: NodeId,
     until: NodeId,
 }
@@ -1237,7 +1232,7 @@ impl<'a, 'input> Descendants<'a, 'input> {
     #[inline]
     fn new(start: Node<'a, 'input>) -> Self {
         Self {
-            start,
+            doc: &start.doc,
             current: start.id,
             until: start.d.next_subtree.unwrap_or_else(|| NodeId::new(start.doc.nodes.len()))
         }
@@ -1252,7 +1247,7 @@ impl<'a, 'input> Iterator for Descendants<'a, 'input> {
         let next = if self.current == self.until {
             None
         } else {
-            Some(self.start.gen_node(self.current))
+            Some(self.doc.get_node(self.current).unwrap())
         };
         self.current = NodeId::new(self.current.get() + 1);
         next
