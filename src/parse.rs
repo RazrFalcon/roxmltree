@@ -571,6 +571,33 @@ fn process_element<'input>(
         }
     }
 
+    match end_token {
+        xmlparser::ElementEnd::Close(prefix, local) => {
+            let prefix = prefix.as_str();
+            let local = local.as_str();
+
+            doc.nodes[parent_id.get()].range.end = token_span.end();
+            if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get()].kind {
+                if prefix != tag_name.prefix || local != tag_name.name {
+                    return Err(Error::UnexpectedCloseTag {
+                        expected: gen_qname_string(tag_name.prefix, tag_name.name),
+                        actual: gen_qname_string(prefix, local),
+                        pos: err_pos_from_span(doc.text, token_span),
+                    });
+                }
+            }
+            pd.awaiting_subtree.push(*parent_id);
+
+            if let Some(id) = doc.nodes[parent_id.get()].parent {
+                *parent_id = id;
+            } else {
+                unreachable!("should be already checked by the xmlparser");
+            }
+            return Ok(())
+        }
+        _ => {}
+    };
+
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
     pd.ns_start_idx = doc.namespaces.len();
 
@@ -597,28 +624,6 @@ fn process_element<'input>(
             );
             pd.awaiting_subtree.push(new_element_id);
         }
-        xmlparser::ElementEnd::Close(prefix, local) => {
-            let prefix = prefix.as_str();
-            let local = local.as_str();
-
-            doc.nodes[parent_id.get()].range.end = token_span.end();
-            if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get()].kind {
-                if prefix != tag_name.prefix || local != tag_name.name {
-                    return Err(Error::UnexpectedCloseTag {
-                        expected: gen_qname_string(tag_name.prefix, tag_name.name),
-                        actual: gen_qname_string(prefix, local),
-                        pos: err_pos_from_span(doc.text, token_span),
-                    });
-                }
-            }
-            pd.awaiting_subtree.push(*parent_id);
-
-            if let Some(id) = doc.nodes[parent_id.get()].parent {
-                *parent_id = id;
-            } else {
-                unreachable!("should be already checked by the xmlparser");
-            }
-        }
         xmlparser::ElementEnd::Open => {
             let tag_ns_uri = get_ns_by_prefix(doc, &namespaces, tag_name.prefix)?;
             *parent_id = doc.append(*parent_id,
@@ -635,6 +640,7 @@ fn process_element<'input>(
                 pd
             );
         }
+        _ => unreachable!()
     }
 
     Ok(())
