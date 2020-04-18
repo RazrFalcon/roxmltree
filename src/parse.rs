@@ -574,14 +574,14 @@ fn process_element<'input>(
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
     pd.ns_start_idx = doc.namespaces.len();
 
-    let attributes = resolve_attributes(pd.attrs_start_idx, namespaces.clone(),
+    let attributes = resolve_attributes(pd.attrs_start_idx, &namespaces,
                                         &mut pd.tmp_attrs, doc)?;
     pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
 
     match end_token {
         xmlparser::ElementEnd::Empty => {
-            let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
+            let tag_ns_uri = get_ns_by_prefix(doc, &namespaces, tag_name.prefix)?;
             let new_element_id = doc.append(*parent_id,
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
@@ -620,7 +620,7 @@ fn process_element<'input>(
             }
         }
         xmlparser::ElementEnd::Open => {
-            let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
+            let tag_ns_uri = get_ns_by_prefix(doc, &namespaces, tag_name.prefix)?;
             *parent_id = doc.append(*parent_id,
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
@@ -644,7 +644,8 @@ fn resolve_namespaces(
     start_idx: usize,
     parent_id: NodeId,
     doc: &mut Document,
-) -> Range {
+) -> Vec<usize> {
+    let mut current_ns_refs: Vec<usize> = (start_idx..doc.namespaces.len()).collect();
     let mut tmp_parent_id = parent_id.get();
     while tmp_parent_id != 0 {
         let curr_id = tmp_parent_id;
@@ -653,29 +654,24 @@ fn resolve_namespaces(
             None => 0,
         };
 
-        let ns_range = match doc.nodes[curr_id].kind {
-            NodeKind::Element { ref namespaces, .. } => namespaces.clone(),
+        let ancestor_ns_refs = match doc.nodes[curr_id].kind {
+            NodeKind::Element { ref namespaces, .. } => namespaces,
             _ => continue,
         };
 
-        for i in ns_range {
-            if !doc.namespaces.exists(start_idx, doc.namespaces[i].name) {
-                let v = doc.namespaces[i].clone();
-                doc.namespaces.0.push(v);
+        for i in ancestor_ns_refs {
+            let ancestor_ns = &doc.namespaces[*i];
+            if !current_ns_refs.iter().any(|j| doc.namespaces[*j].name == ancestor_ns.name) {
+                current_ns_refs.push(*i);
             }
         }
     }
-
-    if start_idx != doc.namespaces.len() {
-        start_idx..doc.namespaces.len()
-    } else {
-        0..0
-    }
+    current_ns_refs
 }
 
 fn resolve_attributes<'input>(
     start_idx: usize,
-    namespaces: Range,
+    namespaces: &[usize],
     tmp_attrs: &mut [AttributeData<'input>],
     doc: &mut Document<'input>,
 ) -> Result<Range, Error> {
@@ -693,7 +689,7 @@ fn resolve_attributes<'input>(
             // always has no value.'
             None
         } else {
-            get_ns_by_prefix(doc, namespaces.clone(), attr.prefix)?
+            get_ns_by_prefix(doc, namespaces, attr.prefix)?
         };
 
         // We do not store attribute prefixes since `ExpandedNameOwned::prefix`
@@ -963,7 +959,7 @@ fn _normalize_attribute(
 
 fn get_ns_by_prefix<'input>(
     doc: &Document<'input>,
-    range: Range,
+    scope_ns: &[usize],
     prefix: StrSpan,
 ) -> Result<Option<Cow<'input, str>>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
@@ -972,7 +968,11 @@ fn get_ns_by_prefix<'input>(
     // <e xmlns='http://www.w3.org'/>
     let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
 
-    let uri = doc.namespaces[range].iter()
+    let uri = scope_ns
+        .iter()
+        .map(|i| {
+            &doc.namespaces[*i]
+        })
         .find(|ns| ns.name == prefix_opt)
         .map(|ns| ns.uri.clone());
 

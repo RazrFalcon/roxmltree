@@ -219,7 +219,7 @@ impl<'input> fmt::Debug for Document<'input> {
                     writeln_indented!(depth, f, "Element {{");
                     writeln_indented!(depth, f, "    tag_name: {:?}", child.tag_name());
                     print_vec("attributes", child.attributes(), depth + 1, f)?;
-                    print_vec("namespaces", child.namespaces(), depth + 1, f)?;
+                    print_vec("namespaces", &child.namespaces(), depth + 1, f)?;
 
                     if child.has_children() {
                         writeln_indented!(depth, f, "    children: [");
@@ -298,7 +298,7 @@ enum NodeKind<'input> {
     Element {
         tag_name: ExpandedNameOwned<'input>,
         attributes: Range,
-        namespaces: Range,
+        namespaces: Vec<usize>,
     },
     PI(PI<'input>),
     Comment(&'input str),
@@ -918,12 +918,17 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().namespaces().len(), 1);
     /// ```
     #[inline]
-    pub fn namespaces(&self) -> &'a [Namespace<'input>] {
+    pub fn namespaces(&self) -> Vec<&'a Namespace<'input>> {
         match self.d.kind {
             NodeKind::Element { ref namespaces, .. } => {
-                &self.doc.namespaces[namespaces.clone()]
+                namespaces
+                    .iter()
+                    .map(|i| {
+                        &self.doc.namespaces[*i]
+                    })
+                    .collect()
             }
-            _ => &[],
+            _ => vec![],
         }
     }
 
