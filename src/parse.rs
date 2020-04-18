@@ -571,32 +571,29 @@ fn process_element<'input>(
         }
     }
 
-    match end_token {
-        xmlparser::ElementEnd::Close(prefix, local) => {
-            let prefix = prefix.as_str();
-            let local = local.as_str();
+    if let xmlparser::ElementEnd::Close(prefix, local) = end_token {
+        let prefix = prefix.as_str();
+        let local = local.as_str();
 
-            doc.nodes[parent_id.get()].range.end = token_span.end();
-            if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get()].kind {
-                if prefix != tag_name.prefix || local != tag_name.name {
-                    return Err(Error::UnexpectedCloseTag {
-                        expected: gen_qname_string(tag_name.prefix, tag_name.name),
-                        actual: gen_qname_string(prefix, local),
-                        pos: err_pos_from_span(doc.text, token_span),
-                    });
-                }
+        doc.nodes[parent_id.get()].range.end = token_span.end();
+        if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get()].kind {
+            if prefix != tag_name.prefix || local != tag_name.name {
+                return Err(Error::UnexpectedCloseTag {
+                    expected: gen_qname_string(tag_name.prefix, tag_name.name),
+                    actual: gen_qname_string(prefix, local),
+                    pos: err_pos_from_span(doc.text, token_span),
+                });
             }
-            pd.awaiting_subtree.push(*parent_id);
-
-            if let Some(id) = doc.nodes[parent_id.get()].parent {
-                *parent_id = id;
-            } else {
-                unreachable!("should be already checked by the xmlparser");
-            }
-            return Ok(())
         }
-        _ => {}
-    };
+        pd.awaiting_subtree.push(*parent_id);
+
+        if let Some(id) = doc.nodes[parent_id.get()].parent {
+            *parent_id = id;
+        } else {
+            unreachable!("should be already checked by the xmlparser");
+        }
+        return Ok(())
+    }
 
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
     pd.ns_start_idx = doc.namespaces.len();
@@ -652,26 +649,17 @@ fn resolve_namespaces(
     doc: &mut Document,
 ) -> Vec<usize> {
     let mut current_ns_refs: Vec<usize> = (start_idx..doc.namespaces.len()).collect();
-    let mut tmp_parent_id = parent_id.get();
-    while tmp_parent_id != 0 {
-        let curr_id = tmp_parent_id;
-        tmp_parent_id = match doc.nodes[tmp_parent_id].parent {
-            Some(id) => id.get(),
-            None => 0,
-        };
+    let parent_id = parent_id.get();
 
-        let ancestor_ns_refs = match doc.nodes[curr_id].kind {
-            NodeKind::Element { ref namespaces, .. } => namespaces,
-            _ => continue,
-        };
-
-        for i in ancestor_ns_refs {
+    if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id].kind {
+        for i in namespaces {
             let ancestor_ns = &doc.namespaces[*i];
             if !current_ns_refs.iter().any(|j| doc.namespaces[*j].name == ancestor_ns.name) {
                 current_ns_refs.push(*i);
             }
         }
     }
+
     current_ns_refs
 }
 
