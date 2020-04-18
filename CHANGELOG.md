@@ -6,15 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Added
-- Implement `Ord`, `PartialOrd` and `Hash` for `Node`. Thanks to @tomjw64.
-- `NodeId`, `Document::get_node` and `Node::id`. Thanks to @tomjw64.
+- Implement `Ord`, `PartialOrd` and `Hash` for `Node`. Thanks to [@tomjw64].
+- `NodeId`, `Document::get_node` and `Node::id`. Thanks to [@tomjw64].
 
 ### Changed
 - The input data size is limited by 4GiB now.
 - `Node` can be access from multiple threads now.
 - Reduce `Node` memory usage.
-- Greatly optimized `Descendants` iterator. Up to 5x faster in some cases. Thanks to @tomjw64.
-- Heavily reduce memory usage when document has a lot of namespaces. Thanks to @tomjw64.
+- Greatly optimized `Descendants` iterator. Up to 5x faster in some cases. Thanks to [@tomjw64].
+- Heavily reduce memory usage when document has a lot of namespaces. Thanks to [@tomjw64].
 
 ### Removed
 - `Node::traverse`, `Traverse` and `Edge`. Use `Node::descendants` instead.
@@ -143,6 +143,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Removed
 - `ExpandedName::has_namespace`. `ExpandedName::namespace` will return `Option` now.
 - `Error::NestedEntityReference`.
+
+[@tomjw64]: https://github.com/tomjw64
 
 [Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.1..HEAD
 [0.10.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.0...v0.10.1
