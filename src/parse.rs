@@ -23,7 +23,7 @@ use crate::{
     NodeId,
     NodeKind,
     PI,
-    Range,
+    ShortRange,
 };
 
 
@@ -93,6 +93,9 @@ pub enum Error {
 
     /// The XML document must have at least one element.
     NoRootNode,
+
+    /// The input string should be smaller than 4GiB.
+    SizeLimit,
 
     /// Errors detected by the `xmlparser` crate.
     ParserError(xmlparser::Error),
@@ -174,6 +177,9 @@ impl fmt::Display for Error {
             Error::NoRootNode => {
                 write!(f, "the document does not have a root node")
             }
+            Error::SizeLimit => {
+                write!(f, "the input string should be smaller than 4GiB")
+            }
             Error::ParserError(ref err) => {
                 write!(f, "{}", err)
             }
@@ -193,8 +199,8 @@ struct AttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
     value: Cow<'input, str>,
-    range: Range,
-    value_range: Range,
+    range: ShortRange,
+    value_range: ShortRange,
 }
 
 impl<'input> Document<'input> {
@@ -218,10 +224,10 @@ impl<'input> Document<'input> {
         &mut self,
         parent_id: NodeId,
         kind: NodeKind<'input>,
-        range: Range,
+        range: ShortRange,
         pd: &mut ParserData,
     ) -> NodeId {
-        let new_child_id = NodeId::new(self.nodes.len());
+        let new_child_id = NodeId::from(self.nodes.len());
 
         let appending_element = match kind {
             NodeKind::Element {..} => true,
@@ -237,17 +243,17 @@ impl<'input> Document<'input> {
             range,
         });
 
-        let last_child_id = self.nodes[parent_id.get()].last_child;
-        self.nodes[new_child_id.get()].prev_sibling = last_child_id;
-        self.nodes[parent_id.get()].last_child = Some(new_child_id);
+        let last_child_id = self.nodes[parent_id.get_usize()].last_child;
+        self.nodes[new_child_id.get_usize()].prev_sibling = last_child_id;
+        self.nodes[parent_id.get_usize()].last_child = Some(new_child_id);
 
         pd.awaiting_subtree.iter().for_each(|id| {
-            self.nodes[id.get()].next_subtree = Some(new_child_id);
+            self.nodes[id.get_usize()].next_subtree = Some(new_child_id);
         });
         pd.awaiting_subtree.clear();
 
         if !appending_element {
-            pd.awaiting_subtree.push(NodeId::new(self.nodes.len() - 1));
+            pd.awaiting_subtree.push(NodeId::from(self.nodes.len() - 1));
         }
 
         new_child_id
@@ -371,6 +377,10 @@ impl LoopDetector {
 
 
 fn parse(text: &str) -> Result<Document, Error> {
+    if text.len() > std::u32::MAX as usize {
+        return Err(Error::SizeLimit);
+    }
+
     let mut pd = ParserData {
         attrs_start_idx: 0,
         ns_start_idx: 1,
@@ -400,7 +410,7 @@ fn parse(text: &str) -> Result<Document, Error> {
         next_subtree: None,
         last_child: None,
         kind: NodeKind::Root,
-        range: 0..text.len(),
+        range: (0..text.len()).into(),
     });
 
     doc.namespaces.push_ns(Some("xml"), Cow::Borrowed(NS_XML_URI));
@@ -438,17 +448,17 @@ fn process_tokens<'input>(
                     target: target.as_str(),
                     value: content.map(|v| v.as_str()),
                 });
-                doc.append(parent_id, pi, span.range(), pd);
+                doc.append(parent_id, pi, span.range().into(), pd);
             }
             xmlparser::Token::Comment { text, span } => {
-                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range(), pd);
+                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range().into(), pd);
             }
             xmlparser::Token::Text { text } => {
                 process_text(text, parent_id, loop_detector, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
                 let cow_str = Cow::Borrowed(text.as_str());
-                append_text(cow_str, parent_id, span.range(), pd.after_text, doc, pd);
+                append_text(cow_str, parent_id, span.range().into(), pd.after_text, doc, pd);
                 pd.after_text = true;
             }
             xmlparser::Token::ElementStart { prefix, local, span } => {
@@ -496,8 +506,8 @@ fn process_attribute<'input>(
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
-    let range = token_span.range();
-    let value_range = value.range();
+    let range = token_span.range().into();
+    let value_range = value.range().into();
     let value = normalize_attribute(doc.text, value, &pd.entities, loop_detector, &mut pd.buffer)?;
 
     if prefix.as_str() == "xmlns" {
@@ -599,7 +609,7 @@ fn process_element<'input>(
                     attributes,
                     namespaces,
                 },
-                tag_name.span.start()..token_span.end(),
+                (tag_name.span.start()..token_span.end()).into(),
                 pd
             );
             pd.awaiting_subtree.push(new_element_id);
@@ -608,8 +618,8 @@ fn process_element<'input>(
             let prefix = prefix.as_str();
             let local = local.as_str();
 
-            doc.nodes[parent_id.get()].range.end = token_span.end();
-            if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get()].kind {
+            doc.nodes[parent_id.get_usize()].range.end = token_span.end() as u32;
+            if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get_usize()].kind {
                 if prefix != tag_name.prefix || local != tag_name.name {
                     return Err(Error::UnexpectedCloseTag {
                         expected: gen_qname_string(tag_name.prefix, tag_name.name),
@@ -620,7 +630,7 @@ fn process_element<'input>(
             }
             pd.awaiting_subtree.push(*parent_id);
 
-            if let Some(id) = doc.nodes[parent_id.get()].parent {
+            if let Some(id) = doc.nodes[parent_id.get_usize()].parent {
                 *parent_id = id;
             } else {
                 unreachable!("should be already checked by the xmlparser");
@@ -638,7 +648,7 @@ fn process_element<'input>(
                     attributes,
                     namespaces,
                 },
-                tag_name.span.start()..token_span.end(),
+                (tag_name.span.start()..token_span.end()).into(),
                 pd
             );
         }
@@ -651,14 +661,14 @@ fn resolve_namespaces(
     start_idx: usize,
     parent_id: NodeId,
     doc: &mut Document,
-) -> Range {
-    if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get()].kind {
+) -> ShortRange {
+    if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get_usize()].kind {
         let parent_ns = namespaces.clone();
         if start_idx == doc.namespaces.len() {
             return parent_ns;
         }
 
-        for i in parent_ns {
+        for i in parent_ns.to_urange() {
             if !doc.namespaces.exists(start_idx, doc.namespaces[i].name) {
                 let v = doc.namespaces[i].clone();
                 doc.namespaces.0.push(v);
@@ -666,17 +676,17 @@ fn resolve_namespaces(
         }
     }
 
-    start_idx..doc.namespaces.len()
+    (start_idx..doc.namespaces.len()).into()
 }
 
 fn resolve_attributes<'input>(
     start_idx: usize,
-    namespaces: Range,
+    namespaces: ShortRange,
     tmp_attrs: &mut [AttributeData<'input>],
     doc: &mut Document<'input>,
-) -> Result<Range, Error> {
+) -> Result<ShortRange, Error> {
     if tmp_attrs.is_empty() {
-        return Ok(0..0);
+        return Ok(ShortRange::new(0, 0));
     }
 
     for attr in tmp_attrs {
@@ -711,7 +721,7 @@ fn resolve_attributes<'input>(
         });
     }
 
-    Ok(start_idx..doc.attrs.len())
+    Ok((start_idx..doc.attrs.len()).into())
 }
 
 fn process_text<'input>(
@@ -723,7 +733,7 @@ fn process_text<'input>(
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
-        append_text(Cow::Borrowed(text.as_str()), parent_id, text.range(), pd.after_text, doc, pd);
+        append_text(Cow::Borrowed(text.as_str()), parent_id, text.range().into(), pd.after_text, doc, pd);
         pd.after_text = true;
         return Ok(());
     }
@@ -759,7 +769,7 @@ fn process_text<'input>(
 
                 if !pd.buffer.is_empty() {
                     let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
-                    append_text(cow_text, parent_id, text.range(), pd.after_text, doc, pd);
+                    append_text(cow_text, parent_id, text.range().into(), pd.after_text, doc, pd);
                     pd.after_text = true;
                     pd.buffer.clear();
                 }
@@ -779,7 +789,7 @@ fn process_text<'input>(
 
     if !pd.buffer.is_empty() {
         let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
-        append_text(cow_text, parent_id, text.range(), pd.after_text, doc, pd);
+        append_text(cow_text, parent_id, text.range().into(), pd.after_text, doc, pd);
         pd.after_text = true;
         pd.buffer.clear();
     }
@@ -790,7 +800,7 @@ fn process_text<'input>(
 fn append_text<'input>(
     text: Cow<'input, str>,
     parent_id: NodeId,
-    range: Range,
+    range: ShortRange,
     after_text: bool,
     doc: &mut Document<'input>,
     pd: &mut ParserData<'input>
@@ -958,7 +968,7 @@ fn _normalize_attribute(
 
 fn get_ns_by_prefix<'input>(
     doc: &Document<'input>,
-    range: Range,
+    range: ShortRange,
     prefix: StrSpan,
 ) -> Result<Option<Cow<'input, str>>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
@@ -967,7 +977,7 @@ fn get_ns_by_prefix<'input>(
     // <e xmlns='http://www.w3.org'/>
     let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
 
-    let uri = doc.namespaces[range].iter()
+    let uri = doc.namespaces[range.to_urange()].iter()
         .find(|ns| ns.name == prefix_opt)
         .map(|ns| ns.uri.clone());
 

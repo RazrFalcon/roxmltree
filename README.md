@@ -50,7 +50,7 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | Writing                         |                  | ✓                   | ✓                | ✓                | ✓                |
 | No **unsafe**                   | ✓                |                     | ✓                |                  | ~<sup>3</sup>    |
 | Language                        | Rust             | C                   | Rust             | Rust             | Rust             |
-| Size overhead<sup>4</sup>       | ~65KiB           | ~1.4MiB<sup>5</sup> | ~118KiB          | ~138KiB          | **~62KiB**       |
+| Size overhead<sup>4</sup>       | ~64KiB           | ~1.4MiB<sup>5</sup> | ~118KiB          | ~138KiB          | **~62KiB**       |
 | Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                | 2                |
 | Tested version                  | 0.10.0           | 2.9.8               | 0.10.0           | 0.3.2            | 0.12.0           |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              | MIT              |
@@ -88,17 +88,17 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 ### Parsing
 
 ```text
-test large_roxmltree     ... bench:   3,343,305 ns/iter (+/- 15,000)
+test large_roxmltree     ... bench:   3,123,941 ns/iter (+/- 19,992)
 test large_minidom       ... bench:   4,969,218 ns/iter (+/- 163,727)
 test large_sdx_document  ... bench:   7,266,856 ns/iter (+/- 26,998)
 test large_xmltree       ... bench:  21,354,608 ns/iter (+/- 136,311)
 
-test medium_roxmltree    ... bench:     575,470 ns/iter (+/- 7,415)
+test medium_roxmltree    ... bench:     547,522 ns/iter (+/- 5,956)
 test medium_minidom      ... bench:   1,223,620 ns/iter (+/- 16,180)
 test medium_sdx_document ... bench:   2,470,063 ns/iter (+/- 24,159)
 test medium_xmltree      ... bench:   8,083,860 ns/iter (+/- 25,363)
 
-test tiny_roxmltree      ... bench:       4,256 ns/iter (+/- 41)
+test tiny_roxmltree      ... bench:       4,170 ns/iter (+/- 41)
 test tiny_minidom        ... bench:       7,495 ns/iter (+/- 81)
 test tiny_sdx_document   ... bench:      17,411 ns/iter (+/- 203)
 test tiny_xmltree        ... bench:      29,522 ns/iter (+/- 223)
@@ -127,13 +127,13 @@ test tiny_xmlrs          ... bench:      27,619 ns/iter (+/- 262)
 ### Iteration
 
 ```text
-test minidom_iter_descendants_expensive     ... bench:   1,004,545 ns/iter (+/- 178,395)
-test roxmltree_iter_descendants_expensive   ... bench:     694,561 ns/iter (+/- 139,937)
-test xmltree_iter_descendants_expensive     ... bench:     624,414 ns/iter (+/- 158,466)
+test xmltree_iter_descendants_expensive     ... bench:     436,684 ns/iter (+/- 7,851)
+test roxmltree_iter_descendants_expensive   ... bench:     470,459 ns/iter (+/- 6,233)
+test minidom_iter_descendants_expensive     ... bench:     785,847 ns/iter (+/- 51,495)
 
-test minidom_iter_descendants_inexpensive   ... bench:     299,906 ns/iter (+/- 77,093)
-test roxmltree_iter_descendants_inexpensive ... bench:      64,251 ns/iter (+/- 8,589)
-test xmltree_iter_descendants_inexpensive   ... bench:     264,602 ns/iter (+/- 112,251)
+test roxmltree_iter_descendants_inexpensive ... bench:      36,759 ns/iter (+/- 684)
+test xmltree_iter_descendants_inexpensive   ... bench:     168,541 ns/iter (+/- 1,885)
+test minidom_iter_descendants_inexpensive   ... bench:     215,615 ns/iter (+/- 38,101)
 ```
 
 Where expensive refers to the matching done on each element. In these

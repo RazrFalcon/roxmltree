@@ -23,8 +23,8 @@ extern crate xmlparser;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt;
-use std::num::NonZeroUsize;
 use std::hash::{Hash, Hasher};
+use std::num::NonZeroU32;
 use std::ops::Deref;
 
 pub use xmlparser::TextPos;
@@ -110,7 +110,7 @@ impl<'input> Document<'input> {
     /// ```
     #[inline]
     pub fn get_node<'a>(&'a self, id: NodeId) -> Option<Node<'a, 'input>> {
-        self.nodes.get(id.get()).map(|data| Node { id, d: data, doc: self })
+        self.nodes.get(id.get_usize()).map(|data| Node { id, d: data, doc: self })
     }
 
     /// Returns the root element of the document.
@@ -272,7 +272,39 @@ pub struct PI<'input> {
 }
 
 
-/// A node ID.
+/// A short range.
+///
+/// Just like Range, but only for `u32` and copyable.
+#[derive(Clone, Copy, Debug)]
+struct ShortRange {
+    start: u32,
+    end: u32,
+}
+
+impl From<Range> for ShortRange {
+    #[inline]
+    fn from(range: Range) -> Self {
+        // Casting to `u32` should be safe since we have a 4GiB input data limit.
+        debug_assert!(range.start <= std::u32::MAX as usize);
+        debug_assert!(range.end <= std::u32::MAX as usize);
+        ShortRange::new(range.start as u32, range.end as u32)
+    }
+}
+
+impl ShortRange {
+    #[inline]
+    fn new(start: u32, end: u32) -> Self {
+        ShortRange { start, end }
+    }
+
+    #[inline]
+    fn to_urange(self) -> Range {
+        self.start as usize .. self.end as usize
+    }
+}
+
+
+/// A node ID stored as `u32`.
 ///
 /// An index into a `Tree`-internal `Vec`.
 ///
@@ -281,20 +313,46 @@ pub struct PI<'input> {
 /// So you can end up in a situation, when `NodeId` produced by one `Document`
 /// is used to select a node in another `Document`.
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct NodeId(NonZeroUsize);
+pub struct NodeId(NonZeroU32);
 
 impl NodeId {
-    /// Construct a new `NodeId` from a `usize`.
+    /// Construct a new `NodeId` from a `u32`.
+    ///
+    /// `u32` is more than enough since we have a 4GiB input data limit anyway.
     #[inline]
-    pub fn new(n: usize) -> Self {
+    pub fn new(id: u32) -> Self {
+        debug_assert!(id < std::u32::MAX);
+
         // We are using `NonZeroUsize` to reduce overhead of `Option<NodeId>`.
-        NodeId(NonZeroUsize::new(n + 1).unwrap())
+        NodeId(NonZeroU32::new(id + 1).unwrap())
+    }
+
+    /// Returns the `u32` representation of the `NodeId`.
+    #[inline]
+    pub fn get(self) -> u32 {
+        self.0.get() as u32 - 1
     }
 
     /// Returns the `usize` representation of the `NodeId`.
     #[inline]
-    pub fn get(self) -> usize {
-        self.0.get() - 1
+    pub fn get_usize(self) -> usize {
+        self.get() as usize
+    }
+}
+
+impl From<u32> for NodeId {
+    #[inline]
+    fn from(id: u32) -> Self {
+        NodeId::new(id)
+    }
+}
+
+impl From<usize> for NodeId {
+    #[inline]
+    fn from(id: usize) -> Self {
+        // Casting to `u32` should be safe since we have a 4GiB input data limit.
+        debug_assert!(id <= std::u32::MAX as usize);
+        NodeId::new(id as u32)
     }
 }
 
@@ -303,8 +361,8 @@ enum NodeKind<'input> {
     Root,
     Element {
         tag_name: ExpandedNameOwned<'input>,
-        attributes: Range,
-        namespaces: Range,
+        attributes: ShortRange,
+        namespaces: ShortRange,
     },
     PI(PI<'input>),
     Comment(&'input str),
@@ -318,7 +376,7 @@ struct NodeData<'input> {
     next_subtree: Option<NodeId>,
     last_child: Option<NodeId>,
     kind: NodeKind<'input>,
-    range: Range,
+    range: ShortRange,
 }
 
 
@@ -327,8 +385,8 @@ struct NodeData<'input> {
 pub struct Attribute<'input> {
     name: ExpandedNameOwned<'input>,
     value: Cow<'input, str>,
-    range: Range,
-    value_range: Range,
+    range: ShortRange,
+    value_range: ShortRange,
 }
 
 impl<'input> Attribute<'input> {
@@ -395,7 +453,7 @@ impl<'input> Attribute<'input> {
     /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
     #[inline]
     pub fn range(&self) -> Range {
-        self.range.clone()
+        self.range.to_urange()
     }
 
     /// Returns attribute's value range in bytes in the original document.
@@ -410,7 +468,7 @@ impl<'input> Attribute<'input> {
     /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
     #[inline]
     pub fn value_range(&self) -> Range {
-        self.value_range.clone()
+        self.value_range.to_urange()
     }
 }
 
@@ -912,7 +970,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn attributes(&self) -> &'a [Attribute<'input>] {
         match self.d.kind {
-            NodeKind::Element { ref attributes, .. } => &self.doc.attrs[attributes.clone()],
+            NodeKind::Element { ref attributes, .. } => &self.doc.attrs[attributes.to_urange()],
             _ => &[],
         }
     }
@@ -932,7 +990,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     pub fn namespaces(&self) -> &'a [Namespace<'input>] {
         match self.d.kind {
             NodeKind::Element { ref namespaces, .. } => {
-                &self.doc.namespaces[namespaces.clone()]
+                &self.doc.namespaces[namespaces.to_urange()]
             }
             _ => &[],
         }
@@ -970,7 +1028,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
             NodeKind::Element { .. } => {
                 match self.first_child() {
                     Some(child) if child.is_text() => {
-                        match self.doc.nodes[child.id.get()].kind {
+                        match self.doc.nodes[child.id.get_usize()].kind {
                             NodeKind::Text(ref text) => Some(text),
                             _ => None
                         }
@@ -1008,7 +1066,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
         match self.next_sibling().map(|n| n.id) {
             Some(id) => {
-                match self.doc.nodes[id.get()].kind {
+                match self.doc.nodes[id.get_usize()].kind {
                     NodeKind::Text(ref text) => Some(text),
                     _ => None
                 }
@@ -1144,7 +1202,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns node's range in bytes in the original document.
     #[inline]
     pub fn range(&self) -> Range {
-        self.d.range.clone()
+        self.d.range.to_urange()
     }
 
     /// Returns node's NodeId
@@ -1245,7 +1303,7 @@ impl<'a, 'input> Descendants<'a, 'input> {
         Self {
             doc: &start.doc,
             current: start.id,
-            until: start.d.next_subtree.unwrap_or_else(|| NodeId::new(start.doc.nodes.len()))
+            until: start.d.next_subtree.unwrap_or_else(|| NodeId::from(start.doc.nodes.len()))
         }
     }
 }

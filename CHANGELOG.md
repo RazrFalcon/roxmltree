@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `NodeId`, `Document::get_node` and `Node::id`. Thanks to @tomjw64.
 
 ### Changed
+- The input data size is limited by 4GiB now.
 - `Node` can be access from multiple threads now.
 - Reduce `Node` memory usage.
 - Greatly optimized `Descendants` iterator. Up to 5x faster in some cases. Thanks to @tomjw64.
