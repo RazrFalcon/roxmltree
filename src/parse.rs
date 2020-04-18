@@ -214,7 +214,13 @@ impl<'input> Document<'input> {
         parse(text)
     }
 
-    fn append(&mut self, parent_id: NodeId, kind: NodeKind<'input>, range: Range, pd: &mut ParserData) -> NodeId {
+    fn append(
+        &mut self,
+        parent_id: NodeId,
+        kind: NodeKind<'input>,
+        range: Range,
+        pd: &mut ParserData,
+    ) -> NodeId {
         let new_child_id = NodeId::new(self.nodes.len());
 
         let appending_element = match kind {
@@ -402,7 +408,8 @@ fn parse(text: &str) -> Result<Document, Error> {
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
     let mut tag_name = TagNameSpan::new_null();
-    process_tokens(parser, parent_id, &mut LoopDetector::default(), &mut tag_name, &mut pd, &mut doc)?;
+    process_tokens(parser, parent_id, &mut LoopDetector::default(),
+                   &mut tag_name, &mut pd, &mut doc)?;
 
     if !doc.root().children().any(|n| n.is_element()) {
         return Err(Error::NoRootNode);
@@ -648,8 +655,9 @@ fn resolve_namespaces(
     if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get()].kind {
         let parent_ns = namespaces.clone();
         if start_idx == doc.namespaces.len() {
-            return parent_ns
+            return parent_ns;
         }
+
         for i in parent_ns {
             if !doc.namespaces.exists(start_idx, doc.namespaces[i].name) {
                 let v = doc.namespaces[i].clone();
@@ -657,7 +665,8 @@ fn resolve_namespaces(
             }
         }
     }
-    return start_idx..doc.namespaces.len()
+
+    start_idx..doc.namespaces.len()
 }
 
 fn resolve_attributes<'input>(
@@ -719,13 +728,6 @@ fn process_text<'input>(
         return Ok(());
     }
 
-    fn _append_text<'input>(parent_id: NodeId, range: Range, pd: &mut ParserData<'input>, doc: &mut Document<'input>) {
-        let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
-        append_text(cow_text, parent_id, range, pd.after_text, doc, pd);
-        pd.after_text = true;
-        pd.buffer.clear();
-    }
-
     pd.buffer.clear();
 
     let mut is_as_is = false; // TODO: explain
@@ -756,7 +758,10 @@ fn process_text<'input>(
                 is_as_is = false;
 
                 if !pd.buffer.is_empty() {
-                    _append_text(parent_id, text.range(), pd, doc);
+                    let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
+                    append_text(cow_text, parent_id, text.range(), pd.after_text, doc, pd);
+                    pd.after_text = true;
+                    pd.buffer.clear();
                 }
 
                 loop_detector.inc_references(&s)?;
@@ -773,7 +778,10 @@ fn process_text<'input>(
     }
 
     if !pd.buffer.is_empty() {
-        _append_text(parent_id, text.range(), pd, doc);
+        let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
+        append_text(cow_text, parent_id, text.range(), pd.after_text, doc, pd);
+        pd.after_text = true;
+        pd.buffer.clear();
     }
 
     Ok(())

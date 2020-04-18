@@ -90,18 +90,18 @@ impl<'input> Document<'input> {
     }
 
     /// Returns the node of the tree with the given NodeId.
-    /// 
+    ///
     /// Note: NodeId::new(0) represents the root node
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// let doc = roxmltree::Document::parse("\
     /// <p>
     ///     text
     /// </p>
     /// ").unwrap();
-    /// 
+    ///
     /// use roxmltree::NodeId;
     /// assert_eq!(doc.get_node(NodeId::new(0)).unwrap(), doc.root());
     /// assert_eq!(doc.get_node(NodeId::new(1)), doc.descendants().find(|n| n.has_tag_name("p")));
@@ -274,18 +274,24 @@ pub struct PI<'input> {
 
 /// A node ID.
 ///
-/// Index into a `Tree`-internal `Vec`.
+/// An index into a `Tree`-internal `Vec`.
+///
+/// Note that this value should be used with care since `roxmltree` doesn't
+/// check that `NodeId` actually belongs to a selected `Document`.
+/// So you can end up in a situation, when `NodeId` produced by one `Document`
+/// is used to select a node in another `Document`.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct NodeId(NonZeroUsize);
 
 impl NodeId {
-    /// Construct a NodeId from a usize
+    /// Construct a new `NodeId` from a `usize`.
     #[inline]
     pub fn new(n: usize) -> Self {
+        // We are using `NonZeroUsize` to reduce overhead of `Option<NodeId>`.
         NodeId(NonZeroUsize::new(n + 1).unwrap())
     }
 
-    /// Get the usize representation of the NodeId
+    /// Returns the `usize` representation of the `NodeId`.
     #[inline]
     pub fn get(self) -> usize {
         self.0.get() - 1
@@ -598,31 +604,36 @@ impl<'input> From<(&'input str, &'input str)> for ExpandedName<'input> {
 
 /// A node in a document.
 ///
-/// ### Document Order
-/// The impl of the `Ord` traits for Node is based on the concept of "document-order".
+/// # Document Order
+///
+/// The implementation of the `Ord` traits for `Node` is based on the concept of *document-order*.
 /// In layman's terms, document-order is the order in which one would see each element if
 /// one opened a document in a text editor or web browser and scrolled down.
 /// Document-order convention is followed in XPath, CSS Counters, and DOM selectors API
 /// to ensure consistent results from selection.
-/// One difference in roxmltree is that there is the notion of more than one document
+/// One difference in `roxmltree` is that there is the notion of more than one document
 /// in existence at a time. While Nodes within the same document are in document-order,
 /// Nodes in different documents will be grouped together, but not in any particular
 /// order.
+///
 /// As an example, if we have a Document `a` with Nodes `[a0, a1, a2]` and a
 /// Document `b` with Nodes `[b0, b1]`, these Nodes in order could be either
 /// `[a0, a1, a2, b0, b1]` or `[b0, b1, a0, a1, a2]` and roxmltree makes no
 /// guarantee which it will be.
-/// Document-order is defined here in the [W3C XPath Recommendation](https://www.w3.org/TR/xpath-3/#id-document-order)
+///
+/// Document-order is defined here in the
+/// [W3C XPath Recommendation](https://www.w3.org/TR/xpath-3/#id-document-order)
 /// The use of document-order in DOM Selectors is described here in the
 /// [W3C Selectors API Level 1](https://www.w3.org/TR/selectors-api/#the-apis)
 #[derive(Clone, Copy)]
 pub struct Node<'a, 'input: 'a> {
-    /// Node ID.
+    /// Node's ID.
     id: NodeId,
 
-    /// Tree containing the node.
+    /// The tree containing the node.
     doc: &'a Document<'input>,
 
+    /// Node's data.
     d: &'a NodeData<'input>,
 }
 
@@ -651,7 +662,7 @@ impl Ord for Node<'_, '_> {
                 let this_doc_ptr = self.doc as *const Document;
                 let other_doc_ptr = other.doc as *const Document;
                 this_doc_ptr.cmp(&other_doc_ptr)
-            },
+            }
             _ => id_cmp
         }
     }

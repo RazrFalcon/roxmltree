@@ -11,4 +11,4 @@ name = "app"
 path = "app.rs"
 
 [dependencies]
-minidom = "0.11.1"
+minidom = "0.12"

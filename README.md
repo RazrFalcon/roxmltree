@@ -39,7 +39,7 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | [Entity references]             | ✓                | ✓                   | ×                | ×                | ×                |
 | [Character references]          | ✓                | ✓                   | ✓                | ✓                | ✓                |
 | [Attribute-Value normalization] | ✓                | ✓                   |                  |                  |                  |
-| Comments                        | ✓                | ✓                   |                  | ✓                | ✓                |
+| Comments                        | ✓                | ✓                   |                  | ✓                |                  |
 | Processing instructions         | ✓                | ✓                   | ✓                | ✓                |                  |
 | UTF-8 BOM                       | ✓                | ✓                   | ×                | ×                | ✓                |
 | Non UTF-8 input                 |                  | ✓                   |                  |                  |                  |
@@ -50,9 +50,9 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | Writing                         |                  | ✓                   | ✓                | ✓                | ✓                |
 | No **unsafe**                   | ✓                |                     | ✓                |                  | ~<sup>3</sup>    |
 | Language                        | Rust             | C                   | Rust             | Rust             | Rust             |
-| Size overhead<sup>4</sup>       | ~67KiB           | ~1.4MiB<sup>5</sup> | ~118KiB          | ~138KiB          | **~63KiB**       |
+| Size overhead<sup>4</sup>       | ~65KiB           | ~1.4MiB<sup>5</sup> | ~118KiB          | ~138KiB          | **~62KiB**       |
 | Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                | 2                |
-| Tested version                  | 0.10.0           | 2.9.8               | 0.10.0           | 0.3.2            | 0.11.1           |
+| Tested version                  | 0.10.0           | 2.9.8               | 0.10.0           | 0.3.2            | 0.12.0           |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              | MIT              |
 
 Legend:
@@ -88,20 +88,20 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 ### Parsing
 
 ```text
-test large_roxmltree     ... bench:   3,344,633 ns/iter (+/- 9,063)
-test large_minidom       ... bench:   5,101,156 ns/iter (+/- 98,146)
-test large_sdx_document  ... bench:   7,583,625 ns/iter (+/- 20,025)
-test large_xmltree       ... bench:  20,792,783 ns/iter (+/- 523,851)
+test large_roxmltree     ... bench:   3,343,305 ns/iter (+/- 15,000)
+test large_minidom       ... bench:   4,969,218 ns/iter (+/- 163,727)
+test large_sdx_document  ... bench:   7,266,856 ns/iter (+/- 26,998)
+test large_xmltree       ... bench:  21,354,608 ns/iter (+/- 136,311)
 
-test medium_roxmltree    ... bench:     659,865 ns/iter (+/- 7,519)
-test medium_minidom      ... bench:   1,176,302 ns/iter (+/- 7,317)
-test medium_sdx_document ... bench:   2,510,734 ns/iter (+/- 18,054)
-test medium_xmltree      ... bench:   7,678,284 ns/iter (+/- 174,265)
+test medium_roxmltree    ... bench:     575,470 ns/iter (+/- 7,415)
+test medium_minidom      ... bench:   1,223,620 ns/iter (+/- 16,180)
+test medium_sdx_document ... bench:   2,470,063 ns/iter (+/- 24,159)
+test medium_xmltree      ... bench:   8,083,860 ns/iter (+/- 25,363)
 
-test tiny_roxmltree      ... bench:       4,178 ns/iter (+/- 23)
-test tiny_minidom        ... bench:       7,468 ns/iter (+/- 88)
-test tiny_sdx_document   ... bench:      18,202 ns/iter (+/- 91)
-test tiny_xmltree        ... bench:      29,425 ns/iter (+/- 877)
+test tiny_roxmltree      ... bench:       4,256 ns/iter (+/- 41)
+test tiny_minidom        ... bench:       7,495 ns/iter (+/- 81)
+test tiny_sdx_document   ... bench:      17,411 ns/iter (+/- 203)
+test tiny_xmltree        ... bench:      29,522 ns/iter (+/- 223)
 ```
 
 *roxmltree* uses [xmlparser] internally,
@@ -111,17 +111,17 @@ and *minidom* uses [quick-xml].
 Here is a comparison between *xmlparser*, *xml-rs* and *quick-xml*:
 
 ```text
-test large_quick_xml     ... bench:   1,245,293 ns/iter (+/- 532,460)
-test large_xmlparser     ... bench:   1,615,152 ns/iter (+/- 11,505)
-test large_xmlrs         ... bench:  19,024,349 ns/iter (+/- 1,102,255)
+test large_quick_xml     ... bench:   1,286,273 ns/iter (+/- 27,174)
+test large_xmlparser     ... bench:   1,742,202 ns/iter (+/- 11,616)
+test large_xmlrs         ... bench:  19,615,797 ns/iter (+/- 105,848)
 
-test medium_quick_xml    ... bench:     246,507 ns/iter (+/- 3,300)
-test medium_xmlparser    ... bench:     337,958 ns/iter (+/- 2,465)
-test medium_xmlrs        ... bench:   6,944,242 ns/iter (+/- 29,862)
+test medium_quick_xml    ... bench:     248,169 ns/iter (+/- 3,885)
+test medium_xmlparser    ... bench:     386,658 ns/iter (+/- 1,721)
+test medium_xmlrs        ... bench:   7,387,753 ns/iter (+/- 18,668)
 
-test tiny_quick_xml      ... bench:       2,328 ns/iter (+/- 67)
-test tiny_xmlparser      ... bench:       2,578 ns/iter (+/- 931)
-test tiny_xmlrs          ... bench:      27,343 ns/iter (+/- 3,299)
+test tiny_quick_xml      ... bench:       2,382 ns/iter (+/- 29)
+test tiny_xmlparser      ... bench:       2,788 ns/iter (+/- 20)
+test tiny_xmlrs          ... bench:      27,619 ns/iter (+/- 262)
 ```
 
 ### Iteration
@@ -135,9 +135,10 @@ test minidom_iter_descendants_inexpensive   ... bench:     299,906 ns/iter (+/- 
 test roxmltree_iter_descendants_inexpensive ... bench:      64,251 ns/iter (+/- 8,589)
 test xmltree_iter_descendants_inexpensive   ... bench:     264,602 ns/iter (+/- 112,251)
 ```
-where expensive refers to the matching done on each element. In these
-benchmarks, 'expensive' means searching for any node in the document which
-contains a string. and 'inexpensive' means searching for any element with a
+
+Where expensive refers to the matching done on each element. In these
+benchmarks, *expensive* means searching for any node in the document which
+contains a string. And *inexpensive* means searching for any element with a
 particular name.
 
 ### Notes
