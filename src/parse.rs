@@ -645,32 +645,19 @@ fn resolve_namespaces(
     parent_id: NodeId,
     doc: &mut Document,
 ) -> Range {
-    let mut tmp_parent_id = parent_id.get();
-    while tmp_parent_id != 0 {
-        let curr_id = tmp_parent_id;
-        tmp_parent_id = match doc.nodes[tmp_parent_id].parent {
-            Some(id) => id.get(),
-            None => 0,
-        };
-
-        let ns_range = match doc.nodes[curr_id].kind {
-            NodeKind::Element { ref namespaces, .. } => namespaces.clone(),
-            _ => continue,
-        };
-
-        for i in ns_range {
+    if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get()].kind {
+        let parent_ns = namespaces.clone();
+        if start_idx == doc.namespaces.len() {
+            return parent_ns
+        }
+        for i in parent_ns {
             if !doc.namespaces.exists(start_idx, doc.namespaces[i].name) {
                 let v = doc.namespaces[i].clone();
                 doc.namespaces.0.push(v);
             }
         }
     }
-
-    if start_idx != doc.namespaces.len() {
-        start_idx..doc.namespaces.len()
-    } else {
-        0..0
-    }
+    return start_idx..doc.namespaces.len()
 }
 
 fn resolve_attributes<'input>(
