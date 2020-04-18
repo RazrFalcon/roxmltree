@@ -1260,6 +1260,7 @@ impl<'a, 'input> Iterator for Descendants<'a, 'input> {
         } else {
             Some(self.doc.get_node(self.current).unwrap())
         };
+
         self.current = NodeId::new(self.current.get() + 1);
         next
     }

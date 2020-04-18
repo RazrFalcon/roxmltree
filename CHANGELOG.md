@@ -5,9 +5,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- Implement `Ord`, `PartialOrd` and `Hash` for `Node`. Thanks to @tomjw64.
+- `NodeId`, `Document::get_node` and `Node::id`. Thanks to @tomjw64.
+
 ### Changed
 - `Node` can be access from multiple threads now.
 - Reduce `Node` memory usage.
+- Greatly optimized `Descendants` iterator. Up to 5x faster in some cases. Thanks to @tomjw64.
+- Heavily reduce memory usage when document has a lot of namespaces. Thanks to @tomjw64.
+
+### Removed
+- `Node::traverse`, `Traverse` and `Edge`. Use `Node::descendants` instead.
 
 ## [0.10.1] - 2020-03-28
 ### Fixed
