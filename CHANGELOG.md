@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.11.0] - 2020-04-19
 ### Added
 - Implement `Ord`, `PartialOrd` and `Hash` for `Node`. Thanks to [@tomjw64].
 - `NodeId`, `Document::get_node` and `Node::id`. Thanks to [@tomjw64].
@@ -146,7 +148,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 [@tomjw64]: https://github.com/tomjw64
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.1..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.11.0..HEAD
+[0.11.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.9.0...v0.9.1
