@@ -28,7 +28,7 @@ use crate::{
 
 
 /// A list of all possible errors.
-#[derive(Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Error {
     /// The `xmlns:xml` attribute must have an <http://www.w3.org/XML/1998/namespace> URI.
     InvalidXmlPrefixUri(TextPos),
