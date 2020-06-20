@@ -595,12 +595,12 @@ impl<'input> fmt::Debug for ExpandedNameOwned<'input> {
 ///
 /// Contains an namespace URI and name pair.
 #[derive(Clone, Copy, PartialEq)]
-pub struct ExpandedName<'a, 'input> {
+pub struct ExpandedName<'a, 'b> {
     uri: Option<&'a str>,
-    name: &'input str,
+    name: &'b str,
 }
 
-impl<'a, 'input> ExpandedName<'a, 'input> {
+impl<'a, 'b> ExpandedName<'a, 'b> {
     /// Returns a namespace URI.
     ///
     /// # Examples
@@ -625,12 +625,12 @@ impl<'a, 'input> ExpandedName<'a, 'input> {
     /// assert_eq!(doc.root_element().tag_name().name(), "e");
     /// ```
     #[inline]
-    pub fn name(&self) -> &'input str {
+    pub fn name(&self) -> &'b str {
         self.name
     }
 }
 
-impl<'a, 'input> fmt::Debug for ExpandedName<'a, 'input> {
+impl fmt::Debug for ExpandedName<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self.namespace() {
             Some(ns) => write!(f, "{{{}}}{}", ns, self.name),
@@ -639,9 +639,9 @@ impl<'a, 'input> fmt::Debug for ExpandedName<'a, 'input> {
     }
 }
 
-impl<'a, 'input> From<&'input str> for ExpandedName<'a, 'input> {
+impl<'a, 'b> From<&'b str> for ExpandedName<'a, 'b> {
     #[inline]
-    fn from(v: &'input str) -> Self {
+    fn from(v: &'b str) -> Self {
         ExpandedName {
             uri: None,
             name: v,
@@ -649,9 +649,9 @@ impl<'a, 'input> From<&'input str> for ExpandedName<'a, 'input> {
     }
 }
 
-impl<'a, 'input> From<(&'a str, &'input str)> for ExpandedName<'a, 'input> {
+impl<'a, 'b> From<(&'a str, &'b str)> for ExpandedName<'a, 'b> {
     #[inline]
-    fn from(v: (&'a str, &'input str)) -> Self {
+    fn from(v: (&'a str, &'b str)) -> Self {
         ExpandedName {
             uri: Some(v.0),
             name: v.1,
@@ -816,9 +816,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert!(!doc.root_element().has_tag_name("b"));
     /// assert!(!doc.root_element().has_tag_name(("http://www.w4.org", "e")));
     /// ```
-    pub fn has_tag_name<'n, N>(&self, name: N) -> bool
+    pub fn has_tag_name<'n, 'm, N>(&self, name: N) -> bool
     where
-        N: Into<ExpandedName<'a, 'n>>,
+        N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
 
@@ -912,9 +912,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().attribute("a"), Some("b"));
     /// assert_eq!(doc.root_element().attribute(("http://www.w3.org", "a")), Some("c"));
     /// ```
-    pub fn attribute<'n, N>(&self, name: N) -> Option<&'a str>
+    pub fn attribute<'n, 'm, N>(&self, name: N) -> Option<&'a str>
     where
-        N: Into<ExpandedName<'n, 'input>>,
+        N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
         self.attributes().iter().find(|a| a.name.as_ref() == name).map(|a| a.value.as_ref())
@@ -925,9 +925,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// The same as [`attribute()`], but returns the `Attribute` itself instead of a value string.
     ///
     /// [`attribute()`]: struct.Node.html#method.attribute
-    pub fn attribute_node<'n, N>(&self, name: N) -> Option<&'a Attribute<'input>>
+    pub fn attribute_node<'n, 'm, N>(&self, name: N) -> Option<&'a Attribute<'input>>
     where
-        N: Into<ExpandedName<'n, 'input>>,
+        N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
         self.attributes().iter().find(|a| a.name.as_ref() == name)
@@ -948,9 +948,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert!(!doc.root_element().has_attribute("b"));
     /// assert!(!doc.root_element().has_attribute(("http://www.w4.org", "a")));
     /// ```
-    pub fn has_attribute<'n, N>(&self, name: N) -> bool
+    pub fn has_attribute<'n, 'm, N>(&self, name: N) -> bool
     where
-        N: Into<ExpandedName<'n, 'input>>,
+        N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
         self.attributes().iter().any(|a| a.name.as_ref() == name)
