@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2020-06-20
+### Changed
+- Re-release 0.11.1, since it had a breaking change.
+
 ## [0.11.1] - 2020-06-19
 ### Changed
 - Extend `ExpandedName` lifetime. Thanks to [@rkusa](https://github.com/rkusa).
@@ -152,7 +156,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 [@tomjw64]: https://github.com/tomjw64
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.11.1..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.12.0..HEAD
+[0.12.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.10.0...v0.10.1
