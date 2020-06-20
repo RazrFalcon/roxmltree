@@ -19,7 +19,7 @@ exclude = ["test-apps", "testing-tools"]
 travis-ci = { repository = "RazrFalcon/roxmltree" }
 
 [dependencies]
-xmlparser = "0.13.1"
+xmlparser = "0.13.2"
 
 [dev-dependencies]
 pretty_assertions = "0.5"
