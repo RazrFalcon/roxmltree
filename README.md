@@ -1,5 +1,5 @@
 # roxmltree
-[![Build Status](https://travis-ci.org/RazrFalcon/roxmltree.svg?branch=master)](https://travis-ci.org/RazrFalcon/roxmltree)
+![Build Status](https://github.com/RazrFalcon/roxmltree/workflows/Rust/badge.svg)
 [![Crates.io](https://img.shields.io/crates/v/roxmltree.svg)](https://crates.io/crates/roxmltree)
 [![Documentation](https://docs.rs/roxmltree/badge.svg)](https://docs.rs/roxmltree)
 [![Rust 1.31+](https://img.shields.io/badge/rust-1.31+-orange.svg)](https://www.rust-lang.org)
