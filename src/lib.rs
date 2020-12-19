@@ -17,6 +17,8 @@ License: ISC.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+#![warn(missing_copy_implementations)]
+#![warn(missing_debug_implementations)]
 
 extern crate xmlparser;
 
@@ -1248,9 +1250,18 @@ impl<'a, 'input: 'a> Iterator for AxisIter<'a, 'input> {
     }
 }
 
+impl fmt::Debug for AxisIter<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_struct("Pixmap")
+            .field("node", &self.node)
+            .field("next", &"fn()")
+            .finish()
+    }
+}
+
 
 /// Iterator over children.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Children<'a, 'input: 'a> {
     front: Option<Node<'a, 'input>>,
     back: Option<Node<'a, 'input>>,
@@ -1290,7 +1301,7 @@ impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
 
 
 /// Iterator over a node and its descendants.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Descendants<'a, 'input> {
     doc: &'a Document<'input>,
     current: NodeId,
