@@ -97,6 +97,11 @@ pub enum Error {
     /// The input string should be smaller than 4GiB.
     SizeLimit,
 
+    /// An XML with DTD detected.
+    ///
+    /// This error will be emitted only when `ParsingOptions::allow_dtd` is set to `false`.
+    DtdDetected,
+
     /// Errors detected by the `xmlparser` crate.
     ParserError(xmlparser::Error),
 }
@@ -180,6 +185,9 @@ impl fmt::Display for Error {
             Error::SizeLimit => {
                 write!(f, "the input string should be smaller than 4GiB")
             }
+            Error::DtdDetected => {
+                write!(f, "XML with DTD detected")
+            }
             Error::ParserError(ref err) => {
                 write!(f, "{}", err)
             }
@@ -191,6 +199,34 @@ impl error::Error for Error {
     #[inline]
     fn description(&self) -> &str {
         "an XML parsing error"
+    }
+}
+
+
+/// Parsing options.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct ParsingOptions {
+    /// Allow DTD parsing.
+    ///
+    /// When set to `false`, XML with DTD will cause an error.
+    /// Empty DTD block is not an error.
+    ///
+    /// Currently, there is no option to simply skip DTD.
+    /// Mainly because you will get `UnknownEntityReference` error later anyway.
+    ///
+    /// This flag is set to `false` by default for security reasons,
+    /// but `roxmltree` still has checks for billion laughs attack,
+    /// so this is just an extra security measure.
+    ///
+    /// Default: false
+    pub allow_dtd: bool,
+}
+
+impl Default for ParsingOptions {
+    fn default() -> Self {
+        ParsingOptions {
+            allow_dtd: false,
+        }
     }
 }
 
@@ -209,6 +245,8 @@ impl<'input> Document<'input> {
     /// We do not support `&[u8]` or `Reader` because the input must be an already allocated
     /// UTF-8 string.
     ///
+    /// This is a shorthand for `Document::parse_with_options(data, ParsingOptions::default())`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -217,7 +255,24 @@ impl<'input> Document<'input> {
     /// ```
     #[inline]
     pub fn parse(text: &str) -> Result<Document, Error> {
-        parse(text)
+        Self::parse_with_options(text, ParsingOptions::default())
+    }
+
+    /// Parses the input XML string using to selected options.
+    ///
+    /// We do not support `&[u8]` or `Reader` because the input must be an already allocated
+    /// UTF-8 string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let opt = roxmltree::ParsingOptions::default();
+    /// let doc = roxmltree::Document::parse_with_options("<e/>", opt).unwrap();
+    /// assert_eq!(doc.descendants().count(), 2); // root node + `e` element node
+    /// ```
+    #[inline]
+    pub fn parse_with_options(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
+        parse(text, opt)
     }
 
     fn append(
@@ -266,6 +321,7 @@ struct Entity<'input>  {
 }
 
 struct ParserData<'input> {
+    opt: ParsingOptions,
     attrs_start_idx: usize,
     ns_start_idx: usize,
     tmp_attrs: Vec<AttributeData<'input>>,
@@ -376,12 +432,13 @@ impl LoopDetector {
 }
 
 
-fn parse(text: &str) -> Result<Document, Error> {
+fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     if text.len() > std::u32::MAX as usize {
         return Err(Error::SizeLimit);
     }
 
     let mut pd = ParserData {
+        opt,
         attrs_start_idx: 0,
         ns_start_idx: 1,
         tmp_attrs: Vec::with_capacity(16),
@@ -474,6 +531,11 @@ fn process_tokens<'input>(
             }
             xmlparser::Token::ElementEnd { end, span } => {
                 process_element(*tag_name, end, span, &mut parent_id, pd, doc)?;
+            }
+            xmlparser::Token::DtdStart { .. } => {
+                if !pd.opt.allow_dtd {
+                    return Err(Error::DtdDetected);
+                }
             }
             xmlparser::Token::EntityDeclaration { name, definition, .. } => {
                 if let xmlparser::EntityDefinition::EntityValue(value) = definition {

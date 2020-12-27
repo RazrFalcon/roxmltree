@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- An ability to reject XML with DTD in it.
+- `ParsingOptions`
+- `Document::parse_with_options`
+- `Error::DtdDetected`
 
 ## [0.13.1] - 2020-12-19
 ### Added
