@@ -1,8 +1,6 @@
-use std::borrow::{Cow, Borrow};
-use std::error;
-use std::fmt;
-use std::mem;
-use std::str;
+use alloc::borrow::{Cow, Borrow, ToOwned};
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 use xmlparser::{
     self,
@@ -137,8 +135,8 @@ impl From<xmlparser::Error> for Error {
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match *self {
             Error::InvalidXmlPrefixUri(pos) => {
                 write!(f, "'xml' namespace prefix mapped to wrong URI at {}", pos)
@@ -195,7 +193,8 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error {
+#[cfg(feature = "std")]
+impl std::error::Error for Error {
     #[inline]
     fn description(&self) -> &str {
         "an XML parsing error"
@@ -421,7 +420,7 @@ impl LoopDetector {
             // Allow infinite amount of references at zero depth.
             Ok(())
         } else {
-            if self.references == std::u8::MAX {
+            if self.references == core::u8::MAX {
                 return Err(Error::EntityReferenceLoop(s.gen_text_pos()));
             }
 
@@ -433,7 +432,7 @@ impl LoopDetector {
 
 
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
-    if text.len() > std::u32::MAX as usize {
+    if text.len() > core::u32::MAX as usize {
         return Err(Error::SizeLimit);
     }
 
@@ -777,7 +776,7 @@ fn resolve_attributes<'input>(
         doc.attrs.push(Attribute {
             name: attr_name,
             // Takes a value from a slice without consuming the slice.
-            value: mem::replace(&mut attr.value, Cow::Borrowed("")),
+            value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
             range: attr.range.clone(),
             value_range: attr.value_range.clone(),
         });
@@ -1071,7 +1070,7 @@ fn gen_qname_string(prefix: &str, local: &str) -> String {
     if prefix.is_empty() {
         local.to_string()
     } else {
-        format!("{}:{}", prefix, local)
+        alloc::format!("{}:{}", prefix, local)
     }
 }
 
@@ -1088,6 +1087,8 @@ fn err_pos_from_qname(input: &str, prefix: StrSpan, local: StrSpan) -> TextPos {
 
 
 mod internals {
+    use alloc::vec::Vec;
+
     /// Iterate over `char` by `u8`.
     pub struct CharToBytes {
         buf: [u8; 4],
@@ -1192,10 +1193,8 @@ mod internals {
 
         #[inline]
         pub fn to_str(&self) -> &str {
-            use std::str;
-
             // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
-            str::from_utf8(&self.buf).unwrap()
+            core::str::from_utf8(&self.buf).unwrap()
         }
     }
 }

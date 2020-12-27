@@ -15,19 +15,24 @@ License: ISC.
 
 #![doc(html_root_url = "https://docs.rs/roxmltree/0.13.1")]
 
+#![no_std]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
 
-extern crate xmlparser;
+extern crate alloc;
 
-use std::borrow::Cow;
-use std::cmp::Ordering;
-use std::fmt;
-use std::hash::{Hash, Hasher};
-use std::num::NonZeroU32;
-use std::ops::Deref;
+#[cfg(feature = "std")]
+extern crate std;
+
+use alloc::borrow::Cow;
+use alloc::vec::Vec;
+use core::cmp::Ordering;
+use core::fmt;
+use core::hash::{Hash, Hasher};
+use core::num::NonZeroU32;
+use core::ops::Deref;
 
 pub use xmlparser::TextPos;
 
@@ -42,7 +47,7 @@ pub const NS_XML_URI: &str = "http://www.w3.org/XML/1998/namespace";
 pub const NS_XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
 
 
-type Range = std::ops::Range<usize>;
+type Range = core::ops::Range<usize>;
 
 /// An XML tree container.
 ///
@@ -287,8 +292,8 @@ impl From<Range> for ShortRange {
     #[inline]
     fn from(range: Range) -> Self {
         // Casting to `u32` should be safe since we have a 4GiB input data limit.
-        debug_assert!(range.start <= std::u32::MAX as usize);
-        debug_assert!(range.end <= std::u32::MAX as usize);
+        debug_assert!(range.start <= core::u32::MAX as usize);
+        debug_assert!(range.end <= core::u32::MAX as usize);
         ShortRange::new(range.start as u32, range.end as u32)
     }
 }
@@ -323,7 +328,7 @@ impl NodeId {
     /// `u32` is more than enough since we have a 4GiB input data limit anyway.
     #[inline]
     pub fn new(id: u32) -> Self {
-        debug_assert!(id < std::u32::MAX);
+        debug_assert!(id < core::u32::MAX);
 
         // We are using `NonZeroUsize` to reduce overhead of `Option<NodeId>`.
         NodeId(NonZeroU32::new(id + 1).unwrap())
@@ -353,7 +358,7 @@ impl From<usize> for NodeId {
     #[inline]
     fn from(id: usize) -> Self {
         // Casting to `u32` should be safe since we have a 4GiB input data limit.
-        debug_assert!(id <= std::u32::MAX as usize);
+        debug_assert!(id <= core::u32::MAX as usize);
         NodeId::new(id as u32)
     }
 }

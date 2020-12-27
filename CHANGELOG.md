@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Added
 - An ability to reject XML with DTD in it.
+- The library is no_std + alloc now.
 - `ParsingOptions`
 - `Document::parse_with_options`
 - `Error::DtdDetected`

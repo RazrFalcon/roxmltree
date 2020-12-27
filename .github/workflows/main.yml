@@ -11,11 +11,14 @@ jobs:
     strategy:
       matrix:
         rust:
-          - stable
           - 1.31.0
+          - stable
     steps:
     - name: Checkout
       uses: actions/checkout@v2
 
     - name: Run tests
       run: cargo test
+
+    - name: Build with std
+      run: cargo build --features std
