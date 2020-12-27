@@ -50,9 +50,9 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | Writing                         |                  | ✓                   | ✓                | ✓                | ✓                |
 | No **unsafe**                   | ✓                |                     | ✓                |                  | ~<sup>3</sup>    |
 | Language                        | Rust             | C                   | Rust             | Rust             | Rust             |
-| Size overhead<sup>4</sup>       | ~64KiB           | ~1.4MiB<sup>5</sup> | ~118KiB          | ~138KiB          | **~62KiB**       |
+| Size overhead<sup>4</sup>       | ~61KiB           | ~1.4MiB<sup>5</sup> | ~106KiB          | ~121KiB          | **~58KiB**       |
 | Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                | 2                |
-| Tested version                  | 0.13.0           | 2.9.8               | 0.10.0           | 0.3.2            | 0.12.0           |
+| Tested version                  | 0.14.0           | 2.9.8               | 0.10.2           | 0.3.2            | 0.12.0           |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              | MIT              |
 
 Legend:

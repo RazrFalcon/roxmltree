@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.14.0] - 2020-12-27
 ### Added
 - An ability to reject XML with DTD in it.
 - The library is no_std + alloc now.
@@ -170,7 +172,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 [@tomjw64]: https://github.com/tomjw64
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.13.1..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.14.0..HEAD
+[0.14.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.13.1...v0.14.0
 [0.13.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.11.1...v0.12.0
