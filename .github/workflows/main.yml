@@ -20,5 +20,5 @@ jobs:
     - name: Run tests
       run: cargo test
 
-    - name: Build with std
-      run: cargo build --features std
+    - name: Build without std
+      run: cargo build --no-default-features
