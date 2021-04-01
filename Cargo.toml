@@ -25,4 +25,5 @@ xmlparser = "0.13.3"
 pretty_assertions = "0.5"
 
 [features]
+default = ["std"]
 std = []
