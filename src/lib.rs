@@ -142,7 +142,7 @@ impl<'input> Document<'input> {
     ///
     /// Shorthand for `doc.root().descendants()`.
     #[inline]
-    pub fn descendants(&self) -> Descendants {
+    pub fn descendants(&self) -> Descendants<'_, 'input> {
         self.root().descendants()
     }
 
