@@ -81,7 +81,7 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 [libxml2]: http://xmlsoft.org/
 [xmltree]: https://crates.io/crates/xmltree
 [sxd-document]: https://crates.io/crates/sxd-document
-[minidom]: https://gitlab.com/xmpp-rs/xmpp-rs/-/tree/master/minidom-rs
+[minidom]: https://gitlab.com/xmpp-rs/xmpp-rs/-/tree/main/minidom
 
 ## Performance
 
