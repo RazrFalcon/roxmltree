@@ -15,9 +15,6 @@ edition = "2018"
 members = ["benches"]
 exclude = ["test-apps", "testing-tools"]
 
-[badges]
-travis-ci = { repository = "RazrFalcon/roxmltree" }
-
 [dependencies]
 xmlparser = "0.13.3"
 

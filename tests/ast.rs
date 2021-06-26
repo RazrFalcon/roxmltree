@@ -29,30 +29,8 @@ impl HasExtension for path::Path {
     }
 }
 
-
-// List of not yet supported test cases.
-static IGNORE: &[&str] = &[
-    "tree_003.xml",
-];
-
-
-#[test]
-fn compare_ast() {
-    for entry in fs::read_dir("tests/files").unwrap() {
-        let entry = entry.unwrap();
-
-        if !entry.path().has_extension("xml") {
-            continue;
-        }
-
-        let file_name = entry.path().file_name().unwrap().to_str().unwrap().to_string();
-        if !IGNORE.contains(&file_name.as_str()) {
-            actual_test(entry.path());
-        }
-    }
-}
-
-fn actual_test(path: path::PathBuf) {
+fn actual_test(path: &str) {
+    let path = path::Path::new(path);
     let expected = load_file(&path.with_extension("yaml"));
 
     let opt = ParsingOptions {
@@ -191,3 +169,98 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
 
     Ok(())
 }
+
+macro_rules! test {
+    ($name:ident) => (
+        #[test]
+        fn $name() {
+            actual_test(&format!("tests/files/{}.xml", stringify!($name)))
+        }
+    )
+}
+
+test!(attrs_001);
+test!(attrs_002);
+test!(attrs_003);
+test!(attrs_004);
+test!(attrs_005);
+test!(attrs_006);
+test!(attrs_err_001);
+test!(attrs_err_002);
+test!(cdata_001);
+test!(cdata_002);
+test!(cdata_003);
+test!(cdata_004);
+test!(cdata_005);
+test!(cdata_006);
+test!(comments_001);
+test!(elems_err_001);
+test!(elems_err_002);
+test!(entity_001);
+test!(entity_002);
+test!(entity_003);
+test!(entity_004);
+test!(entity_005);
+test!(entity_006);
+test!(entity_007);
+test!(entity_008);
+test!(entity_009);
+test!(entity_010);
+test!(entity_011);
+test!(entity_012);
+test!(entity_013);
+test!(entity_014);
+test!(entity_err_001);
+test!(entity_err_002);
+test!(entity_err_003);
+test!(entity_err_004);
+test!(entity_err_005);
+test!(entity_err_006);
+test!(entity_err_007);
+test!(entity_err_008);
+test!(entity_err_009);
+test!(ns_001);
+test!(ns_002);
+test!(ns_003);
+test!(ns_004);
+test!(ns_005);
+test!(ns_006);
+test!(ns_007);
+test!(ns_008);
+test!(ns_009);
+test!(ns_010);
+test!(ns_011);
+test!(ns_012);
+test!(ns_013);
+test!(ns_014);
+test!(ns_015);
+test!(ns_016);
+test!(ns_017);
+test!(ns_err_001);
+test!(ns_err_002);
+test!(ns_err_003);
+test!(ns_err_004);
+test!(ns_err_005);
+test!(ns_err_006);
+test!(ns_err_007);
+test!(ns_err_008);
+test!(ns_err_009);
+test!(ns_err_010);
+test!(ns_err_011);
+test!(ns_err_012);
+test!(ns_err_013);
+test!(text_001);
+test!(text_002);
+test!(text_003);
+test!(text_004);
+test!(text_005);
+test!(text_006);
+test!(text_007);
+test!(text_008);
+test!(text_009);
+test!(text_010);
+test!(text_011);
+test!(tree_001);
+test!(tree_002);
+// test!(tree_003); // unsupported
+test!(tree_err_001);
