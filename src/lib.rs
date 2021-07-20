@@ -708,8 +708,8 @@ impl PartialEq for Node<'_, '_> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
            self.id == other.id
-        && self.doc as *const _ == other.doc as *const _
-        && self.d as *const _ == other.d as *const _
+        && std::ptr::eq(self.doc, other.doc)
+        && std::ptr::eq(self.d, other.d)
     }
 }
 
@@ -1277,30 +1277,26 @@ impl<'a, 'input: 'a> Iterator for Children<'a, 'input> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.front == self.back {
-            let node = self.front.take();
+        let front = self.front.take();
+        if front == self.back {
             self.back = None;
-            node
         } else {
-            let node = self.front.take();
-            self.front = node.as_ref().and_then(Node::next_sibling);
-            node
+            self.front = front.as_ref().and_then(Node::next_sibling);
         }
+        front
     }
 }
 
 impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.back == self.front {
-            let node = self.back.take();
+        let back = self.back.take();
+        if back == self.front {
             self.front = None;
-            node
         } else {
-            let node = self.back.take();
-            self.back = node.as_ref().and_then(Node::prev_sibling);
-            node
+            self.back = back.as_ref().and_then(Node::prev_sibling);
         }
+        back
     }
 }
 
