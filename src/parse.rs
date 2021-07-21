@@ -652,14 +652,14 @@ fn process_element<'input>(
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
     pd.ns_start_idx = doc.namespaces.len();
 
-    let attributes = resolve_attributes(pd.attrs_start_idx, namespaces.clone(),
+    let attributes = resolve_attributes(pd.attrs_start_idx, namespaces,
                                         &mut pd.tmp_attrs, doc)?;
     pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
 
     match end_token {
         xmlparser::ElementEnd::Empty => {
-            let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
+            let tag_ns_uri = get_ns_by_prefix(doc, namespaces, tag_name.prefix)?;
             let new_element_id = doc.append(*parent_id,
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
@@ -698,7 +698,7 @@ fn process_element<'input>(
             }
         }
         xmlparser::ElementEnd::Open => {
-            let tag_ns_uri = get_ns_by_prefix(doc, namespaces.clone(), tag_name.prefix)?;
+            let tag_ns_uri = get_ns_by_prefix(doc, namespaces, tag_name.prefix)?;
             *parent_id = doc.append(*parent_id,
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
@@ -724,7 +724,7 @@ fn resolve_namespaces(
     doc: &mut Document,
 ) -> ShortRange {
     if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get_usize()].kind {
-        let parent_ns = namespaces.clone();
+        let parent_ns = *namespaces;
         if start_idx == doc.namespaces.len() {
             return parent_ns;
         }
@@ -760,7 +760,7 @@ fn resolve_attributes<'input>(
             // always has no value.'
             None
         } else {
-            get_ns_by_prefix(doc, namespaces.clone(), attr.prefix)?
+            get_ns_by_prefix(doc, namespaces, attr.prefix)?
         };
 
         // We do not store attribute prefixes since `ExpandedNameOwned::prefix`
@@ -777,8 +777,8 @@ fn resolve_attributes<'input>(
             name: attr_name,
             // Takes a value from a slice without consuming the slice.
             value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
-            range: attr.range.clone(),
-            value_range: attr.value_range.clone(),
+            range: attr.range,
+            value_range: attr.value_range,
         });
     }
 
