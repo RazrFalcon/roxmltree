@@ -229,6 +229,23 @@ impl Default for ParsingOptions {
     }
 }
 
+impl ParsingOptions {
+    /// Allows DTD parsing if set to `true`. Otherwise, XML with DTD will cause an error.
+    /// Empty DTD block is not an error.
+    ///
+    /// Currently, there is no option to simply skip DTD.
+    /// Mainly because you will get `UnknownEntityReference` error later anyway.
+    ///
+    /// This flag is set to `false` by default for security reasons,
+    /// but `roxmltree` still has checks for billion laughs attack,
+    /// so this is just an extra security measure.
+    ///
+    /// Default: false
+    pub fn allow_dtd(self, allow_dtd: bool) -> Self {
+        self.allow_dtd = allow_dtd;
+        self
+    }
+}
 
 struct AttributeData<'input> {
     prefix: StrSpan<'input>,
