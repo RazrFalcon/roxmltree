@@ -1257,7 +1257,7 @@ impl<'a, 'input: 'a> Iterator for AxisIter<'a, 'input> {
 
 impl fmt::Debug for AxisIter<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.debug_struct("Pixmap")
+        f.debug_struct("AxisIter")
             .field("node", &self.node)
             .field("next", &"fn()")
             .finish()
