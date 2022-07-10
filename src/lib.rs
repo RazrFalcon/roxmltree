@@ -982,6 +982,29 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
     }
 
+    /// Returns element's namespace uri
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let doc = roxmltree::Document::parse(
+    ///     "<e xmlns:n='http://www.w3.org/2001/XMLSchema' xmlns='http://www.w3.org' a='b' n:a='c'/>"
+    /// ).unwrap();
+    ///
+    /// assert_eq!(doc.root_element().namespace(None), Some("http://www.w3.org"));
+    /// assert_eq!(doc.root_element().namespace(Some("n")), Some("http://www.w3.org/2001/XMLSchema"));
+    /// ```
+    pub fn namespace<'n, N>(&self, name: N) -> Option<&'a str>
+    where
+        N: Into<Option<&'n str>>,
+    {
+        let name = name.into();
+        self.namespaces()
+            .iter()
+            .find(|ns| ns.name == name)
+            .map(|v| v.uri.as_ref())
+    }
+
     /// Returns element's namespaces.
     ///
     /// # Examples
