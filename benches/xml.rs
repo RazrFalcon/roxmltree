@@ -163,6 +163,33 @@ fn large_minidom(bencher: &mut Bencher) {
     })
 }
 
+fn tiny_libxml(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("fonts.conf").unwrap();
+    bencher.iter(|| {
+        libxml::parser::Parser::default()
+            .parse_string(&text)
+            .unwrap()
+    })
+}
+
+fn medium_libxml(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("medium.svg").unwrap();
+    bencher.iter(|| {
+        libxml::parser::Parser::default()
+            .parse_string(&text)
+            .unwrap()
+    })
+}
+
+fn large_libxml(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("large.plist").unwrap();
+    bencher.iter(|| {
+        libxml::parser::Parser::default()
+            .parse_string(&text)
+            .unwrap()
+    })
+}
+
 fn roxmltree_iter_descendants_inexpensive(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
     let doc = roxmltree::Document::parse(&text).unwrap();
@@ -297,6 +324,7 @@ benchmark_group!(minidom, tiny_minidom, medium_minidom, large_minidom);
 benchmark_group!(xmlparser, tiny_xmlparser, medium_xmlparser, large_xmlparser);
 benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs);
 benchmark_group!(quick_xml, tiny_quick_xml, medium_quick_xml, large_quick_xml);
+benchmark_group!(libxml, tiny_libxml, medium_libxml, large_libxml);
 benchmark_main!(
     roxmltree,
     xmltree,
@@ -305,6 +333,7 @@ benchmark_main!(
     xmlparser,
     xmlrs,
     quick_xml,
+    libxml,
     roxmltree_iter,
     minidom_iter,
     xmltree_iter);
