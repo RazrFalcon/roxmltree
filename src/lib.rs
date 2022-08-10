@@ -319,7 +319,7 @@ impl ShortRange {
 /// check that `NodeId` actually belongs to a selected `Document`.
 /// So you can end up in a situation, when `NodeId` produced by one `Document`
 /// is used to select a node in another `Document`.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct NodeId(NonZeroU32);
 
 impl NodeId {
