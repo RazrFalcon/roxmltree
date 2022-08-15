@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2022-08-15
+### Changed
+- Extend `Document::descendants` lifetime.
+  Thanks to [@DBLouis](https://github.com/DBLouis).
+- Derive `Eq` and `Hash` for `NodeId`.
+- Remove `pretty_assertions` dev-dependency.
+- MSRV is now 1.36
+
 ## [0.14.1] - 2021-04-01
 ### Changed
 - The `std` feature is enabled by default now.
@@ -176,7 +184,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 [@tomjw64]: https://github.com/tomjw64
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.14.1..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.0..HEAD
+[0.15.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.13.1...v0.14.0
 [0.13.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.13.0...v0.13.1
