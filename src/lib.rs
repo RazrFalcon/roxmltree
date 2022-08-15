@@ -709,8 +709,8 @@ impl PartialEq for Node<'_, '_> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
            self.id == other.id
-        && std::ptr::eq(self.doc as *const _, other.doc as *const _)
-        && std::ptr::eq(self.d as *const _, other.d as *const _)
+        && core::ptr::eq(self.doc as *const _, other.doc as *const _)
+        && core::ptr::eq(self.d as *const _, other.d as *const _)
     }
 }
 
