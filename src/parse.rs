@@ -221,6 +221,8 @@ pub struct ParsingOptions {
     pub allow_dtd: bool,
 }
 
+// Explicit for readability.
+#[allow(clippy::derivable_impls)]
 impl Default for ParsingOptions {
     fn default() -> Self {
         ParsingOptions {
@@ -488,6 +490,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     Ok(doc)
 }
 
+#[allow(clippy::collapsible_match)]
 fn process_tokens<'input>(
     parser: xmlparser::Tokenizer<'input>,
     mut parent_id: NodeId,

@@ -21,6 +21,9 @@ License: ISC.
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
 
+// `matches!` available since 1.42, but we target 1.36 for now.
+#![allow(clippy::match_like_matches_macro)]
+
 extern crate alloc;
 
 #[cfg(feature = "std")]
@@ -708,8 +711,8 @@ impl PartialEq for Node<'_, '_> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
            self.id == other.id
-        && self.doc as *const _ == other.doc as *const _
-        && self.d as *const _ == other.d as *const _
+        && std::ptr::eq(self.doc as *const _, other.doc as *const _)
+        && std::ptr::eq(self.d as *const _, other.d as *const _)
     }
 }
 
@@ -1317,7 +1320,7 @@ impl<'a, 'input> Descendants<'a, 'input> {
     #[inline]
     fn new(start: Node<'a, 'input>) -> Self {
         Self {
-            doc: &start.doc,
+            doc: start.doc,
             current: start.id,
             until: start.d.next_subtree.unwrap_or_else(|| NodeId::from(start.doc.nodes.len()))
         }
