@@ -1,5 +1,4 @@
 extern crate roxmltree;
-#[macro_use] extern crate pretty_assertions;
 
 use roxmltree::*;
 
