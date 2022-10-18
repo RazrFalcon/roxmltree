@@ -9,7 +9,8 @@ fn main() {
     }
 
     let text = std::fs::read_to_string(&args[1]).unwrap();
-    let doc = match roxmltree::Document::parse(&text) {
+    let opt = roxmltree::ParsingOptions { allow_dtd: true };
+    let doc = match roxmltree::Document::parse_with_options(&text, opt) {
         Ok(v) => v,
         Err(e) => {
             println!("Error: {}.", e);
