@@ -16,7 +16,7 @@ members = ["benches"]
 exclude = ["test-apps", "testing-tools"]
 
 [dependencies]
-xmlparser = "0.13.3"
+xmlparser = "0.13.5"
 
 [features]
 default = ["std"]
