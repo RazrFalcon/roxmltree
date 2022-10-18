@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.15.1] - 2022-10-18
 ### Fixed
 - Bump `xmlparser` to prevent stack overflow on some input.
 
@@ -186,7 +188,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 [@tomjw64]: https://github.com/tomjw64
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.0..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.1..HEAD
+[0.15.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.13.1...v0.14.0

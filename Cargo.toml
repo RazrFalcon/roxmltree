@@ -1,6 +1,6 @@
 [package]
 name = "roxmltree"
-version = "0.15.0"
+version = "0.15.1"
 authors = ["Yevhenii Reizner <razrfalcon@gmail.com>"]
 keywords = ["xml", "parser", "tree", "dom"]
 categories = ["parser-implementations"]
