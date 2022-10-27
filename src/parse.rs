@@ -685,6 +685,8 @@ fn process_element<'input>(
             let local = local.as_str();
 
             let parent_node = &mut doc.nodes[parent_id.get_usize()];
+            // should never panic as we start with the single prefix of the
+            // root node and always push another one when changing the parent
             let parent_prefix = *pd.parent_prefixes.last().unwrap();
 
             parent_node.range.end = token_span.end() as u32;
