@@ -327,6 +327,7 @@ struct ParserData<'input> {
     ns_start_idx: usize,
     tmp_attrs: Vec<AttributeData<'input>>,
     awaiting_subtree: Vec<NodeId>,
+    parent_prefixes: Vec<&'input str>,
     entities: Vec<Entity<'input>>,
     buffer: TextBuffer,
     after_text: bool,
@@ -445,6 +446,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         tmp_attrs: Vec::with_capacity(16),
         entities: Vec::new(),
         awaiting_subtree: Vec::new(),
+        parent_prefixes: Vec::new(),
         buffer: TextBuffer::new(),
         after_text: false,
     };
@@ -475,6 +477,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
+    pd.parent_prefixes.push("");
     let mut tag_name = TagNameSpan::new_null();
     process_tokens(parser, parent_id, &mut LoopDetector::default(),
                    &mut tag_name, &mut pd, &mut doc)?;
@@ -667,7 +670,6 @@ fn process_element<'input>(
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
                         ns: tag_ns_uri,
-                        prefix: tag_name.prefix.as_str(),
                         name: tag_name.name.as_str(),
                     },
                     attributes,
@@ -682,11 +684,16 @@ fn process_element<'input>(
             let prefix = prefix.as_str();
             let local = local.as_str();
 
-            doc.nodes[parent_id.get_usize()].range.end = token_span.end() as u32;
-            if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get_usize()].kind {
-                if prefix != tag_name.prefix || local != tag_name.name {
+            let parent_node = &mut doc.nodes[parent_id.get_usize()];
+            // should never panic as we start with the single prefix of the
+            // root node and always push another one when changing the parent
+            let parent_prefix = *pd.parent_prefixes.last().unwrap();
+
+            parent_node.range.end = token_span.end() as u32;
+            if let NodeKind::Element { ref tag_name, .. } = parent_node.kind {
+                if prefix != parent_prefix || local != tag_name.name {
                     return Err(Error::UnexpectedCloseTag {
-                        expected: gen_qname_string(tag_name.prefix, tag_name.name),
+                        expected: gen_qname_string(parent_prefix, tag_name.name),
                         actual: gen_qname_string(prefix, local),
                         pos: err_pos_from_span(doc.text, token_span),
                     });
@@ -694,8 +701,10 @@ fn process_element<'input>(
             }
             pd.awaiting_subtree.push(*parent_id);
 
-            if let Some(id) = doc.nodes[parent_id.get_usize()].parent {
+            if let Some(id) = parent_node.parent {
                 *parent_id = id;
+                pd.parent_prefixes.pop();
+                debug_assert!(!pd.parent_prefixes.is_empty());
             } else {
                 unreachable!("should be already checked by the xmlparser");
             }
@@ -706,7 +715,6 @@ fn process_element<'input>(
                 NodeKind::Element {
                     tag_name: ExpandedNameOwned {
                         ns: tag_ns_uri,
-                        prefix: tag_name.prefix.as_str(),
                         name: tag_name.name.as_str(),
                     },
                     attributes,
@@ -715,6 +723,7 @@ fn process_element<'input>(
                 (tag_name.span.start()..token_span.end()).into(),
                 pd
             );
+            pd.parent_prefixes.push(tag_name.prefix.as_str());
         }
     }
 
@@ -766,9 +775,7 @@ fn resolve_attributes<'input>(
             get_ns_by_prefix(doc, namespaces, attr.prefix)?
         };
 
-        // We do not store attribute prefixes since `ExpandedNameOwned::prefix`
-        // is used only for closing tags matching during parsing.
-        let attr_name = ExpandedNameOwned { ns, prefix: "", name: attr.local.as_str() };
+        let attr_name = ExpandedNameOwned { ns, name: attr.local.as_str() };
 
         // Check for duplicated attributes.
         if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
