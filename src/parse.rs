@@ -1,6 +1,6 @@
 use alloc::borrow::{Cow, Borrow, ToOwned};
 use alloc::string::{String, ToString};
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use xmlparser::{
     self,
@@ -475,8 +475,9 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
+    let parent_prefixes = vec![""];
     let mut tag_name = TagNameSpan::new_null();
-    process_tokens(parser, parent_id, &mut LoopDetector::default(),
+    process_tokens(parser, parent_id, parent_prefixes, &mut LoopDetector::default(),
                    &mut tag_name, &mut pd, &mut doc)?;
 
     if !doc.root().children().any(|n| n.is_element()) {
@@ -494,6 +495,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
 fn process_tokens<'input>(
     parser: xmlparser::Tokenizer<'input>,
     mut parent_id: NodeId,
+    mut parent_prefixes: Vec<&'input str>,
     loop_detector: &mut LoopDetector,
     tag_name: &mut TagNameSpan<'input>,
     pd: &mut ParserData<'input>,
@@ -513,7 +515,7 @@ fn process_tokens<'input>(
                 doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range().into(), pd);
             }
             xmlparser::Token::Text { text } => {
-                process_text(text, parent_id, loop_detector, pd, doc)?;
+                process_text(text, parent_id, &parent_prefixes, loop_detector, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
                 let cow_str = Cow::Borrowed(text.as_str());
@@ -532,7 +534,7 @@ fn process_tokens<'input>(
                 process_attribute(prefix, local, value, span, loop_detector, pd, doc)?;
             }
             xmlparser::Token::ElementEnd { end, span } => {
-                process_element(*tag_name, end, span, &mut parent_id, pd, doc)?;
+                process_element(*tag_name, end, span, &mut parent_id, &mut parent_prefixes, pd, doc)?;
             }
             xmlparser::Token::DtdStart { .. } => {
                 if !pd.opt.allow_dtd {
@@ -637,6 +639,7 @@ fn process_element<'input>(
     end_token: xmlparser::ElementEnd<'input>,
     token_span: StrSpan<'input>,
     parent_id: &mut NodeId,
+    parent_prefixes: &mut Vec<&'input str>,
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
@@ -682,8 +685,11 @@ fn process_element<'input>(
             let prefix = prefix.as_str();
             let local = local.as_str();
 
+            let parent_prefix = *parent_prefixes.last().unwrap();
+
             doc.nodes[parent_id.get_usize()].range.end = token_span.end() as u32;
             if let NodeKind::Element { ref tag_name, .. } = doc.nodes[parent_id.get_usize()].kind {
+                assert_eq!(tag_name.prefix, parent_prefix);
                 if prefix != tag_name.prefix || local != tag_name.name {
                     return Err(Error::UnexpectedCloseTag {
                         expected: gen_qname_string(tag_name.prefix, tag_name.name),
@@ -696,6 +702,8 @@ fn process_element<'input>(
 
             if let Some(id) = doc.nodes[parent_id.get_usize()].parent {
                 *parent_id = id;
+                parent_prefixes.pop();
+                debug_assert!(!parent_prefixes.is_empty());
             } else {
                 unreachable!("should be already checked by the xmlparser");
             }
@@ -715,6 +723,7 @@ fn process_element<'input>(
                 (tag_name.span.start()..token_span.end()).into(),
                 pd
             );
+            parent_prefixes.push(tag_name.prefix.as_str());
         }
     }
 
@@ -791,6 +800,7 @@ fn resolve_attributes<'input>(
 fn process_text<'input>(
     text: StrSpan<'input>,
     parent_id: NodeId,
+    parent_prefixes: &Vec<&'input str>,
     loop_detector: &mut LoopDetector,
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
@@ -843,7 +853,7 @@ fn process_text<'input>(
 
                 let parser = xmlparser::Tokenizer::from_fragment(doc.text, fragment.range());
                 let mut tag_name = TagNameSpan::new_null();
-                process_tokens(parser, parent_id, loop_detector, &mut tag_name, pd, doc)?;
+                process_tokens(parser, parent_id, parent_prefixes.clone(), loop_detector, &mut tag_name, pd, doc)?;
                 pd.buffer.clear();
 
                 loop_detector.dec_depth();
