@@ -475,9 +475,9 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
-    let parent_prefixes = vec![""];
+    let mut parent_prefixes = vec![""];
     let mut tag_name = TagNameSpan::new_null();
-    process_tokens(parser, parent_id, parent_prefixes, &mut LoopDetector::default(),
+    process_tokens(parser, parent_id, &mut parent_prefixes, &mut LoopDetector::default(),
                    &mut tag_name, &mut pd, &mut doc)?;
 
     if !doc.root().children().any(|n| n.is_element()) {
@@ -495,7 +495,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
 fn process_tokens<'input>(
     parser: xmlparser::Tokenizer<'input>,
     mut parent_id: NodeId,
-    mut parent_prefixes: Vec<&'input str>,
+    parent_prefixes: &mut Vec<&'input str>,
     loop_detector: &mut LoopDetector,
     tag_name: &mut TagNameSpan<'input>,
     pd: &mut ParserData<'input>,
@@ -515,7 +515,7 @@ fn process_tokens<'input>(
                 doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range().into(), pd);
             }
             xmlparser::Token::Text { text } => {
-                process_text(text, parent_id, &parent_prefixes, loop_detector, pd, doc)?;
+                process_text(text, parent_id, parent_prefixes, loop_detector, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
                 let cow_str = Cow::Borrowed(text.as_str());
@@ -534,7 +534,7 @@ fn process_tokens<'input>(
                 process_attribute(prefix, local, value, span, loop_detector, pd, doc)?;
             }
             xmlparser::Token::ElementEnd { end, span } => {
-                process_element(*tag_name, end, span, &mut parent_id, &mut parent_prefixes, pd, doc)?;
+                process_element(*tag_name, end, span, &mut parent_id, parent_prefixes, pd, doc)?;
             }
             xmlparser::Token::DtdStart { .. } => {
                 if !pd.opt.allow_dtd {
@@ -800,7 +800,7 @@ fn resolve_attributes<'input>(
 fn process_text<'input>(
     text: StrSpan<'input>,
     parent_id: NodeId,
-    parent_prefixes: &Vec<&'input str>,
+    parent_prefixes: &mut Vec<&'input str>,
     loop_detector: &mut LoopDetector,
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
@@ -853,7 +853,7 @@ fn process_text<'input>(
 
                 let parser = xmlparser::Tokenizer::from_fragment(doc.text, fragment.range());
                 let mut tag_name = TagNameSpan::new_null();
-                process_tokens(parser, parent_id, parent_prefixes.clone(), loop_detector, &mut tag_name, pd, doc)?;
+                process_tokens(parser, parent_id, parent_prefixes, loop_detector, &mut tag_name, pd, doc)?;
                 pd.buffer.clear();
 
                 loop_detector.dec_depth();
