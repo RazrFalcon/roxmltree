@@ -575,7 +575,6 @@ impl<'input> Deref for Namespaces<'input> {
 #[derive(Clone, PartialEq)]
 struct ExpandedNameOwned<'input> {
     ns: Option<Cow<'input, str>>,
-    prefix: &'input str, // Used only for closing tags matching during parsing.
     name: &'input str,
 }
 
