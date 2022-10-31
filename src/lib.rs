@@ -415,7 +415,7 @@ impl<'input> Attribute<'input> {
     /// ```
     #[inline]
     pub fn namespace(&self) -> Option<&str> {
-        self.name.ns.as_ref().map(Cow::as_ref)
+        if !self.name.ns.is_empty() { Some(&*self.name.ns) } else { None }
     }
 
     /// Returns attribute's name.
@@ -576,10 +576,9 @@ impl<'input> Deref for Namespaces<'input> {
     }
 }
 
-
 #[derive(Clone, PartialEq)]
 struct ExpandedNameOwned<'input> {
-    ns: Option<Cow<'input, str>>,
+    ns: Cow<'input, str>,
     name: &'input str,
 }
 
@@ -587,7 +586,7 @@ impl<'a, 'input> ExpandedNameOwned<'input> {
     #[inline]
     fn as_ref(&'a self) -> ExpandedName<'a, 'input> {
         ExpandedName {
-            uri: self.ns.as_ref().map(Cow::as_ref),
+            uri: if !self.ns.is_empty() { Some(&*self.ns) } else { None },
             name: self.name,
         }
     }
@@ -595,9 +594,10 @@ impl<'a, 'input> ExpandedNameOwned<'input> {
 
 impl<'input> fmt::Debug for ExpandedNameOwned<'input> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self.ns {
-            Some(ref ns) => write!(f, "{{{}}}{}", ns.as_ref(), self.name),
-            None => write!(f, "{}", self.name),
+        if !self.ns.is_empty() {
+            write!(f, "{{{}}}{}", self.ns, self.name)
+        } else {
+            write!(f, "{}", self.name)
         }
     }
 }

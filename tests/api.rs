@@ -84,11 +84,11 @@ fn empty_ns() {
     let doc = Document::parse(data).unwrap();
     let p = doc.root_element();
 
-    assert_eq!(p.attribute(("", "attr")), Some("val"));
-    assert_eq!(p.has_attribute(("", "attr")), true);
+    assert_eq!(p.attribute("attr"), Some("val"));
+    assert_eq!(p.has_attribute("attr"), true);
 
-    assert_eq!(p.attribute("attr"), None);
-    assert_eq!(p.has_attribute("attr"), false);
+    assert_eq!(p.attribute(("", "attr")), None);
+    assert_eq!(p.has_attribute(("", "attr")), false);
 }
 
 #[test]

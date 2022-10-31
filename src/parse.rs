@@ -787,11 +787,11 @@ fn resolve_attributes<'input>(
         let ns = if attr.prefix.as_str() == "xml" {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace.
-            Some(Cow::Borrowed(NS_XML_URI))
+            Cow::Borrowed(NS_XML_URI)
         } else if attr.prefix.is_empty() {
             // 'The namespace name for an unprefixed attribute name
             // always has no value.'
-            None
+            Cow::Borrowed("")
         } else {
             get_ns_by_prefix(doc, namespaces, attr.prefix)?
         };
@@ -1064,7 +1064,7 @@ fn get_ns_by_prefix<'input>(
     doc: &Document<'input>,
     range: ShortRange,
     prefix: StrSpan,
-) -> Result<Option<Cow<'input, str>>, Error> {
+) -> Result<Cow<'input, str>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
     //
     // Example:
@@ -1076,7 +1076,7 @@ fn get_ns_by_prefix<'input>(
         .map(|ns| ns.uri.clone());
 
     match uri {
-        Some(v) => Ok(Some(v)),
+        Some(v) => Ok(v),
         None => {
             if !prefix.is_empty() {
                 // If an URI was not found and prefix IS NOT empty than
@@ -1092,7 +1092,7 @@ fn get_ns_by_prefix<'input>(
                 //
                 // Example:
                 // <e a='b'/>
-                Ok(None)
+                Ok(Cow::Borrowed(""))
             }
         }
     }
