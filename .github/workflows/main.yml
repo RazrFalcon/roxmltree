@@ -25,7 +25,10 @@ jobs:
         override: true
 
     - name: Run tests
-      run: cargo test --all-features
+      run: cargo test
+
+    - name: Run tests without token-ranges
+      run: cargo test --no-default-features --features std
 
     - name: Build without std
       run: cargo build --no-default-features

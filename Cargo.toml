@@ -19,9 +19,6 @@ exclude = ["test-apps", "testing-tools"]
 xmlparser = "0.13.5"
 
 [features]
-default = ["std"]
+default = ["std", "token-ranges"]
 std = []
 token-ranges = []
-
-[package.metadata.docs.rs]
-features = ["token-ranges"]
