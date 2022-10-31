@@ -78,6 +78,20 @@ fn api_01() {
 }
 
 #[test]
+fn empty_ns() {
+    let data = "<e a:attr='val' xmlns:a=''/>";
+
+    let doc = Document::parse(data).unwrap();
+    let p = doc.root_element();
+
+    assert_eq!(p.attribute(("", "attr")), Some("val"));
+    assert_eq!(p.has_attribute(("", "attr")), true);
+
+    assert_eq!(p.attribute("attr"), None);
+    assert_eq!(p.has_attribute("attr"), false);
+}
+
+#[test]
 fn get_pi() {
     let data = "\
 <?target value?>
