@@ -21,3 +21,7 @@ xmlparser = "0.13.5"
 [features]
 default = ["std"]
 std = []
+token-ranges = []
+
+[package.metadata.docs.rs]
+features = ["token-ranges"]
