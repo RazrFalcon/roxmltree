@@ -75,7 +75,7 @@ type Range = core::ops::Range<usize>;
 pub struct Document<'input> {
     /// An original data.
     ///
-    /// Required for `text_pos` methods.
+    /// Required for `text_pos_at` methods.
     text: &'input str,
     nodes: Vec<NodeData<'input>>,
     attrs: Vec<Attribute<'input>>,
@@ -384,6 +384,7 @@ struct NodeData<'input> {
     next_subtree: Option<NodeId>,
     last_child: Option<NodeId>,
     kind: NodeKind<'input>,
+    #[cfg(feature = "token-ranges")]
     range: ShortRange,
 }
 
@@ -393,7 +394,9 @@ struct NodeData<'input> {
 pub struct Attribute<'input> {
     name: ExpandedNameOwned<'input>,
     value: Cow<'input, str>,
+    #[cfg(feature = "token-ranges")]
     range: ShortRange,
+    #[cfg(feature = "token-ranges")]
     value_range: ShortRange,
 }
 
@@ -459,6 +462,7 @@ impl<'input> Attribute<'input> {
     /// ```
     ///
     /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
+    #[cfg(feature = "token-ranges")]
     #[inline]
     pub fn range(&self) -> Range {
         self.range.to_urange()
@@ -474,6 +478,7 @@ impl<'input> Attribute<'input> {
     /// ```
     ///
     /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
+    #[cfg(feature = "token-ranges")]
     #[inline]
     pub fn value_range(&self) -> Range {
         self.value_range.to_urange()
@@ -1207,6 +1212,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     }
 
     /// Returns node's range in bytes in the original document.
+    #[cfg(feature = "token-ranges")]
     #[inline]
     pub fn range(&self) -> Range {
         self.d.range.to_urange()

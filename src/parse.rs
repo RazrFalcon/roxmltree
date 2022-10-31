@@ -236,7 +236,9 @@ struct AttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
     value: Cow<'input, str>,
+    #[cfg(feature = "token-ranges")]
     range: ShortRange,
+    #[cfg(feature = "token-ranges")]
     value_range: ShortRange,
 }
 
@@ -283,6 +285,9 @@ impl<'input> Document<'input> {
         range: ShortRange,
         pd: &mut ParserData,
     ) -> NodeId {
+        #[cfg(not(feature = "token-ranges"))]
+        let _ = range;
+
         let new_child_id = NodeId::from(self.nodes.len());
 
         let appending_element = match kind {
@@ -296,6 +301,7 @@ impl<'input> Document<'input> {
             next_subtree: None,
             last_child: None,
             kind,
+            #[cfg(feature = "token-ranges")]
             range,
         });
 
@@ -470,6 +476,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         next_subtree: None,
         last_child: None,
         kind: NodeKind::Root,
+        #[cfg(feature = "token-ranges")]
         range: (0..text.len()).into(),
     });
 
@@ -573,8 +580,13 @@ fn process_attribute<'input>(
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
+    #[cfg(not(feature = "token-ranges"))]
+    let _ = token_span;
+    #[cfg(feature = "token-ranges")]
     let range = token_span.range().into();
+    #[cfg(feature = "token-ranges")]
     let value_range = value.range().into();
+
     let value = normalize_attribute(doc.text, value, &pd.entities, loop_detector, &mut pd.buffer)?;
 
     if prefix.as_str() == "xmlns" {
@@ -628,7 +640,11 @@ fn process_attribute<'input>(
         doc.namespaces.push_ns(None, value);
     } else {
         pd.tmp_attrs.push(AttributeData {
-            prefix, local, value, range, value_range
+            prefix, local, value,
+            #[cfg(feature = "token-ranges")]
+            range,
+            #[cfg(feature = "token-ranges")]
+            value_range,
         });
     }
 
@@ -689,7 +705,12 @@ fn process_element<'input>(
             // root node and always push another one when changing the parent
             let parent_prefix = *pd.parent_prefixes.last().unwrap();
 
-            parent_node.range.end = token_span.end() as u32;
+            #[cfg(feature = "token-ranges")]
+            {
+                debug_assert!(token_span.end() <= core::u32::MAX as usize);
+                parent_node.range.end = token_span.end() as u32;
+            }
+
             if let NodeKind::Element { ref tag_name, .. } = parent_node.kind {
                 if prefix != parent_prefix || local != tag_name.name {
                     return Err(Error::UnexpectedCloseTag {
@@ -787,7 +808,9 @@ fn resolve_attributes<'input>(
             name: attr_name,
             // Takes a value from a slice without consuming the slice.
             value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
+            #[cfg(feature = "token-ranges")]
             range: attr.range,
+            #[cfg(feature = "token-ranges")]
             value_range: attr.value_range,
         });
     }

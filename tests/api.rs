@@ -119,6 +119,7 @@ fn lookup_namespace_uri() {
     assert_eq!(node.lookup_namespace_uri(Some("n2")), None);
 }
 
+#[cfg(feature = "token-ranges")]
 #[test]
 fn text_pos_01() {
     let data = "\
@@ -154,6 +155,7 @@ fn text_pos_01() {
     assert_eq!(doc.text_pos_at(text.range().start), TextPos::new(3, 8));
 }
 
+#[cfg(feature = "token-ranges")]
 #[test]
 fn text_pos_02() {
     let data = "<n1:e xmlns:n1='http://www.w3.org' n1:a='b'/>";
@@ -169,6 +171,7 @@ fn text_pos_02() {
     }
 }
 
+#[cfg(feature = "token-ranges")]
 #[test]
 fn text_pos_03() {
     let data = "\

@@ -1,3 +1,4 @@
+#[cfg(feature = "token-ranges")]
 fn main() {
     let args: Vec<_> = std::env::args().collect();
 
@@ -23,3 +24,6 @@ fn main() {
         }
     }
 }
+
+#[cfg(not(feature = "token-ranges"))]
+fn main() {}
