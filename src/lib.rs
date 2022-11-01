@@ -28,6 +28,7 @@ extern crate alloc;
 extern crate std;
 
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
@@ -311,6 +312,52 @@ impl ShortRange {
     }
 }
 
+/// A custom variant of `Cow<'a, str>` that
+/// keeps a niche available and sheds excess capacity.
+///
+/// This variant stores `Box<str>` instead of `String`
+/// which is more appropriate for a space-conscious
+/// read-only data structure as
+///
+/// 1. it keeps a niche available so that for example
+///
+///    ```rust,ignore
+///    assert_eq!(
+///        size_of::<CowStr<'static>>(),
+///        size_of::<Option<CowStr<'static>>>(),
+///    );
+///    ```
+///
+///    holds and
+///
+/// 2. it sheds any excess capacity that was allocated
+///    when an owned string had to be constructed thereby
+///    keeping only the amount of memory around that is
+///    required to store the string.
+#[derive(Clone, PartialEq)]
+enum CowStr<'a> {
+    Borrowed(&'a str),
+    Owned(Box<str>),
+}
+
+impl<'a> From<Cow<'a, str>> for CowStr<'a> {
+    fn from(v: Cow<'a, str>) -> CowStr<'a> {
+        match v {
+            Cow::Borrowed(v) => CowStr::Borrowed(v),
+            Cow::Owned(v) => CowStr::Owned(v.into()),
+        }
+    }
+}
+
+impl<'a> AsRef<str> for CowStr<'a> {
+    fn as_ref(&self) -> &str {
+        match self {
+            CowStr::Borrowed(v) => v,
+            CowStr::Owned(ref v) => v,
+        }
+    }
+}
+
 
 /// A node ID stored as `u32`.
 ///
@@ -415,7 +462,7 @@ impl<'input> Attribute<'input> {
     /// ```
     #[inline]
     pub fn namespace(&self) -> Option<&str> {
-        self.name.ns.as_ref().map(Cow::as_ref)
+        self.name.ns.as_ref().map(CowStr::as_ref)
     }
 
     /// Returns attribute's name.
@@ -579,7 +626,7 @@ impl<'input> Deref for Namespaces<'input> {
 
 #[derive(Clone, PartialEq)]
 struct ExpandedNameOwned<'input> {
-    ns: Option<Cow<'input, str>>,
+    ns: Option<CowStr<'input>>,
     name: &'input str,
 }
 
@@ -587,7 +634,7 @@ impl<'a, 'input> ExpandedNameOwned<'input> {
     #[inline]
     fn as_ref(&'a self) -> ExpandedName<'a, 'input> {
         ExpandedName {
-            uri: self.ns.as_ref().map(Cow::as_ref),
+            uri: self.ns.as_ref().map(CowStr::as_ref),
             name: self.name,
         }
     }

@@ -22,6 +22,7 @@ use crate::{
     NodeKind,
     PI,
     ShortRange,
+    CowStr,
 };
 
 
@@ -787,7 +788,7 @@ fn resolve_attributes<'input>(
         let ns = if attr.prefix.as_str() == "xml" {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace.
-            Some(Cow::Borrowed(NS_XML_URI))
+            Some(CowStr::Borrowed(NS_XML_URI))
         } else if attr.prefix.is_empty() {
             // 'The namespace name for an unprefixed attribute name
             // always has no value.'
@@ -1064,7 +1065,7 @@ fn get_ns_by_prefix<'input>(
     doc: &Document<'input>,
     range: ShortRange,
     prefix: StrSpan,
-) -> Result<Option<Cow<'input, str>>, Error> {
+) -> Result<Option<CowStr<'input>>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
     //
     // Example:
@@ -1076,7 +1077,7 @@ fn get_ns_by_prefix<'input>(
         .map(|ns| ns.uri.clone());
 
     match uri {
-        Some(v) => Ok(Some(v)),
+        Some(v) => Ok(Some(v.into())),
         None => {
             if !prefix.is_empty() {
                 // If an URI was not found and prefix IS NOT empty than
