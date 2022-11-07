@@ -459,8 +459,8 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     };
 
     // Trying to guess rough nodes and attributes amount.
-    let nodes_capacity = text.bytes().filter(|c| *c == b'<').count();
-    let attributes_capacity = text.bytes().filter(|c| *c == b'=').count();
+    let nodes_capacity = text.match_indices('<').count();
+    let attributes_capacity = text.match_indices('=').count();
 
     // Init document.
     let mut doc = Document {
@@ -826,7 +826,7 @@ fn process_text<'input>(
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
-    if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
+    if !text.as_str().contains(&['&', '\r'][..]) {
         append_text(BorrowedText::Input(text.as_str()), parent_id, text.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
         pd.after_text = true;
         return Ok(());
@@ -999,18 +999,7 @@ fn normalize_attribute<'input>(
 fn is_normalization_required(text: &StrSpan) -> bool {
     // We assume that `&` indicates an entity or a character reference.
     // But in rare cases it can be just an another character.
-
-    fn check(c: u8) -> bool {
-        match c {
-              b'&'
-            | b'\t'
-            | b'\n'
-            | b'\r' => true,
-            _ => false,
-        }
-    }
-
-    text.as_str().bytes().any(check)
+    text.as_str().contains(&['&', '\t', '\n', '\r'][..])
 }
 
 fn _normalize_attribute(
