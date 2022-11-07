@@ -4,6 +4,19 @@ version = "0.1.0"
 edition = "2018"
 workspace = ".."
 
+[features]
+## Enables support for rust-libxml for benchmarks. rust-libxml requires native 
+## dependencies on the your local machine to run. 
+##
+## To run the benchmarks with the libxml feature on, first install the required
+## dependencies outlined in https://github.com/kwarc/rust-libxml/
+## You can run the benchmarks with the libxml feature on with:
+##
+## ```
+## $ cargo bench --features=libxml
+## ```
+libxml = ["dep:libxml"]
+
 [dependencies]
 bencher = "0.1"
 minidom = "0.12"
@@ -13,7 +26,7 @@ sxd-document = "0.3"
 xml-rs = "0.8"
 xmlparser = "0.13"
 xmltree = "0.10"
-libxml = "0.3.1"
+libxml = { version = "0.3.1", optional = true }
 
 [[bench]]
 name = "benchmark"
