@@ -147,9 +147,7 @@ You can try running the benchmarks yourself by running `cargo bench` in the `ben
 
 - Since all libraries have a different XML support, benchmarking is a bit pointless.
 - Tree crates may use different *xml-rs* crate versions.
-- We do not bench the libxml2, because `xmlReadFile()` will parse only an XML structure,
-  without attributes normalization and stuff. So it's hard to compare.
-  And we have to use a separate benchmark utility.
+- We bench *libxml2* using the *[rust-libxml]* wrapper crate 
 - *quick-xml* is faster than *xmlparser* because it's more forgiving for the input,
   while *xmlparser* is very strict and does a lot of checks, which are expensive.
   So performance difference is mainly due to validation.
@@ -157,6 +155,7 @@ You can try running the benchmarks yourself by running `cargo bench` in the `ben
 [xml-rs]: https://crates.io/crates/xml-rs
 [quick-xml]: https://crates.io/crates/quick-xml
 [xmlparser]: https://crates.io/crates/xmlparser
+[rust-libxml]: https://github.com/KWARC/rust-libxml
 
 ## Safety
 
