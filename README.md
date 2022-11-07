@@ -88,20 +88,23 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 ### Parsing
 
 ```text
-test large_roxmltree     ... bench:   3,123,941 ns/iter (+/- 19,992)
-test large_minidom       ... bench:   4,969,218 ns/iter (+/- 163,727)
-test large_sdx_document  ... bench:   7,266,856 ns/iter (+/- 26,998)
-test large_xmltree       ... bench:  21,354,608 ns/iter (+/- 136,311)
+test large_roxmltree     ... bench:   1,553,308 ns/iter (+/- 58,306)
+test large_libxml        ... bench:   1,933,786 ns/iter (+/- 58,435)
+test large_sdx_document  ... bench:   3,469,016 ns/iter (+/- 227,326)
+test large_minidom       ... bench:   3,532,325 ns/iter (+/- 108,046)
+test large_xmltree       ... bench:  12,009,212 ns/iter (+/- 749,100)
 
-test medium_roxmltree    ... bench:     547,522 ns/iter (+/- 5,956)
-test medium_minidom      ... bench:   1,223,620 ns/iter (+/- 16,180)
-test medium_sdx_document ... bench:   2,470,063 ns/iter (+/- 24,159)
-test medium_xmltree      ... bench:   8,083,860 ns/iter (+/- 25,363)
+test medium_roxmltree    ... bench:     419,176 ns/iter (+/- 18,119)
+test medium_libxml       ... bench:     692,290 ns/iter (+/- 155,278)
+test medium_minidom      ... bench:     781,737 ns/iter (+/- 33,125)
+test medium_sdx_document ... bench:   1,237,014 ns/iter (+/- 39,868)
+test medium_xmltree      ... bench:   3,898,475 ns/iter (+/- 213,596)
 
-test tiny_roxmltree      ... bench:       4,170 ns/iter (+/- 41)
-test tiny_minidom        ... bench:       7,495 ns/iter (+/- 81)
-test tiny_sdx_document   ... bench:      17,411 ns/iter (+/- 203)
-test tiny_xmltree        ... bench:      29,522 ns/iter (+/- 223)
+test tiny_roxmltree      ... bench:       2,165 ns/iter (+/- 25)
+test tiny_minidom        ... bench:       5,645 ns/iter (+/- 82)
+test tiny_libxml         ... bench:       6,446 ns/iter (+/- 163)
+test tiny_sdx_document   ... bench:       8,678 ns/iter (+/- 739)
+test tiny_xmltree        ... bench:      15,711 ns/iter (+/- 278)
 ```
 
 *roxmltree* uses [xmlparser] internally,
@@ -111,29 +114,29 @@ and *minidom* uses [quick-xml].
 Here is a comparison between *xmlparser*, *xml-rs* and *quick-xml*:
 
 ```text
-test large_quick_xml     ... bench:   1,286,273 ns/iter (+/- 27,174)
-test large_xmlparser     ... bench:   1,742,202 ns/iter (+/- 11,616)
-test large_xmlrs         ... bench:  19,615,797 ns/iter (+/- 105,848)
+test large_xmlparser     ... bench:     732,620 ns/iter (+/- 6,615)
+test large_quick_xml     ... bench:     953,197 ns/iter (+/- 42,547)
+test large_xmlrs         ... bench:   9,932,179 ns/iter (+/- 271,766)
 
-test medium_quick_xml    ... bench:     248,169 ns/iter (+/- 3,885)
-test medium_xmlparser    ... bench:     386,658 ns/iter (+/- 1,721)
-test medium_xmlrs        ... bench:   7,387,753 ns/iter (+/- 18,668)
+test medium_quick_xml    ... bench:     222,990 ns/iter (+/- 21,897)
+test medium_xmlparser    ... bench:     252,363 ns/iter (+/- 2,298)
+test medium_xmlrs        ... bench:   3,617,399 ns/iter (+/- 91,085)
 
-test tiny_quick_xml      ... bench:       2,382 ns/iter (+/- 29)
-test tiny_xmlparser      ... bench:       2,788 ns/iter (+/- 20)
-test tiny_xmlrs          ... bench:      27,619 ns/iter (+/- 262)
+test tiny_xmlparser      ... bench:       1,040 ns/iter (+/- 7)
+test tiny_quick_xml      ... bench:       1,634 ns/iter (+/- 25)
+test tiny_xmlrs          ... bench:      14,095 ns/iter (+/- 217)
 ```
 
 ### Iteration
 
 ```text
-test xmltree_iter_descendants_expensive     ... bench:     436,684 ns/iter (+/- 7,851)
-test roxmltree_iter_descendants_expensive   ... bench:     470,459 ns/iter (+/- 6,233)
-test minidom_iter_descendants_expensive     ... bench:     785,847 ns/iter (+/- 51,495)
+test xmltree_iter_descendants_expensive     ... bench:     343,790 ns/iter (+/- 2,767)
+test roxmltree_iter_descendants_expensive   ... bench:     562,800 ns/iter (+/- 7,487)
+test minidom_iter_descendants_expensive     ... bench:     662,709 ns/iter (+/- 2,380)
 
-test roxmltree_iter_descendants_inexpensive ... bench:      36,759 ns/iter (+/- 684)
-test xmltree_iter_descendants_inexpensive   ... bench:     168,541 ns/iter (+/- 1,885)
-test minidom_iter_descendants_inexpensive   ... bench:     215,615 ns/iter (+/- 38,101)
+test roxmltree_iter_descendants_inexpensive ... bench:      25,648 ns/iter (+/- 949)
+test xmltree_iter_descendants_inexpensive   ... bench:      76,779 ns/iter (+/- 1,026)
+test minidom_iter_descendants_inexpensive   ... bench:     114,691 ns/iter (+/- 1,803)
 ```
 
 Where expensive refers to the matching done on each element. In these
@@ -143,11 +146,12 @@ particular name.
 
 ### Notes
 
+The benchmarks were taken on a 2021 MacBook Pro with the Apple M1 Pro chip with 16GB of RAM.
 You can try running the benchmarks yourself by running `cargo bench` in the `benches` dir.
 
 - Since all libraries have a different XML support, benchmarking is a bit pointless.
 - Tree crates may use different *xml-rs* crate versions.
-- We bench *libxml2* using the *[rust-libxml]* wrapper crate 
+- We bench *libxml2* using the *[rust-libxml]* wrapper crate
 - *quick-xml* is faster than *xmlparser* because it's more forgiving for the input,
   while *xmlparser* is very strict and does a lot of checks, which are expensive.
   So performance difference is mainly due to validation.
