@@ -1,6 +1,7 @@
 use alloc::borrow::{Cow, ToOwned};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use alloc::rc::Rc;
 
 use xmlparser::{
     self,
@@ -468,6 +469,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         nodes: Vec::with_capacity(nodes_capacity),
         attrs: Vec::with_capacity(attributes_capacity),
         namespaces: Namespaces(Vec::new()),
+        names: Vec::new(),
     };
 
     // Add a root node.
@@ -497,6 +499,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     doc.nodes.shrink_to_fit();
     doc.attrs.shrink_to_fit();
     doc.namespaces.0.shrink_to_fit();
+    doc.names.shrink_to_fit();
 
     Ok(doc)
 }
@@ -682,12 +685,14 @@ fn process_element<'input>(
     match end_token {
         xmlparser::ElementEnd::Empty => {
             let tag_ns_uri = get_ns_by_prefix(doc, namespaces, tag_name.prefix)?;
+            let dedup_tag_name = resolve_name(ExpandedNameOwned {
+                ns: tag_ns_uri,
+                name: tag_name.name.as_str(),
+            }, doc);
+
             let new_element_id = doc.append(*parent_id,
                 NodeKind::Element {
-                    tag_name: ExpandedNameOwned {
-                        ns: tag_ns_uri,
-                        name: tag_name.name.as_str(),
-                    },
+                    tag_name: dedup_tag_name,
                     attributes,
                     namespaces,
                 },
@@ -732,12 +737,14 @@ fn process_element<'input>(
         }
         xmlparser::ElementEnd::Open => {
             let tag_ns_uri = get_ns_by_prefix(doc, namespaces, tag_name.prefix)?;
+            let dedup_tag_name = resolve_name(ExpandedNameOwned {
+                ns: tag_ns_uri,
+                name: tag_name.name.as_str(),
+            }, doc);
+
             *parent_id = doc.append(*parent_id,
                 NodeKind::Element {
-                    tag_name: ExpandedNameOwned {
-                        ns: tag_ns_uri,
-                        name: tag_name.name.as_str(),
-                    },
+                    tag_name: dedup_tag_name,
                     attributes,
                     namespaces,
                 },
@@ -799,13 +806,15 @@ fn resolve_attributes<'input>(
         let attr_name = ExpandedNameOwned { ns, name: attr.local.as_str() };
 
         // Check for duplicated attributes.
-        if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
+        if doc.attrs[start_idx..].iter().any(|attr| attr.name.as_ref() == &attr_name) {
             let pos = err_pos_from_qname(doc.text, attr.prefix, attr.local);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
+        let dedup_attr_name = resolve_name(attr_name, doc);
+
         doc.attrs.push(Attribute {
-            name: attr_name,
+            name: dedup_attr_name,
             // Takes a value from a slice without consuming the slice.
             value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
             #[cfg(feature = "token-ranges")]
@@ -816,6 +825,20 @@ fn resolve_attributes<'input>(
     }
 
     Ok((start_idx..doc.attrs.len()).into())
+}
+
+fn resolve_name<'input>(
+    name: ExpandedNameOwned<'input>,
+    doc: &mut Document<'input>,
+) -> Rc<ExpandedNameOwned<'input>> {
+    match doc.names.binary_search_by(|probe| ExpandedNameOwned::cmp(probe, &name)) {
+        Ok(idx) => doc.names[idx].clone(),
+        Err(idx) => {
+            let name = Rc::new(name);
+            doc.names.insert(idx, name.clone());
+            name
+        }
+    }
 }
 
 fn process_text<'input>(

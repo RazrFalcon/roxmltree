@@ -30,6 +30,7 @@ extern crate std;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use alloc::rc::Rc;
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
@@ -81,6 +82,8 @@ pub struct Document<'input> {
     nodes: Vec<NodeData<'input>>,
     attrs: Vec<Attribute<'input>>,
     namespaces: Namespaces<'input>,
+    /// Sorted list of deduplicated tag and attribute names
+    names: Vec<Rc<ExpandedNameOwned<'input>>>,
 }
 
 impl<'input> Document<'input> {
@@ -334,7 +337,7 @@ impl ShortRange {
 ///    when an owned string had to be constructed thereby
 ///    keeping only the amount of memory around that is
 ///    required to store the string.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum CowStr<'a> {
     Borrowed(&'a str),
     Owned(Box<str>),
@@ -415,7 +418,7 @@ impl From<usize> for NodeId {
 enum NodeKind<'input> {
     Root,
     Element {
-        tag_name: ExpandedNameOwned<'input>,
+        tag_name: Rc<ExpandedNameOwned<'input>>,
         attributes: ShortRange,
         namespaces: ShortRange,
     },
@@ -439,7 +442,7 @@ struct NodeData<'input> {
 /// An attribute.
 #[derive(Clone)]
 pub struct Attribute<'input> {
-    name: ExpandedNameOwned<'input>,
+    name: Rc<ExpandedNameOwned<'input>>,
     value: Cow<'input, str>,
     #[cfg(feature = "token-ranges")]
     range: ShortRange,
@@ -624,7 +627,7 @@ impl<'input> Deref for Namespaces<'input> {
 }
 
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct ExpandedNameOwned<'input> {
     ns: Option<CowStr<'input>>,
     name: &'input str,
@@ -857,7 +860,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn tag_name(&self) -> ExpandedName<'a, 'input> {
         match self.d.kind {
-            NodeKind::Element { ref tag_name, .. } => tag_name.as_ref(),
+            NodeKind::Element { ref tag_name, .. } => tag_name.as_ref().as_ref(),
             _ => "".into()
         }
     }
@@ -884,7 +887,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         match self.d.kind {
             NodeKind::Element { ref tag_name, .. } => {
                 match name.namespace() {
-                    Some(_) => tag_name.as_ref() == name,
+                    Some(_) => tag_name.as_ref().as_ref() == name,
                     None => tag_name.name == name.name,
                 }
             }
@@ -976,7 +979,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().iter().find(|a| a.name.as_ref() == name).map(|a| a.value.as_ref())
+        self.attributes().iter().find(|a| a.name.as_ref().as_ref() == name).map(|a| a.value.as_ref())
     }
 
     /// Returns element's attribute object.
@@ -989,7 +992,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().iter().find(|a| a.name.as_ref() == name)
+        self.attributes().iter().find(|a| a.name.as_ref().as_ref() == name)
     }
 
     /// Checks that element has a specified attribute.
@@ -1012,7 +1015,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().iter().any(|a| a.name.as_ref() == name)
+        self.attributes().iter().any(|a| a.name.as_ref().as_ref() == name)
     }
 
     /// Returns element's attributes.
