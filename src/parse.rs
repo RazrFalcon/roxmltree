@@ -1,4 +1,4 @@
-use alloc::borrow::{Cow, Borrow, ToOwned};
+use alloc::borrow::{Cow, ToOwned};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -284,7 +284,7 @@ impl<'input> Document<'input> {
         parent_id: NodeId,
         kind: NodeKind<'input>,
         range: ShortRange,
-        pd: &mut ParserData,
+        awaiting_subtree: &mut Vec<NodeId>,
     ) -> NodeId {
         #[cfg(not(feature = "token-ranges"))]
         let _ = range;
@@ -310,13 +310,13 @@ impl<'input> Document<'input> {
         self.nodes[new_child_id.get_usize()].prev_sibling = last_child_id;
         self.nodes[parent_id.get_usize()].last_child = Some(new_child_id);
 
-        pd.awaiting_subtree.iter().for_each(|id| {
+        awaiting_subtree.iter().for_each(|id| {
             self.nodes[id.get_usize()].next_subtree = Some(new_child_id);
         });
-        pd.awaiting_subtree.clear();
+        awaiting_subtree.clear();
 
         if !appending_element {
-            pd.awaiting_subtree.push(NodeId::from(self.nodes.len() - 1));
+            awaiting_subtree.push(NodeId::from(self.nodes.len() - 1));
         }
 
         new_child_id
@@ -518,17 +518,16 @@ fn process_tokens<'input>(
                     target: target.as_str(),
                     value: content.map(|v| v.as_str()),
                 });
-                doc.append(parent_id, pi, span.range().into(), pd);
+                doc.append(parent_id, pi, span.range().into(), &mut pd.awaiting_subtree);
             }
             xmlparser::Token::Comment { text, span } => {
-                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range().into(), pd);
+                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range().into(), &mut pd.awaiting_subtree);
             }
             xmlparser::Token::Text { text } => {
                 process_text(text, parent_id, loop_detector, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
-                let cow_str = Cow::Borrowed(text.as_str());
-                append_text(cow_str, parent_id, span.range().into(), pd.after_text, doc, pd);
+                append_text(BorrowedText::Input(text.as_str()), parent_id, span.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
                 pd.after_text = true;
             }
             xmlparser::Token::ElementStart { prefix, local, span } => {
@@ -693,7 +692,7 @@ fn process_element<'input>(
                     namespaces,
                 },
                 (tag_name.span.start()..token_span.end()).into(),
-                pd
+                &mut pd.awaiting_subtree,
             );
             pd.awaiting_subtree.push(new_element_id);
         }
@@ -743,7 +742,7 @@ fn process_element<'input>(
                     namespaces,
                 },
                 (tag_name.span.start()..token_span.end()).into(),
-                pd
+                &mut pd.awaiting_subtree,
             );
             pd.parent_prefixes.push(tag_name.prefix.as_str());
         }
@@ -828,7 +827,7 @@ fn process_text<'input>(
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
-        append_text(Cow::Borrowed(text.as_str()), parent_id, text.range().into(), pd.after_text, doc, pd);
+        append_text(BorrowedText::Input(text.as_str()), parent_id, text.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
         pd.after_text = true;
         return Ok(());
     }
@@ -863,8 +862,7 @@ fn process_text<'input>(
                 is_as_is = false;
 
                 if !pd.buffer.is_empty() {
-                    let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
-                    append_text(cow_text, parent_id, text.range().into(), pd.after_text, doc, pd);
+                    append_text(BorrowedText::Temp(pd.buffer.to_str()), parent_id, text.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
                     pd.after_text = true;
                     pd.buffer.clear();
                 }
@@ -883,8 +881,7 @@ fn process_text<'input>(
     }
 
     if !pd.buffer.is_empty() {
-        let cow_text = Cow::Owned(pd.buffer.to_str().to_owned());
-        append_text(cow_text, parent_id, text.range().into(), pd.after_text, doc, pd);
+        append_text(BorrowedText::Temp(pd.buffer.to_str()), parent_id, text.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
         pd.after_text = true;
         pd.buffer.clear();
     }
@@ -892,30 +889,47 @@ fn process_text<'input>(
     Ok(())
 }
 
-fn append_text<'input>(
-    text: Cow<'input, str>,
+enum BorrowedText<'input, 'temp> {
+    Input(&'input str),
+    Temp(&'temp str),
+}
+
+fn append_text<'input, 'temp>(
+    text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
     range: ShortRange,
     after_text: bool,
     doc: &mut Document<'input>,
-    pd: &mut ParserData<'input>
+    awaiting_subtree: &mut Vec<NodeId>
 ) {
     if after_text {
         // Prepend to a previous text node.
-        if let Some(node) = doc.nodes.iter_mut().last() {
+        if let Some(node) = doc.nodes.last_mut() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
-                match *prev_text {
-                    Cow::Borrowed(..) => {
-                        *prev_text = Cow::Owned((*prev_text).to_string() + text.borrow());
+                let text = match text {
+                    BorrowedText::Input(text) => text,
+                    BorrowedText::Temp(text) => text,
+                };
+
+                match prev_text {
+                    Cow::Borrowed(s) => {
+                        let mut concat_text = String::with_capacity(s.len() + text.len());
+                        concat_text.push_str(s);
+                        concat_text.push_str(text);
+                        *prev_text = Cow::Owned(concat_text);
                     }
                     Cow::Owned(ref mut s) => {
-                        s.push_str(text.borrow());
+                        s.push_str(text);
                     }
                 }
             }
         }
     } else {
-        doc.append(parent_id, NodeKind::Text(text), range, pd);
+        let text = match text {
+            BorrowedText::Input(text) => Cow::Borrowed(text),
+            BorrowedText::Temp(text) => Cow::Owned(text.to_owned()),
+        };
+        doc.append(parent_id, NodeKind::Text(text), range, awaiting_subtree);
     }
 }
 
