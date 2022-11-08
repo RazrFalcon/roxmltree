@@ -433,7 +433,7 @@ impl From<usize> for NodeId {
 enum NodeKind<'input> {
     Root,
     Element {
-        tag_name: ExpandedNameOwned<'input>,
+        tag_name: NamespacedName<'input>,
         attributes: ShortRange,
         namespaces: ShortRange,
     },
@@ -671,6 +671,26 @@ impl<'input> fmt::Debug for ExpandedNameOwned<'input> {
     }
 }
 
+#[derive(Copy, Clone, PartialEq)]
+struct NamespacedName<'input> {
+    namespace_idx: Option<u32>,
+    local_name: &'input str
+}
+
+impl<'input> NamespacedName<'input> {
+    #[inline]
+    fn namespace<'doc>(&self, doc: &'doc Document<'input>) -> Option<&'doc Namespace<'input>> {
+        self.namespace_idx.map(|idx| &doc.namespaces[idx as usize])
+    }
+
+    #[inline]
+    fn as_expanded_name<'a, 'doc>(&'a self, doc: &'doc Document<'input>) -> ExpandedName<'doc, 'input> {
+        ExpandedName {
+            uri: self.namespace(doc).map(Namespace::uri),
+            name: self.local_name,
+        }
+    }
+}
 
 /// An expanded name.
 ///
@@ -879,7 +899,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn tag_name(&self) -> ExpandedName<'a, 'input> {
         match self.d.kind {
-            NodeKind::Element { ref tag_name, .. } => tag_name.as_ref(),
+            NodeKind::Element { ref tag_name, .. } => tag_name.as_expanded_name(self.doc),
             _ => "".into()
         }
     }
@@ -906,8 +926,8 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         match self.d.kind {
             NodeKind::Element { ref tag_name, .. } => {
                 match name.namespace() {
-                    Some(_) => tag_name.as_ref() == name,
-                    None => tag_name.name == name.name,
+                    Some(_) => tag_name.as_expanded_name(self.doc) == name,
+                    None => tag_name.local_name == name.name,
                 }
             }
             _ => false,
