@@ -36,6 +36,7 @@ use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
 use core::ops::Deref;
 use core::slice::Iter as SliceIter;
+use indexmap::IndexSet;
 
 pub use xmlparser::TextPos;
 
@@ -82,6 +83,7 @@ pub struct Document<'input> {
     nodes: Vec<NodeData<'input>>,
     attrs: Vec<AttributeOwned<'input>>,
     namespaces: Namespaces<'input>,
+    names: IndexSet<ExpandedNameOwned<'input>>,
 }
 
 impl<'input> Document<'input> {
@@ -335,7 +337,7 @@ impl ShortRange {
 ///    when an owned string had to be constructed thereby
 ///    keeping only the amount of memory around that is
 ///    required to store the string.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 enum CowStr<'a> {
     Borrowed(&'a str),
     Owned(Box<str>),
@@ -438,7 +440,7 @@ struct NodeData<'input> {
 
 #[derive(Clone)]
 struct AttributeOwned<'input> {
-    name: ExpandedNameOwned<'input>,
+    name: usize,
     value: Cow<'input, str>,
     #[cfg(feature = "token-ranges")]
     range: ShortRange,
@@ -450,6 +452,7 @@ struct AttributeOwned<'input> {
 #[derive(Clone)]
 pub struct Attributes<'a, 'input> {
     attrs: SliceIter<'a, AttributeOwned<'input>>,
+    names: &'a IndexSet<ExpandedNameOwned<'input>>,
 }
 
 impl<'a, 'input> Iterator for Attributes<'a, 'input> {
@@ -457,7 +460,7 @@ impl<'a, 'input> Iterator for Attributes<'a, 'input> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.attrs.next().map(|attr| Attribute {
-            name: attr.name.as_ref(),
+            name: self.names[attr.name].as_ref(),
             value: attr.value.as_ref(),
             #[cfg(feature = "token-ranges")]
             range: attr.range,
@@ -672,7 +675,7 @@ impl<'input> Deref for Namespaces<'input> {
 }
 
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 struct ExpandedNameOwned<'input> {
     ns: Option<CowStr<'input>>,
     name: &'input str,
@@ -1081,7 +1084,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
             _ => &[],
         };
 
-        Attributes { attrs: attrs.iter() }
+        Attributes { attrs: attrs.iter(), names: &self.doc.names }
     }
 
     /// Returns element's namespaces.

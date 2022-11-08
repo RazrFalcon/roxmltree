@@ -468,6 +468,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         nodes: Vec::with_capacity(nodes_capacity),
         attrs: Vec::with_capacity(attributes_capacity),
         namespaces: Namespaces(Vec::new()),
+        names: Default::default(),
     };
 
     // Add a root node.
@@ -799,13 +800,13 @@ fn resolve_attributes<'input>(
         let attr_name = ExpandedNameOwned { ns, name: attr.local.as_str() };
 
         // Check for duplicated attributes.
-        if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
+        if doc.attrs[start_idx..].iter().any(|attr| doc.names[attr.name] == attr_name) {
             let pos = err_pos_from_qname(doc.text, attr.prefix, attr.local);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
         doc.attrs.push(AttributeOwned {
-            name: attr_name,
+            name: doc.names.insert_full(attr_name).0,
             // Takes a value from a slice without consuming the slice.
             value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
             #[cfg(feature = "token-ranges")]

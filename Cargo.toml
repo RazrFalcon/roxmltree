@@ -17,8 +17,9 @@ exclude = ["test-apps", "testing-tools"]
 
 [dependencies]
 xmlparser = "0.13.5"
+indexmap = "1.6.2"
 
 [features]
 default = ["std", "token-ranges"]
-std = []
+std = ["indexmap/std"]
 token-ranges = []
