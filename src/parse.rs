@@ -23,6 +23,7 @@ use crate::{
     PI,
     ShortRange,
     CowStr,
+    NamespacedName,
 };
 
 
@@ -679,12 +680,12 @@ fn process_element<'input>(
 
     match end_token {
         xmlparser::ElementEnd::Empty => {
-            let tag_ns_uri = get_ns_by_prefix(doc, namespaces, tag_name.prefix)?;
+            let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
             let new_element_id = doc.append(*parent_id,
                 NodeKind::Element {
-                    tag_name: ExpandedNameOwned {
-                        ns: tag_ns_uri,
-                        name: tag_name.name.as_str(),
+                    tag_name: NamespacedName {
+                        namespace_idx: tag_ns_idx,
+                        local_name: tag_name.name.as_str(),
                     },
                     attributes,
                     namespaces,
@@ -710,9 +711,9 @@ fn process_element<'input>(
             }
 
             if let NodeKind::Element { ref tag_name, .. } = parent_node.kind {
-                if prefix != parent_prefix || local != tag_name.name {
+                if prefix != parent_prefix || local != tag_name.local_name {
                     return Err(Error::UnexpectedCloseTag {
-                        expected: gen_qname_string(parent_prefix, tag_name.name),
+                        expected: gen_qname_string(parent_prefix, tag_name.local_name),
                         actual: gen_qname_string(prefix, local),
                         pos: err_pos_from_span(doc.text, token_span),
                     });
@@ -729,12 +730,12 @@ fn process_element<'input>(
             }
         }
         xmlparser::ElementEnd::Open => {
-            let tag_ns_uri = get_ns_by_prefix(doc, namespaces, tag_name.prefix)?;
+            let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
             *parent_id = doc.append(*parent_id,
                 NodeKind::Element {
-                    tag_name: ExpandedNameOwned {
-                        ns: tag_ns_uri,
-                        name: tag_name.name.as_str(),
+                    tag_name: NamespacedName {
+                        namespace_idx: tag_ns_idx,
+                        local_name: tag_name.name.as_str(),
                     },
                     attributes,
                     namespaces,
@@ -1109,6 +1110,43 @@ fn get_ns_by_prefix<'input>(
             }
         }
     }
+}
+
+fn get_ns_idx_by_prefix<'input>(
+    doc: &Document<'input>,
+    range: ShortRange,
+    prefix: StrSpan,
+) -> Result<Option<u32>, Error> {
+    // Prefix CAN be empty when the default namespace was defined.
+    //
+    // Example:
+    // <e xmlns='http://www.w3.org'/>
+    let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
+
+    range.to_urange().into_iter()
+        .map(|idx| (idx, &doc.namespaces[idx]))
+        .find(|(_, ns)| ns.name == prefix_opt)
+        .map_or_else(
+            || {
+                if !prefix.is_empty() {
+                    // If an URI was not found and prefix IS NOT empty than
+                    // we have an unknown namespace.
+                    //
+                    // Example:
+                    // <e random:a='b'/>
+                    let pos = err_pos_from_span(doc.text, prefix);
+                    Err(Error::UnknownNamespace(prefix.as_str().to_string(), pos))
+                } else {
+                    // If an URI was not found and prefix IS empty than
+                    // an element or an attribute doesn't have a namespace.
+                    //
+                    // Example:
+                    // <e a='b'/>
+                    Ok(None)
+                }
+            },
+            |(idx, _)| Ok(Some(idx as u32)),
+        )
 }
 
 #[inline]
