@@ -216,8 +216,8 @@ impl<'input> fmt::Debug for Document<'input> {
 
         fn print_into_iter<
             T: fmt::Debug,
-            E: Iterator<Item=T> + ExactSizeIterator,
-            I: IntoIterator<IntoIter=E>
+            E: ExactSizeIterator<Item=T>,
+            I: IntoIterator<Item=T, IntoIter=E>
         >(
             prefix: &str,
             data: I,
@@ -1299,11 +1299,13 @@ impl<'a, 'input> Iterator for Attributes<'a, 'input> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        (self.current < self.until).then(|| {
+        if self.current < self.until {
             let next = self.doc.get_attribute(self.current);
             self.current += 1;
-            next
-        })
+            Some(next)
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -1322,11 +1324,13 @@ impl<'a, 'input> Iterator for Attributes<'a, 'input> {
 impl<'a, 'input> DoubleEndedIterator for Attributes<'a, 'input> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        (self.current < self.until).then(|| {
+        if self.current < self.until {
             let next = self.doc.get_attribute(self.until);
             self.until -= 1;
-            next
-        })
+            Some(next)
+        } else {
+            None
+        }
     }
 }
 
