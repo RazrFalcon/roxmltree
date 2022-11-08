@@ -28,7 +28,6 @@ extern crate alloc;
 extern crate std;
 
 use alloc::borrow::Cow;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
@@ -44,9 +43,13 @@ pub use crate::parse::*;
 
 /// The <http://www.w3.org/XML/1998/namespace> URI.
 pub const NS_XML_URI: &str = "http://www.w3.org/XML/1998/namespace";
+/// The prefix 'xml', which is by definition bound to NS_XML_URI
+const NS_XML_PREFIX: &str = "xml";
 
 /// The <http://www.w3.org/2000/xmlns/> URI.
 pub const NS_XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
+/// The string 'xmlns', which is used to declare new namespaces
+const XMLNS: &str = "xmlns";
 
 
 type Range = core::ops::Range<usize>;
@@ -124,6 +127,7 @@ impl<'input> Document<'input> {
 
     fn get_attribute<'a>(&'a self, idx: usize) -> Attribute<'a, 'input> {
         Attribute {
+            doc: self,
             d: &self.attrs[idx],
         }
     }
@@ -326,53 +330,6 @@ impl ShortRange {
     }
 }
 
-/// A custom variant of `Cow<'a, str>` that
-/// keeps a niche available and sheds excess capacity.
-///
-/// This variant stores `Box<str>` instead of `String`
-/// which is more appropriate for a space-conscious
-/// read-only data structure as
-///
-/// 1. it keeps a niche available so that for example
-///
-///    ```rust,ignore
-///    assert_eq!(
-///        size_of::<CowStr<'static>>(),
-///        size_of::<Option<CowStr<'static>>>(),
-///    );
-///    ```
-///
-///    holds and
-///
-/// 2. it sheds any excess capacity that was allocated
-///    when an owned string had to be constructed thereby
-///    keeping only the amount of memory around that is
-///    required to store the string.
-#[derive(Clone, PartialEq)]
-enum CowStr<'a> {
-    Borrowed(&'a str),
-    Owned(Box<str>),
-}
-
-impl<'a> From<Cow<'a, str>> for CowStr<'a> {
-    fn from(v: Cow<'a, str>) -> CowStr<'a> {
-        match v {
-            Cow::Borrowed(v) => CowStr::Borrowed(v),
-            Cow::Owned(v) => CowStr::Owned(v.into()),
-        }
-    }
-}
-
-impl<'a> AsRef<str> for CowStr<'a> {
-    fn as_ref(&self) -> &str {
-        match self {
-            CowStr::Borrowed(v) => v,
-            CowStr::Owned(ref v) => v,
-        }
-    }
-}
-
-
 /// A node ID stored as `u32`.
 ///
 /// An index into a `Tree`-internal `Vec`.
@@ -451,7 +408,7 @@ struct NodeData<'input> {
 
 #[derive(Clone)]
 struct AttributeData<'input> {
-    name: ExpandedNameOwned<'input>,
+    name: NamespacedName<'input>,
     value: Cow<'input, str>,
     #[cfg(feature = "token-ranges")]
     range: ShortRange,
@@ -462,6 +419,7 @@ struct AttributeData<'input> {
 /// An attribute.
 #[derive(Copy, Clone)]
 pub struct Attribute<'doc, 'input: 'doc> {
+    doc: &'doc Document<'input>,
     d: &'doc AttributeData<'input>,
 }
 
@@ -480,7 +438,7 @@ impl<'doc, 'input> Attribute<'doc, 'input> {
     /// ```
     #[inline]
     pub fn namespace(&self) -> Option<&'doc str> {
-        self.d.name.ns.as_ref().map(CowStr::as_ref)
+        self.d.name.namespace(self.doc).map(Namespace::uri)
     }
 
     /// Returns attribute's name.
@@ -497,7 +455,7 @@ impl<'doc, 'input> Attribute<'doc, 'input> {
     /// ```
     #[inline]
     pub fn name(&self) -> &'doc str {
-        self.d.name.name
+        self.d.name.local_name
     }
 
     /// Returns attribute's value.
@@ -553,14 +511,14 @@ impl<'doc, 'input> Attribute<'doc, 'input> {
 impl PartialEq for Attribute<'_, '_> {
     #[inline]
     fn eq(&self, other: &Attribute<'_, '_>) -> bool {
-        self.d.name == other.d.name && self.d.value == other.d.value
+        self.d.name.as_expanded_name(self.doc) == other.d.name.as_expanded_name(self.doc) && self.d.value == other.d.value
     }
 }
 
 impl fmt::Debug for Attribute<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "Attribute {{ name: {:?}, value: {:?} }}",
-               self.d.name, self.d.value)
+               self.d.name.as_expanded_name(self.doc), self.d.value)
     }
 }
 
@@ -641,33 +599,7 @@ impl<'input> Deref for Namespaces<'input> {
     }
 }
 
-
-#[derive(Clone, PartialEq)]
-struct ExpandedNameOwned<'input> {
-    ns: Option<CowStr<'input>>,
-    name: &'input str,
-}
-
-impl<'a, 'input> ExpandedNameOwned<'input> {
-    #[inline]
-    fn as_ref(&'a self) -> ExpandedName<'a, 'input> {
-        ExpandedName {
-            uri: self.ns.as_ref().map(CowStr::as_ref),
-            name: self.name,
-        }
-    }
-}
-
-impl<'input> fmt::Debug for ExpandedNameOwned<'input> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self.ns {
-            Some(ref ns) => write!(f, "{{{}}}{}", ns.as_ref(), self.name),
-            None => write!(f, "{}", self.name),
-        }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone)]
 struct NamespacedName<'input> {
     namespace_idx: Option<u32>,
     local_name: &'input str
@@ -1023,7 +955,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         let name = name.into();
         self.attribute_data()
             .iter()
-            .find(|a| a.name.as_ref() == name)
+            .find(|a| a.name.as_expanded_name(self.doc) == name)
             .map(|a| a.value.as_ref())
     }
 
@@ -1037,7 +969,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().find(|a| a.d.name.as_ref() == name)
+        self.attributes().find(|a| a.d.name.as_expanded_name(self.doc) == name)
     }
 
     /// Checks that element has a specified attribute.
@@ -1062,7 +994,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         let name = name.into();
         self.attribute_data()
             .iter()
-            .any(|a| a.name.as_ref() == name)
+            .any(|a| a.name.as_expanded_name(self.doc) == name)
     }
 
     /// Returns element's attributes.
