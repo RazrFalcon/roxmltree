@@ -37,6 +37,7 @@ use core::num::NonZeroU32;
 use core::ops::Deref;
 use core::slice::Iter as SliceIter;
 use indexmap::IndexSet;
+use ahash::RandomState;
 
 pub use xmlparser::TextPos;
 
@@ -83,7 +84,7 @@ pub struct Document<'input> {
     nodes: Vec<NodeData<'input>>,
     attrs: Vec<AttributeOwned<'input>>,
     namespaces: Namespaces<'input>,
-    names: IndexSet<ExpandedNameOwned<'input>>,
+    names: IndexSet<ExpandedNameOwned<'input>, RandomState>,
 }
 
 impl<'input> Document<'input> {
@@ -452,7 +453,7 @@ struct AttributeOwned<'input> {
 #[derive(Clone)]
 pub struct Attributes<'a, 'input> {
     attrs: SliceIter<'a, AttributeOwned<'input>>,
-    names: &'a IndexSet<ExpandedNameOwned<'input>>,
+    names: &'a IndexSet<ExpandedNameOwned<'input>, RandomState>,
 }
 
 impl<'a, 'input> Iterator for Attributes<'a, 'input> {
