@@ -17,14 +17,12 @@ use crate::{
     XMLNS,
     AttributeData,
     Document,
-    ExpandedNameOwned,
     Namespaces,
     NodeData,
     NodeId,
     NodeKind,
     PI,
     ShortRange,
-    CowStr,
     NamespacedName,
 };
 
@@ -785,22 +783,23 @@ fn resolve_attributes<'input>(
     }
 
     for attr in &mut pd.tmp_attrs {
-        let ns = if attr.prefix.as_str() == NS_XML_PREFIX {
+        let namespace_idx = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
-            // http://www.w3.org/XML/1998/namespace.
-            Some(CowStr::Borrowed(NS_XML_URI))
+            // http://www.w3.org/XML/1998/namespace. This namespace is added
+            // to the document on creation and is always element 0.
+            Some(0)
         } else if attr.prefix.is_empty() {
             // 'The namespace name for an unprefixed attribute name
             // always has no value.'
             None
         } else {
-            get_ns_by_prefix(doc, namespaces, attr.prefix)?
+            get_ns_idx_by_prefix(doc, namespaces, attr.prefix)?
         };
 
-        let attr_name = ExpandedNameOwned { ns, name: attr.local.as_str() };
+        let attr_name = NamespacedName { namespace_idx, local_name: attr.local.as_str() };
 
         // Check for duplicated attributes.
-        if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
+        if doc.attrs[start_idx..].iter().any(|attr| attr.name.as_expanded_name(doc) == attr_name.as_expanded_name(doc)) {
             let pos = err_pos_from_qname(doc.text, attr.prefix, attr.local);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
@@ -1074,44 +1073,6 @@ fn _normalize_attribute(
     }
 
     Ok(())
-}
-
-fn get_ns_by_prefix<'input>(
-    doc: &Document<'input>,
-    range: ShortRange,
-    prefix: StrSpan,
-) -> Result<Option<CowStr<'input>>, Error> {
-    // Prefix CAN be empty when the default namespace was defined.
-    //
-    // Example:
-    // <e xmlns='http://www.w3.org'/>
-    let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
-
-    let uri = doc.namespaces[range.to_urange()].iter()
-        .find(|ns| ns.name == prefix_opt)
-        .map(|ns| ns.uri.clone());
-
-    match uri {
-        Some(v) => Ok(Some(v.into())),
-        None => {
-            if !prefix.is_empty() {
-                // If an URI was not found and prefix IS NOT empty than
-                // we have an unknown namespace.
-                //
-                // Example:
-                // <e random:a='b'/>
-                let pos = err_pos_from_span(doc.text, prefix);
-                Err(Error::UnknownNamespace(prefix.as_str().to_string(), pos))
-            } else {
-                // If an URI was not found and prefix IS empty than
-                // an element or an attribute doesn't have a namespace.
-                //
-                // Example:
-                // <e a='b'/>
-                Ok(None)
-            }
-        }
-    }
 }
 
 fn get_ns_idx_by_prefix<'input>(
