@@ -13,7 +13,7 @@ use xmlparser::{
 use crate::{
     NS_XML_URI,
     NS_XMLNS_URI,
-    Attribute,
+    AttributeOwned,
     Document,
     ExpandedNameOwned,
     Namespaces,
@@ -804,7 +804,7 @@ fn resolve_attributes<'input>(
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
-        doc.attrs.push(Attribute {
+        doc.attrs.push(AttributeOwned {
             name: attr_name,
             // Takes a value from a slice without consuming the slice.
             value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
