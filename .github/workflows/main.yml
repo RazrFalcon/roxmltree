@@ -24,6 +24,10 @@ jobs:
         toolchain: ${{ matrix.rust }}
         override: true
 
+    - name: Adjust dependency versions
+      run: cp Cargo.lock.msrv Cargo.lock
+      if: matrix.rust == '1.36.0'
+
     - name: Run tests
       run: cargo test
 
