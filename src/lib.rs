@@ -79,7 +79,7 @@ pub struct Document<'input> {
     /// Required for `text_pos_at` methods.
     text: &'input str,
     nodes: Vec<NodeData<'input>>,
-    attrs: Vec<Attribute<'input>>,
+    attrs: Vec<AttributeData<'input>>,
     namespaces: Namespaces<'input>,
 }
 
@@ -120,6 +120,12 @@ impl<'input> Document<'input> {
     #[inline]
     pub fn get_node<'a>(&'a self, id: NodeId) -> Option<Node<'a, 'input>> {
         self.nodes.get(id.get_usize()).map(|data| Node { id, d: data, doc: self })
+    }
+
+    fn get_attribute<'a>(&'a self, idx: usize) -> Attribute<'a, 'input> {
+        Attribute {
+            d: &self.attrs[idx],
+        }
     }
 
     /// Returns the root element of the document.
@@ -204,10 +210,18 @@ impl<'input> fmt::Debug for Document<'input> {
             };
         }
 
-        fn print_vec<T: fmt::Debug>(prefix: &str, data: &[T], depth: usize, f: &mut fmt::Formatter)
-            -> Result<(), fmt::Error>
-        {
-            if data.is_empty() {
+        fn print_into_iter<
+            T: fmt::Debug,
+            E: Iterator<Item=T> + ExactSizeIterator,
+            I: IntoIterator<IntoIter=E>
+        >(
+            prefix: &str,
+            data: I,
+            depth: usize,
+            f: &mut fmt::Formatter,
+        ) -> Result<(), fmt::Error> {
+            let data = data.into_iter();
+            if data.len() == 0 {
                 return Ok(());
             }
 
@@ -227,8 +241,8 @@ impl<'input> fmt::Debug for Document<'input> {
                 if child.is_element() {
                     writeln_indented!(depth, f, "Element {{");
                     writeln_indented!(depth, f, "    tag_name: {:?}", child.tag_name());
-                    print_vec("attributes", child.attributes(), depth + 1, f)?;
-                    print_vec("namespaces", child.namespaces(), depth + 1, f)?;
+                    print_into_iter("attributes", child.attributes(), depth + 1, f)?;
+                    print_into_iter("namespaces", child.namespaces(), depth + 1, f)?;
 
                     if child.has_children() {
                         writeln_indented!(depth, f, "    children: [");
@@ -435,10 +449,8 @@ struct NodeData<'input> {
     range: ShortRange,
 }
 
-
-/// An attribute.
 #[derive(Clone)]
-pub struct Attribute<'input> {
+struct AttributeData<'input> {
     name: ExpandedNameOwned<'input>,
     value: Cow<'input, str>,
     #[cfg(feature = "token-ranges")]
@@ -447,7 +459,13 @@ pub struct Attribute<'input> {
     value_range: ShortRange,
 }
 
-impl<'input> Attribute<'input> {
+/// An attribute.
+#[derive(Copy, Clone)]
+pub struct Attribute<'doc, 'input: 'doc> {
+    d: &'doc AttributeData<'input>,
+}
+
+impl<'doc, 'input> Attribute<'doc, 'input> {
     /// Returns attribute's namespace URI.
     ///
     /// # Examples
@@ -457,12 +475,12 @@ impl<'input> Attribute<'input> {
     ///     "<e xmlns:n='http://www.w3.org' a='b' n:a='c'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().attributes()[0].namespace(), None);
-    /// assert_eq!(doc.root_element().attributes()[1].namespace(), Some("http://www.w3.org"));
+    /// assert_eq!(doc.root_element().attributes().nth(0).unwrap().namespace(), None);
+    /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().namespace(), Some("http://www.w3.org"));
     /// ```
     #[inline]
-    pub fn namespace(&self) -> Option<&str> {
-        self.name.ns.as_ref().map(CowStr::as_ref)
+    pub fn namespace(&self) -> Option<&'doc str> {
+        self.d.name.ns.as_ref().map(CowStr::as_ref)
     }
 
     /// Returns attribute's name.
@@ -474,12 +492,12 @@ impl<'input> Attribute<'input> {
     ///     "<e xmlns:n='http://www.w3.org' a='b' n:a='c'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().attributes()[0].name(), "a");
-    /// assert_eq!(doc.root_element().attributes()[1].name(), "a");
+    /// assert_eq!(doc.root_element().attributes().nth(0).unwrap().name(), "a");
+    /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().name(), "a");
     /// ```
     #[inline]
-    pub fn name(&self) -> &str {
-        self.name.name
+    pub fn name(&self) -> &'doc str {
+        self.d.name.name
     }
 
     /// Returns attribute's value.
@@ -491,12 +509,12 @@ impl<'input> Attribute<'input> {
     ///     "<e xmlns:n='http://www.w3.org' a='b' n:a='c'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().attributes()[0].value(), "b");
-    /// assert_eq!(doc.root_element().attributes()[1].value(), "c");
+    /// assert_eq!(doc.root_element().attributes().nth(0).unwrap().value(), "b");
+    /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().value(), "c");
     /// ```
     #[inline]
-    pub fn value(&self) -> &str {
-        &self.value
+    pub fn value(&self) -> &'doc str {
+        &self.d.value
     }
 
     /// Returns attribute's name range in bytes in the original document.
@@ -512,7 +530,7 @@ impl<'input> Attribute<'input> {
     #[cfg(feature = "token-ranges")]
     #[inline]
     pub fn range(&self) -> Range {
-        self.range.to_urange()
+        self.d.range.to_urange()
     }
 
     /// Returns attribute's value range in bytes in the original document.
@@ -528,21 +546,21 @@ impl<'input> Attribute<'input> {
     #[cfg(feature = "token-ranges")]
     #[inline]
     pub fn value_range(&self) -> Range {
-        self.value_range.to_urange()
+        self.d.value_range.to_urange()
     }
 }
 
-impl<'input> PartialEq for Attribute<'input> {
+impl PartialEq for Attribute<'_, '_> {
     #[inline]
-    fn eq(&self, other: &Attribute<'input>) -> bool {
-        self.name == other.name && self.value == other.value
+    fn eq(&self, other: &Attribute<'_, '_>) -> bool {
+        self.d.name == other.d.name && self.d.value == other.d.value
     }
 }
 
-impl<'input> fmt::Debug for Attribute<'input> {
+impl fmt::Debug for Attribute<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "Attribute {{ name: {:?}, value: {:?} }}",
-               self.name, self.value)
+               self.d.name, self.d.value)
     }
 }
 
@@ -953,6 +971,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         self.namespaces().iter().find(|ns| ns.name == prefix).map(|v| v.uri.as_ref())
     }
 
+    fn attribute_data(&self) -> &'a [AttributeData<'input>] {
+        match self.d.kind {
+            NodeKind::Element { ref attributes, .. } => &self.doc.attrs[attributes.to_urange()],
+            _ => &[],
+        }
+    }
+
     /// Returns element's attribute value.
     ///
     /// # Examples
@@ -976,7 +1001,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().iter().find(|a| a.name.as_ref() == name).map(|a| a.value.as_ref())
+        self.attribute_data()
+            .iter()
+            .find(|a| a.name.as_ref() == name)
+            .map(|a| a.value.as_ref())
     }
 
     /// Returns element's attribute object.
@@ -984,12 +1012,12 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// The same as [`attribute()`], but returns the `Attribute` itself instead of a value string.
     ///
     /// [`attribute()`]: struct.Node.html#method.attribute
-    pub fn attribute_node<'n, 'm, N>(&self, name: N) -> Option<&'a Attribute<'input>>
+    pub fn attribute_node<'n, 'm, N>(&self, name: N) -> Option<Attribute<'a, 'input>>
     where
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().iter().find(|a| a.name.as_ref() == name)
+        self.attributes().find(|a| a.d.name.as_ref() == name)
     }
 
     /// Checks that element has a specified attribute.
@@ -1012,7 +1040,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().iter().any(|a| a.name.as_ref() == name)
+        self.attribute_data()
+            .iter()
+            .any(|a| a.name.as_ref() == name)
     }
 
     /// Returns element's attributes.
@@ -1027,11 +1057,8 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().attributes().len(), 2);
     /// ```
     #[inline]
-    pub fn attributes(&self) -> &'a [Attribute<'input>] {
-        match self.d.kind {
-            NodeKind::Element { ref attributes, .. } => &self.doc.attrs[attributes.to_urange()],
-            _ => &[],
-        }
+    pub fn attributes(&self) -> Attributes<'a, 'input> {
+        Attributes::new(self)
     }
 
     /// Returns element's namespaces.
@@ -1289,6 +1316,69 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
     }
 }
 
+/// Iterator over a node's attributes
+#[derive(Clone, Debug)]
+pub struct Attributes<'a, 'input> {
+    doc: &'a Document<'input>,
+    current: usize,
+    until: usize
+}
+
+impl<'a, 'input> Attributes<'a, 'input> {
+    #[inline]
+    fn new(node: &Node<'a, 'input>) -> Attributes<'a, 'input> {
+        let (current, until) = match node.d.kind {
+            NodeKind::Element { ref attributes, .. } => {
+                let range = attributes.to_urange();
+                (range.start, range.end)
+            },
+            _ => (0,0)
+        };
+        Attributes {
+            doc: node.doc,
+            current,
+            until
+        }
+    }
+}
+
+impl<'a, 'input> Iterator for Attributes<'a, 'input> {
+    type Item = Attribute<'a, 'input>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.current < self.until).then(|| {
+            let next = self.doc.get_attribute(self.current);
+            self.current += 1;
+            next
+        })
+    }
+
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.current += n;
+        self.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.until - self.current;
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a, 'input> DoubleEndedIterator for Attributes<'a, 'input> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        (self.current < self.until).then(|| {
+            let next = self.doc.get_attribute(self.until);
+            self.until -= 1;
+            next
+        })
+    }
+}
+
+impl ExactSizeIterator for Attributes<'_, '_> {}
 
 /// Iterator over specified axis.
 #[derive(Clone)]
