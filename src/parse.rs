@@ -15,7 +15,7 @@ use crate::{
     NS_XML_PREFIX,
     NS_XMLNS_URI,
     XMLNS,
-    Attribute,
+    AttributeData,
     Document,
     ExpandedNameOwned,
     Namespaces,
@@ -234,8 +234,7 @@ impl Default for ParsingOptions {
     }
 }
 
-
-struct AttributeData<'input> {
+struct TempAttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
     value: Cow<'input, str>,
@@ -334,7 +333,7 @@ struct ParserData<'input> {
     opt: ParsingOptions,
     attrs_start_idx: usize,
     ns_start_idx: usize,
-    tmp_attrs: Vec<AttributeData<'input>>,
+    tmp_attrs: Vec<TempAttributeData<'input>>,
     awaiting_subtree: Vec<NodeId>,
     parent_prefixes: Vec<&'input str>,
     entities: Vec<Entity<'input>>,
@@ -641,7 +640,7 @@ fn process_attribute<'input>(
 
         doc.namespaces.push_ns(None, value);
     } else {
-        pd.tmp_attrs.push(AttributeData {
+        pd.tmp_attrs.push(TempAttributeData {
             prefix, local, value,
             #[cfg(feature = "token-ranges")]
             range,
@@ -676,8 +675,7 @@ fn process_element<'input>(
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
     pd.ns_start_idx = doc.namespaces.len();
 
-    let attributes = resolve_attributes(pd.attrs_start_idx, namespaces,
-                                        &mut pd.tmp_attrs, doc)?;
+    let attributes = resolve_attributes(pd, namespaces, doc)?;
     pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
 
@@ -776,16 +774,16 @@ fn resolve_namespaces(
 }
 
 fn resolve_attributes<'input>(
-    start_idx: usize,
+    pd: &mut ParserData<'input>,
     namespaces: ShortRange,
-    tmp_attrs: &mut [AttributeData<'input>],
     doc: &mut Document<'input>,
 ) -> Result<ShortRange, Error> {
-    if tmp_attrs.is_empty() {
+    let start_idx = pd.attrs_start_idx;
+    if pd.tmp_attrs.is_empty() {
         return Ok(ShortRange::new(0, 0));
     }
 
-    for attr in tmp_attrs {
+    for attr in &mut pd.tmp_attrs {
         let ns = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace.
@@ -806,7 +804,7 @@ fn resolve_attributes<'input>(
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
-        doc.attrs.push(Attribute {
+        doc.attrs.push(AttributeData {
             name: attr_name,
             // Takes a value from a slice without consuming the slice.
             value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),

@@ -97,9 +97,11 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                         }
                     }
 
-                    if !child.attributes().is_empty() {
+
+                    let attributes = child.attributes();
+                    if !(attributes.len() == 0) {
                         let mut attrs = Vec::new();
-                        for attr in child.attributes() {
+                        for attr in attributes {
                             match attr.namespace() {
                                 Some(ns) => {
                                     attrs.push((format!("{}@{}", attr.name(), ns), attr.value()));
