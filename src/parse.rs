@@ -1086,30 +1086,30 @@ fn get_ns_idx_by_prefix<'input>(
     // <e xmlns='http://www.w3.org'/>
     let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
 
-    range.to_urange().into_iter()
-        .map(|idx| (idx, &doc.namespaces[idx]))
-        .find(|(_, ns)| ns.name == prefix_opt)
-        .map_or_else(
-            || {
-                if !prefix.is_empty() {
-                    // If an URI was not found and prefix IS NOT empty than
-                    // we have an unknown namespace.
-                    //
-                    // Example:
-                    // <e random:a='b'/>
-                    let pos = err_pos_from_span(doc.text, prefix);
-                    Err(Error::UnknownNamespace(prefix.as_str().to_string(), pos))
-                } else {
-                    // If an URI was not found and prefix IS empty than
-                    // an element or an attribute doesn't have a namespace.
-                    //
-                    // Example:
-                    // <e a='b'/>
-                    Ok(None)
-                }
-            },
-            |(idx, _)| Ok(Some(idx as u32)),
-        )
+    let idx = doc.namespaces[range.to_urange()].iter()
+        .position(|ns| ns.name == prefix_opt);
+
+    match idx {
+        Some(idx) => Ok(Some(range.start + idx as u32)),
+        None => {
+            if !prefix.is_empty() {
+                // If an URI was not found and prefix IS NOT empty than
+                // we have an unknown namespace.
+                //
+                // Example:
+                // <e random:a='b'/>
+                let pos = err_pos_from_span(doc.text, prefix);
+                Err(Error::UnknownNamespace(prefix.as_str().to_string(), pos))
+            } else {
+                // If an URI was not found and prefix IS empty than
+                // an element or an attribute doesn't have a namespace.
+                //
+                // Example:
+                // <e a='b'/>
+                Ok(None)
+            }
+        }
+    }
 }
 
 #[inline]
