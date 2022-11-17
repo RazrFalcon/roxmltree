@@ -15,16 +15,15 @@ use crate::{
     NS_XML_PREFIX,
     NS_XMLNS_URI,
     XMLNS,
-    Attribute,
+    AttributeData,
     Document,
-    ExpandedNameOwned,
     Namespaces,
     NodeData,
     NodeId,
     NodeKind,
     PI,
     ShortRange,
-    CowStr,
+    ExpandedNameIndexed,
 };
 
 
@@ -234,8 +233,7 @@ impl Default for ParsingOptions {
     }
 }
 
-
-struct AttributeData<'input> {
+struct TempAttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
     value: Cow<'input, str>,
@@ -334,7 +332,7 @@ struct ParserData<'input> {
     opt: ParsingOptions,
     attrs_start_idx: usize,
     ns_start_idx: usize,
-    tmp_attrs: Vec<AttributeData<'input>>,
+    tmp_attrs: Vec<TempAttributeData<'input>>,
     awaiting_subtree: Vec<NodeId>,
     parent_prefixes: Vec<&'input str>,
     entities: Vec<Entity<'input>>,
@@ -641,7 +639,7 @@ fn process_attribute<'input>(
 
         doc.namespaces.push_ns(None, value);
     } else {
-        pd.tmp_attrs.push(AttributeData {
+        pd.tmp_attrs.push(TempAttributeData {
             prefix, local, value,
             #[cfg(feature = "token-ranges")]
             range,
@@ -676,19 +674,18 @@ fn process_element<'input>(
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
     pd.ns_start_idx = doc.namespaces.len();
 
-    let attributes = resolve_attributes(pd.attrs_start_idx, namespaces,
-                                        &mut pd.tmp_attrs, doc)?;
+    let attributes = resolve_attributes(pd, namespaces, doc)?;
     pd.attrs_start_idx = doc.attrs.len();
     pd.tmp_attrs.clear();
 
     match end_token {
         xmlparser::ElementEnd::Empty => {
-            let tag_ns_uri = get_ns_by_prefix(doc, namespaces, tag_name.prefix)?;
+            let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
             let new_element_id = doc.append(*parent_id,
                 NodeKind::Element {
-                    tag_name: ExpandedNameOwned {
-                        ns: tag_ns_uri,
-                        name: tag_name.name.as_str(),
+                    tag_name: ExpandedNameIndexed {
+                        namespace_idx: tag_ns_idx,
+                        local_name: tag_name.name.as_str(),
                     },
                     attributes,
                     namespaces,
@@ -714,9 +711,9 @@ fn process_element<'input>(
             }
 
             if let NodeKind::Element { ref tag_name, .. } = parent_node.kind {
-                if prefix != parent_prefix || local != tag_name.name {
+                if prefix != parent_prefix || local != tag_name.local_name {
                     return Err(Error::UnexpectedCloseTag {
-                        expected: gen_qname_string(parent_prefix, tag_name.name),
+                        expected: gen_qname_string(parent_prefix, tag_name.local_name),
                         actual: gen_qname_string(prefix, local),
                         pos: err_pos_from_span(doc.text, token_span),
                     });
@@ -733,12 +730,12 @@ fn process_element<'input>(
             }
         }
         xmlparser::ElementEnd::Open => {
-            let tag_ns_uri = get_ns_by_prefix(doc, namespaces, tag_name.prefix)?;
+            let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
             *parent_id = doc.append(*parent_id,
                 NodeKind::Element {
-                    tag_name: ExpandedNameOwned {
-                        ns: tag_ns_uri,
-                        name: tag_name.name.as_str(),
+                    tag_name: ExpandedNameIndexed {
+                        namespace_idx: tag_ns_idx,
+                        local_name: tag_name.name.as_str(),
                     },
                     attributes,
                     namespaces,
@@ -776,37 +773,38 @@ fn resolve_namespaces(
 }
 
 fn resolve_attributes<'input>(
-    start_idx: usize,
+    pd: &mut ParserData<'input>,
     namespaces: ShortRange,
-    tmp_attrs: &mut [AttributeData<'input>],
     doc: &mut Document<'input>,
 ) -> Result<ShortRange, Error> {
-    if tmp_attrs.is_empty() {
+    let start_idx = pd.attrs_start_idx;
+    if pd.tmp_attrs.is_empty() {
         return Ok(ShortRange::new(0, 0));
     }
 
-    for attr in tmp_attrs {
-        let ns = if attr.prefix.as_str() == NS_XML_PREFIX {
+    for attr in &mut pd.tmp_attrs {
+        let namespace_idx = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
-            // http://www.w3.org/XML/1998/namespace.
-            Some(CowStr::Borrowed(NS_XML_URI))
+            // http://www.w3.org/XML/1998/namespace. This namespace is added
+            // to the document on creation and is always element 0.
+            Some(0)
         } else if attr.prefix.is_empty() {
             // 'The namespace name for an unprefixed attribute name
             // always has no value.'
             None
         } else {
-            get_ns_by_prefix(doc, namespaces, attr.prefix)?
+            get_ns_idx_by_prefix(doc, namespaces, attr.prefix)?
         };
 
-        let attr_name = ExpandedNameOwned { ns, name: attr.local.as_str() };
+        let attr_name = ExpandedNameIndexed { namespace_idx, local_name: attr.local.as_str() };
 
         // Check for duplicated attributes.
-        if doc.attrs[start_idx..].iter().any(|attr| attr.name == attr_name) {
+        if doc.attrs[start_idx..].iter().any(|attr| attr.name.as_expanded_name(doc) == attr_name.as_expanded_name(doc)) {
             let pos = err_pos_from_qname(doc.text, attr.prefix, attr.local);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
-        doc.attrs.push(Attribute {
+        doc.attrs.push(AttributeData {
             name: attr_name,
             // Takes a value from a slice without consuming the slice.
             value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
@@ -1077,23 +1075,22 @@ fn _normalize_attribute(
     Ok(())
 }
 
-fn get_ns_by_prefix<'input>(
+fn get_ns_idx_by_prefix<'input>(
     doc: &Document<'input>,
     range: ShortRange,
     prefix: StrSpan,
-) -> Result<Option<CowStr<'input>>, Error> {
+) -> Result<Option<u32>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
     //
     // Example:
     // <e xmlns='http://www.w3.org'/>
     let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
 
-    let uri = doc.namespaces[range.to_urange()].iter()
-        .find(|ns| ns.name == prefix_opt)
-        .map(|ns| ns.uri.clone());
+    let idx = doc.namespaces[range.to_urange()].iter()
+        .position(|ns| ns.name == prefix_opt);
 
-    match uri {
-        Some(v) => Ok(Some(v.into())),
+    match idx {
+        Some(idx) => Ok(Some(range.start + idx as u32)),
         None => {
             if !prefix.is_empty() {
                 // If an URI was not found and prefix IS NOT empty than
