@@ -125,13 +125,6 @@ impl<'input> Document<'input> {
         self.nodes.get(id.get_usize()).map(|data| Node { id, d: data, doc: self })
     }
 
-    fn get_attribute<'a>(&'a self, idx: usize) -> Attribute<'a, 'input> {
-        Attribute {
-            doc: self,
-            data: &self.attrs[idx],
-        }
-    }
-
     /// Returns the root element of the document.
     ///
     /// Unlike `root`, will return a first element node.
@@ -406,7 +399,7 @@ struct NodeData<'input> {
     range: ShortRange,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct AttributeData<'input> {
     name: ExpandedNameIndexed<'input>,
     value: Cow<'input, str>,
@@ -599,7 +592,7 @@ impl<'input> Deref for Namespaces<'input> {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy, Debug)]
 struct ExpandedNameIndexed<'input> {
     namespace_idx: Option<u32>,
     local_name: &'input str
@@ -923,13 +916,6 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         self.namespaces().iter().find(|ns| ns.name == prefix).map(|v| v.uri.as_ref())
     }
 
-    fn attribute_data(&self) -> &'a [AttributeData<'input>] {
-        match self.d.kind {
-            NodeKind::Element { ref attributes, .. } => &self.doc.attrs[attributes.to_urange()],
-            _ => &[],
-        }
-    }
-
     /// Returns element's attribute value.
     ///
     /// # Examples
@@ -953,10 +939,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attribute_data()
-            .iter()
-            .find(|a| a.name.as_expanded_name(self.doc) == name)
-            .map(|a| a.value.as_ref())
+        self.attributes()
+            .find(|a| a.data.name.as_expanded_name(self.doc) == name)
+            .map(|a| a.value())
     }
 
     /// Returns element's attribute object.
@@ -992,9 +977,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attribute_data()
-            .iter()
-            .any(|a| a.name.as_expanded_name(self.doc) == name)
+        self.attributes().any(|a| a.data.name.as_expanded_name(self.doc) == name)
     }
 
     /// Returns element's attributes.
@@ -1272,24 +1255,21 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
 #[derive(Clone, Debug)]
 pub struct Attributes<'a, 'input> {
     doc: &'a Document<'input>,
-    current: usize,
-    until: usize
+    attrs: core::slice::Iter<'a, AttributeData<'input>>
 }
 
 impl<'a, 'input> Attributes<'a, 'input> {
     #[inline]
     fn new(node: &Node<'a, 'input>) -> Attributes<'a, 'input> {
-        let (current, until) = match node.d.kind {
+        let attrs = match node.d.kind {
             NodeKind::Element { ref attributes, .. } => {
-                let range = attributes.to_urange();
-                (range.start, range.end)
-            },
-            _ => (0,0)
+                &node.doc.attrs[attributes.to_urange()]
+            }
+            _ => &[],
         };
         Attributes {
             doc: node.doc,
-            current,
-            until
+            attrs: attrs.iter(),
         }
     }
 }
@@ -1299,38 +1279,33 @@ impl<'a, 'input> Iterator for Attributes<'a, 'input> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current < self.until {
-            let next = self.doc.get_attribute(self.current);
-            self.current += 1;
-            Some(next)
-        } else {
-            None
-        }
+        self.attrs.next().map(|attr| Attribute {
+            doc: self.doc,
+            data: attr,
+        })
     }
 
     #[inline]
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.current += n;
-        self.next()
+        self.attrs.nth(n).map(|attr| Attribute {
+            doc: self.doc,
+            data: attr,
+        })
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.until - self.current;
-        (remaining, Some(remaining))
+        self.attrs.size_hint()
     }
 }
 
 impl<'a, 'input> DoubleEndedIterator for Attributes<'a, 'input> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.current < self.until {
-            let next = self.doc.get_attribute(self.until);
-            self.until -= 1;
-            Some(next)
-        } else {
-            None
-        }
+        self.attrs.next_back().map(|attr| Attribute {
+            doc: self.doc,
+            data: attr,
+        })
     }
 }
 
