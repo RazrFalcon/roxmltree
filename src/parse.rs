@@ -12,7 +12,9 @@ use xmlparser::{
 
 use crate::{
     NS_XML_URI,
+    NS_XML_PREFIX,
     NS_XMLNS_URI,
+    XMLNS,
     Attribute,
     Document,
     ExpandedNameOwned,
@@ -481,7 +483,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         range: (0..text.len()).into(),
     });
 
-    doc.namespaces.push_ns(Some("xml"), Cow::Borrowed(NS_XML_URI));
+    doc.namespaces.push_ns(Some(NS_XML_PREFIX), Cow::Borrowed(NS_XML_URI));
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
@@ -531,7 +533,7 @@ fn process_tokens<'input>(
                 pd.after_text = true;
             }
             xmlparser::Token::ElementStart { prefix, local, span } => {
-                if prefix.as_str() == "xmlns" {
+                if prefix.as_str() == XMLNS {
                     let pos = err_pos_from_span(doc.text, prefix);
                     return Err(Error::InvalidElementNamePrefix(pos));
                 }
@@ -589,7 +591,7 @@ fn process_attribute<'input>(
 
     let value = normalize_attribute(doc.text, value, &pd.entities, loop_detector, &mut pd.buffer)?;
 
-    if prefix.as_str() == "xmlns" {
+    if prefix.as_str() == XMLNS {
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value == NS_XMLNS_URI {
             let pos = err_pos_from_qname(doc.text, prefix, local);
@@ -601,7 +603,7 @@ fn process_attribute<'input>(
         // The prefix 'xml' is by definition bound to the namespace name
         // http://www.w3.org/XML/1998/namespace.
         // It MUST NOT be bound to any other namespace name.
-        if local.as_str() == "xml" {
+        if local.as_str() == NS_XML_PREFIX {
             if !is_xml_ns_uri {
                 let pos = err_pos_from_span(doc.text, prefix);
                 return Err(Error::InvalidXmlPrefixUri(pos));
@@ -624,7 +626,7 @@ fn process_attribute<'input>(
         if !is_xml_ns_uri {
             doc.namespaces.push_ns(Some(local.as_str()), value);
         }
-    } else if local.as_str() == "xmlns" {
+    } else if local.as_str() == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
         if value == NS_XML_URI {
             let pos = err_pos_from_span(doc.text, local);
@@ -784,7 +786,7 @@ fn resolve_attributes<'input>(
     }
 
     for attr in tmp_attrs {
-        let ns = if attr.prefix.as_str() == "xml" {
+        let ns = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace.
             Some(CowStr::Borrowed(NS_XML_URI))

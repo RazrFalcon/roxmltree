@@ -44,9 +44,13 @@ pub use crate::parse::*;
 
 /// The <http://www.w3.org/XML/1998/namespace> URI.
 pub const NS_XML_URI: &str = "http://www.w3.org/XML/1998/namespace";
+/// The prefix 'xml', which is by definition bound to NS_XML_URI
+const NS_XML_PREFIX: &str = "xml";
 
 /// The <http://www.w3.org/2000/xmlns/> URI.
 pub const NS_XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
+/// The string 'xmlns', which is used to declare new namespaces
+const XMLNS: &str = "xmlns";
 
 
 type Range = core::ops::Range<usize>;
