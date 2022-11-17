@@ -23,7 +23,7 @@ use crate::{
     NodeKind,
     PI,
     ShortRange,
-    NamespacedName,
+    ExpandedNameIndexed,
 };
 
 
@@ -683,7 +683,7 @@ fn process_element<'input>(
             let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
             let new_element_id = doc.append(*parent_id,
                 NodeKind::Element {
-                    tag_name: NamespacedName {
+                    tag_name: ExpandedNameIndexed {
                         namespace_idx: tag_ns_idx,
                         local_name: tag_name.name.as_str(),
                     },
@@ -733,7 +733,7 @@ fn process_element<'input>(
             let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
             *parent_id = doc.append(*parent_id,
                 NodeKind::Element {
-                    tag_name: NamespacedName {
+                    tag_name: ExpandedNameIndexed {
                         namespace_idx: tag_ns_idx,
                         local_name: tag_name.name.as_str(),
                     },
@@ -796,7 +796,7 @@ fn resolve_attributes<'input>(
             get_ns_idx_by_prefix(doc, namespaces, attr.prefix)?
         };
 
-        let attr_name = NamespacedName { namespace_idx, local_name: attr.local.as_str() };
+        let attr_name = ExpandedNameIndexed { namespace_idx, local_name: attr.local.as_str() };
 
         // Check for duplicated attributes.
         if doc.attrs[start_idx..].iter().any(|attr| attr.name.as_expanded_name(doc) == attr_name.as_expanded_name(doc)) {

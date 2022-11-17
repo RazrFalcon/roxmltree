@@ -128,7 +128,7 @@ impl<'input> Document<'input> {
     fn get_attribute<'a>(&'a self, idx: usize) -> Attribute<'a, 'input> {
         Attribute {
             doc: self,
-            d: &self.attrs[idx],
+            data: &self.attrs[idx],
         }
     }
 
@@ -386,7 +386,7 @@ impl From<usize> for NodeId {
 enum NodeKind<'input> {
     Root,
     Element {
-        tag_name: NamespacedName<'input>,
+        tag_name: ExpandedNameIndexed<'input>,
         attributes: ShortRange,
         namespaces: ShortRange,
     },
@@ -408,7 +408,7 @@ struct NodeData<'input> {
 
 #[derive(Clone)]
 struct AttributeData<'input> {
-    name: NamespacedName<'input>,
+    name: ExpandedNameIndexed<'input>,
     value: Cow<'input, str>,
     #[cfg(feature = "token-ranges")]
     range: ShortRange,
@@ -418,12 +418,12 @@ struct AttributeData<'input> {
 
 /// An attribute.
 #[derive(Copy, Clone)]
-pub struct Attribute<'doc, 'input: 'doc> {
-    doc: &'doc Document<'input>,
-    d: &'doc AttributeData<'input>,
+pub struct Attribute<'a, 'input: 'a> {
+    doc: &'a Document<'input>,
+    data: &'a AttributeData<'input>,
 }
 
-impl<'doc, 'input> Attribute<'doc, 'input> {
+impl<'a, 'input> Attribute<'a, 'input> {
     /// Returns attribute's namespace URI.
     ///
     /// # Examples
@@ -437,8 +437,8 @@ impl<'doc, 'input> Attribute<'doc, 'input> {
     /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().namespace(), Some("http://www.w3.org"));
     /// ```
     #[inline]
-    pub fn namespace(&self) -> Option<&'doc str> {
-        self.d.name.namespace(self.doc).map(Namespace::uri)
+    pub fn namespace(&self) -> Option<&'a str> {
+        self.data.name.namespace(self.doc).map(Namespace::uri)
     }
 
     /// Returns attribute's name.
@@ -454,8 +454,8 @@ impl<'doc, 'input> Attribute<'doc, 'input> {
     /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().name(), "a");
     /// ```
     #[inline]
-    pub fn name(&self) -> &'doc str {
-        self.d.name.local_name
+    pub fn name(&self) -> &'a str {
+        self.data.name.local_name
     }
 
     /// Returns attribute's value.
@@ -471,8 +471,8 @@ impl<'doc, 'input> Attribute<'doc, 'input> {
     /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().value(), "c");
     /// ```
     #[inline]
-    pub fn value(&self) -> &'doc str {
-        &self.d.value
+    pub fn value(&self) -> &'a str {
+        &self.data.value
     }
 
     /// Returns attribute's name range in bytes in the original document.
@@ -488,7 +488,7 @@ impl<'doc, 'input> Attribute<'doc, 'input> {
     #[cfg(feature = "token-ranges")]
     #[inline]
     pub fn range(&self) -> Range {
-        self.d.range.to_urange()
+        self.data.range.to_urange()
     }
 
     /// Returns attribute's value range in bytes in the original document.
@@ -504,21 +504,21 @@ impl<'doc, 'input> Attribute<'doc, 'input> {
     #[cfg(feature = "token-ranges")]
     #[inline]
     pub fn value_range(&self) -> Range {
-        self.d.value_range.to_urange()
+        self.data.value_range.to_urange()
     }
 }
 
 impl PartialEq for Attribute<'_, '_> {
     #[inline]
     fn eq(&self, other: &Attribute<'_, '_>) -> bool {
-        self.d.name.as_expanded_name(self.doc) == other.d.name.as_expanded_name(self.doc) && self.d.value == other.d.value
+        self.data.name.as_expanded_name(self.doc) == other.data.name.as_expanded_name(self.doc) && self.data.value == other.data.value
     }
 }
 
 impl fmt::Debug for Attribute<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "Attribute {{ name: {:?}, value: {:?} }}",
-               self.d.name.as_expanded_name(self.doc), self.d.value)
+               self.data.name.as_expanded_name(self.doc), self.data.value)
     }
 }
 
@@ -600,19 +600,19 @@ impl<'input> Deref for Namespaces<'input> {
 }
 
 #[derive(Copy, Clone)]
-struct NamespacedName<'input> {
+struct ExpandedNameIndexed<'input> {
     namespace_idx: Option<u32>,
     local_name: &'input str
 }
 
-impl<'input> NamespacedName<'input> {
+impl<'input> ExpandedNameIndexed<'input> {
     #[inline]
-    fn namespace<'doc>(&self, doc: &'doc Document<'input>) -> Option<&'doc Namespace<'input>> {
+    fn namespace<'a>(&self, doc: &'a Document<'input>) -> Option<&'a Namespace<'input>> {
         self.namespace_idx.map(|idx| &doc.namespaces[idx as usize])
     }
 
     #[inline]
-    fn as_expanded_name<'a, 'doc>(&'a self, doc: &'doc Document<'input>) -> ExpandedName<'doc, 'input> {
+    fn as_expanded_name<'a>(&self, doc: &'a Document<'input>) -> ExpandedName<'a, 'input> {
         ExpandedName {
             uri: self.namespace(doc).map(Namespace::uri),
             name: self.local_name,
@@ -969,7 +969,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().find(|a| a.d.name.as_expanded_name(self.doc) == name)
+        self.attributes().find(|a| a.data.name.as_expanded_name(self.doc) == name)
     }
 
     /// Checks that element has a specified attribute.
