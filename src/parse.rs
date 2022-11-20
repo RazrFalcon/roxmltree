@@ -204,7 +204,7 @@ impl std::error::Error for Error {
 }
 
 /// Parsing options.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ParsingOptions {
     /// Allow DTD parsing.
     ///

@@ -274,7 +274,7 @@ impl<'input> fmt::Debug for Document<'input> {
 }
 
 /// A list of supported node types.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NodeType {
     /// The root node of the `Document`.
     Root,
@@ -291,7 +291,7 @@ pub enum NodeType {
 }
 
 /// A processing instruction.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[allow(missing_docs)]
 pub struct PI<'input> {
     pub target: &'input str,
@@ -509,7 +509,7 @@ impl fmt::Debug for Attribute<'_, '_> {
 /// A namespace.
 ///
 /// Contains URI and *prefix* pair.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Namespace<'input> {
     name: Option<&'input str>,
     uri: Cow<'input, str>,
@@ -605,7 +605,7 @@ impl<'input> ExpandedNameIndexed<'input> {
 /// An expanded name.
 ///
 /// Contains an namespace URI and name pair.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ExpandedName<'a, 'b> {
     uri: Option<&'a str>,
     name: &'b str,
