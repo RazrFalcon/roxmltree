@@ -18,8 +18,10 @@ fn main() {
         }
     };
 
-    println!("Elements count: {}",
-             doc.root().descendants().filter(|n| n.is_element()).count());
+    println!(
+        "Elements count: {}",
+        doc.root().descendants().filter(|n| n.is_element()).count()
+    );
 
     let attrs_count: usize = doc.root().descendants().map(|n| n.attributes().len()).sum();
     println!("Attributes count: {}", attrs_count);
@@ -30,7 +32,10 @@ fn main() {
     let mut uris = HashSet::new();
     for node in doc.root().descendants() {
         for ns in node.namespaces() {
-            uris.insert((ns.name().unwrap_or("\"\"").to_string(), ns.uri().to_string()));
+            uris.insert((
+                ns.name().unwrap_or("\"\"").to_string(),
+                ns.uri().to_string(),
+            ));
         }
     }
     println!("Unique namespaces count: {}", uris.len());
@@ -41,8 +46,10 @@ fn main() {
         }
     }
 
-    println!("Comments count: {}",
-             doc.root().descendants().filter(|n| n.is_comment()).count());
+    println!(
+        "Comments count: {}",
+        doc.root().descendants().filter(|n| n.is_comment()).count()
+    );
 
     println!("Comments:");
     for node in doc.root().descendants().filter(|n| n.is_comment()) {

@@ -2,11 +2,11 @@ extern crate roxmltree;
 
 use roxmltree::*;
 
-use std::path;
+use std::fmt;
+use std::fmt::Write;
 use std::fs;
 use std::io::Read;
-use std::fmt::Write;
-use std::fmt;
+use std::path;
 
 #[derive(Clone, Copy, PartialEq)]
 struct TStr<'a>(pub &'a str);
@@ -17,14 +17,17 @@ impl<'a> fmt::Debug for TStr<'a> {
     }
 }
 
-
 trait HasExtension {
     fn has_extension(&self, ext: &str) -> bool;
 }
 
 impl HasExtension for path::Path {
     fn has_extension(&self, ext: &str) -> bool {
-        if let Some(e) = self.extension() { e == ext } else { false }
+        if let Some(e) = self.extension() {
+            e == ext
+        } else {
+            false
+        }
     }
 }
 
@@ -32,9 +35,7 @@ fn actual_test(path: &str) {
     let path = path::Path::new(path);
     let expected = load_file(&path.with_extension("yaml"));
 
-    let opt = ParsingOptions {
-        allow_dtd: true,
-    };
+    let opt = ParsingOptions { allow_dtd: true };
 
     let input_xml = load_file(&path);
     let doc = match Document::parse_with_options(&input_xml, opt) {
@@ -86,17 +87,31 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                     match child.tag_name().namespace() {
                         Some(ns) => {
                             if ns.is_empty() {
-                                writeln_indented!(depth + 2, s, "tag_name: {}", child.tag_name().name());
+                                writeln_indented!(
+                                    depth + 2,
+                                    s,
+                                    "tag_name: {}",
+                                    child.tag_name().name()
+                                );
                             } else {
-                                writeln_indented!(depth + 2, s, "tag_name: {}@{}",
-                                                  child.tag_name().name(), ns);
+                                writeln_indented!(
+                                    depth + 2,
+                                    s,
+                                    "tag_name: {}@{}",
+                                    child.tag_name().name(),
+                                    ns
+                                );
                             }
                         }
                         None => {
-                            writeln_indented!(depth + 2, s, "tag_name: {}", child.tag_name().name());
+                            writeln_indented!(
+                                depth + 2,
+                                s,
+                                "tag_name: {}",
+                                child.tag_name().name()
+                            );
                         }
                     }
-
 
                     let attributes = child.attributes();
                     if !(attributes.len() == 0) {
@@ -123,7 +138,11 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                         let mut ns_list = Vec::new();
                         for ns in child.namespaces() {
                             let name = ns.name().unwrap_or("None");
-                            let uri = if ns.uri().is_empty() { "\"\"" } else { ns.uri() };
+                            let uri = if ns.uri().is_empty() {
+                                "\"\""
+                            } else {
+                                ns.uri()
+                            };
                             ns_list.push((name, uri));
                         }
                         ns_list.sort_by(|a, b| a.0.cmp(&b.0));
@@ -172,12 +191,12 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
 }
 
 macro_rules! test {
-    ($name:ident) => (
+    ($name:ident) => {
         #[test]
         fn $name() {
             actual_test(&format!("tests/files/{}.xml", stringify!($name)))
         }
-    )
+    };
 }
 
 test!(attrs_001);

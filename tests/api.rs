@@ -86,7 +86,13 @@ fn get_pi() {
 
     let doc = Document::parse(data).unwrap();
     let node = doc.root().first_child().unwrap();
-    assert_eq!(node.pi(), Some(PI { target: "target", value: Some("value") }));
+    assert_eq!(
+        node.pi(),
+        Some(PI {
+            target: "target",
+            value: Some("value")
+        })
+    );
 }
 
 #[test]
@@ -114,7 +120,10 @@ fn lookup_namespace_uri() {
 
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
-    assert_eq!(node.lookup_namespace_uri(Some("n1")), Some("http://www.w3.org"));
+    assert_eq!(
+        node.lookup_namespace_uri(Some("n1")),
+        Some("http://www.w3.org")
+    );
     assert_eq!(node.lookup_namespace_uri(None), Some("http://www.w4.org"));
     assert_eq!(node.lookup_namespace_uri(Some("n2")), None);
 }
@@ -236,7 +245,8 @@ fn nodes_document_order() {
 #[test]
 fn lifetimes() {
     fn f<'a, 'd, F, R>(doc: &'a roxmltree::Document<'d>, fun: F) -> R
-        where F: Fn(&'a roxmltree::Document<'d>) -> R
+    where
+        F: Fn(&'a roxmltree::Document<'d>) -> R,
     {
         fun(doc)
     }

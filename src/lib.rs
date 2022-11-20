@@ -18,7 +18,6 @@ License: ISC.
 #![warn(missing_docs)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
-
 // `matches!` available since 1.42, but we target 1.36 for now.
 #![allow(clippy::match_like_matches_macro)]
 
@@ -40,7 +39,6 @@ pub use xmlparser::TextPos;
 mod parse;
 pub use crate::parse::*;
 
-
 /// The <http://www.w3.org/XML/1998/namespace> URI.
 pub const NS_XML_URI: &str = "http://www.w3.org/XML/1998/namespace";
 /// The prefix 'xml', which is by definition bound to NS_XML_URI
@@ -50,7 +48,6 @@ const NS_XML_PREFIX: &str = "xml";
 pub const NS_XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
 /// The string 'xmlns', which is used to declare new namespaces
 const XMLNS: &str = "xmlns";
-
 
 type Range = core::ops::Range<usize>;
 
@@ -98,7 +95,11 @@ impl<'input> Document<'input> {
     /// ```
     #[inline]
     pub fn root<'a>(&'a self) -> Node<'a, 'input> {
-        Node { id: NodeId::new(0), d: &self.nodes[0], doc: self }
+        Node {
+            id: NodeId::new(0),
+            d: &self.nodes[0],
+            doc: self,
+        }
     }
 
     /// Returns the node of the tree with the given NodeId.
@@ -122,7 +123,11 @@ impl<'input> Document<'input> {
     /// ```
     #[inline]
     pub fn get_node<'a>(&'a self, id: NodeId) -> Option<Node<'a, 'input>> {
-        self.nodes.get(id.get_usize()).map(|data| Node { id, d: data, doc: self })
+        self.nodes.get(id.get_usize()).map(|data| Node {
+            id,
+            d: data,
+            doc: self,
+        })
     }
 
     /// Returns the root element of the document.
@@ -140,7 +145,9 @@ impl<'input> Document<'input> {
     #[inline]
     pub fn root_element<'a>(&'a self) -> Node<'a, 'input> {
         // `expect` is safe, because the `Document` is guarantee to have at least one element.
-        self.root().first_element_child().expect("XML documents must contain a root element")
+        self.root()
+            .first_element_child()
+            .expect("XML documents must contain a root element")
     }
 
     /// Returns an iterator over document's descendant nodes.
@@ -209,8 +216,8 @@ impl<'input> fmt::Debug for Document<'input> {
 
         fn print_into_iter<
             T: fmt::Debug,
-            E: ExactSizeIterator<Item=T>,
-            I: IntoIterator<Item=T, IntoIter=E>
+            E: ExactSizeIterator<Item = T>,
+            I: IntoIterator<Item = T, IntoIter = E>,
         >(
             prefix: &str,
             data: I,
@@ -231,9 +238,11 @@ impl<'input> fmt::Debug for Document<'input> {
             Ok(())
         }
 
-        fn print_children(parent: Node, depth: usize, f: &mut fmt::Formatter)
-            -> Result<(), fmt::Error>
-        {
+        fn print_children(
+            parent: Node,
+            depth: usize,
+            f: &mut fmt::Formatter,
+        ) -> Result<(), fmt::Error> {
             for child in parent.children() {
                 if child.is_element() {
                     writeln_indented!(depth, f, "Element {{");
@@ -264,7 +273,6 @@ impl<'input> fmt::Debug for Document<'input> {
     }
 }
 
-
 /// A list of supported node types.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum NodeType {
@@ -282,7 +290,6 @@ pub enum NodeType {
     Text,
 }
 
-
 /// A processing instruction.
 #[derive(Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
@@ -290,7 +297,6 @@ pub struct PI<'input> {
     pub target: &'input str,
     pub value: Option<&'input str>,
 }
-
 
 /// A short range.
 ///
@@ -319,7 +325,7 @@ impl ShortRange {
 
     #[inline]
     fn to_urange(self) -> Range {
-        self.start as usize .. self.end as usize
+        self.start as usize..self.end as usize
     }
 }
 
@@ -375,7 +381,6 @@ impl From<usize> for NodeId {
     }
 }
 
-
 enum NodeKind<'input> {
     Root,
     Element {
@@ -387,7 +392,6 @@ enum NodeKind<'input> {
     Comment(&'input str),
     Text(Cow<'input, str>),
 }
-
 
 struct NodeData<'input> {
     parent: Option<NodeId>,
@@ -486,17 +490,21 @@ impl<'a, 'input> Attribute<'a, 'input> {
 impl PartialEq for Attribute<'_, '_> {
     #[inline]
     fn eq(&self, other: &Attribute<'_, '_>) -> bool {
-        self.data.name.as_expanded_name(self.doc) == other.data.name.as_expanded_name(self.doc) && self.data.value == other.data.value
+        self.data.name.as_expanded_name(self.doc) == other.data.name.as_expanded_name(self.doc)
+            && self.data.value == other.data.value
     }
 }
 
 impl fmt::Debug for Attribute<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Attribute {{ name: {:?}, value: {:?} }}",
-               self.data.name.as_expanded_name(self.doc), self.data.value)
+        write!(
+            f,
+            "Attribute {{ name: {:?}, value: {:?} }}",
+            self.data.name.as_expanded_name(self.doc),
+            self.data.value
+        )
     }
 }
-
 
 /// A namespace.
 ///
@@ -549,7 +557,6 @@ impl<'input> Namespace<'input> {
     }
 }
 
-
 struct Namespaces<'input>(Vec<Namespace<'input>>);
 
 impl<'input> Namespaces<'input> {
@@ -577,7 +584,7 @@ impl<'input> Deref for Namespaces<'input> {
 #[derive(Clone, Copy, Debug)]
 struct ExpandedNameIndexed<'input> {
     namespace_idx: Option<u32>,
-    local_name: &'input str
+    local_name: &'input str,
 }
 
 impl<'input> ExpandedNameIndexed<'input> {
@@ -646,10 +653,7 @@ impl fmt::Debug for ExpandedName<'_, '_> {
 impl<'a, 'b> From<&'b str> for ExpandedName<'a, 'b> {
     #[inline]
     fn from(v: &'b str) -> Self {
-        ExpandedName {
-            uri: None,
-            name: v,
-        }
+        ExpandedName { uri: None, name: v }
     }
 }
 
@@ -662,7 +666,6 @@ impl<'a, 'b> From<(&'a str, &'b str)> for ExpandedName<'a, 'b> {
         }
     }
 }
-
 
 /// A node in a document.
 ///
@@ -704,9 +707,9 @@ impl Eq for Node<'_, '_> {}
 impl PartialEq for Node<'_, '_> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-           self.id == other.id
-        && core::ptr::eq(self.doc as *const _, other.doc as *const _)
-        && core::ptr::eq(self.d as *const _, other.d as *const _)
+        self.id == other.id
+            && core::ptr::eq(self.doc as *const _, other.doc as *const _)
+            && core::ptr::eq(self.d as *const _, other.d as *const _)
     }
 }
 
@@ -725,7 +728,7 @@ impl Ord for Node<'_, '_> {
                 let other_doc_ptr = other.doc as *const Document;
                 this_doc_ptr.cmp(&other_doc_ptr)
             }
-            _ => id_cmp
+            _ => id_cmp,
         }
     }
 }
@@ -803,7 +806,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     pub fn tag_name(&self) -> ExpandedName<'a, 'input> {
         match self.d.kind {
             NodeKind::Element { ref tag_name, .. } => tag_name.as_expanded_name(self.doc),
-            _ => "".into()
+            _ => "".into(),
         }
     }
 
@@ -827,12 +830,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         let name = name.into();
 
         match self.d.kind {
-            NodeKind::Element { ref tag_name, .. } => {
-                match name.namespace() {
-                    Some(_) => tag_name.as_expanded_name(self.doc) == name,
-                    None => tag_name.local_name == name.name,
-                }
-            }
+            NodeKind::Element { ref tag_name, .. } => match name.namespace() {
+                Some(_) => tag_name.as_expanded_name(self.doc) == name,
+                None => tag_name.local_name == name.name,
+            },
             _ => false,
         }
     }
@@ -853,7 +854,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().default_namespace(), None);
     /// ```
     pub fn default_namespace(&self) -> Option<&'a str> {
-        self.namespaces().iter().find(|ns| ns.name.is_none()).map(|v| v.uri.as_ref())
+        self.namespaces()
+            .iter()
+            .find(|ns| ns.name.is_none())
+            .map(|v| v.uri.as_ref())
     }
 
     /// Returns a prefix for a given namespace URI.
@@ -876,7 +880,11 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
             return Some("xml");
         }
 
-        self.namespaces().iter().find(|ns| ns.uri == uri).map(|v| v.name).unwrap_or(None)
+        self.namespaces()
+            .iter()
+            .find(|ns| ns.uri == uri)
+            .map(|v| v.name)
+            .unwrap_or(None)
     }
 
     /// Returns an URI for a given prefix.
@@ -895,7 +903,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().lookup_namespace_uri(None), Some("http://www.w3.org"));
     /// ```
     pub fn lookup_namespace_uri(&self, prefix: Option<&'a str>) -> Option<&'a str> {
-        self.namespaces().iter().find(|ns| ns.name == prefix).map(|v| v.uri.as_ref())
+        self.namespaces()
+            .iter()
+            .find(|ns| ns.name == prefix)
+            .map(|v| v.uri.as_ref())
     }
 
     /// Returns element's attribute value.
@@ -936,7 +947,8 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().find(|a| a.data.name.as_expanded_name(self.doc) == name)
+        self.attributes()
+            .find(|a| a.data.name.as_expanded_name(self.doc) == name)
     }
 
     /// Checks that element has a specified attribute.
@@ -959,7 +971,8 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes().any(|a| a.data.name.as_expanded_name(self.doc) == name)
+        self.attributes()
+            .any(|a| a.data.name.as_expanded_name(self.doc) == name)
     }
 
     /// Returns element's attributes.
@@ -1028,17 +1041,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn text(&self) -> Option<&'a str> {
         match self.d.kind {
-            NodeKind::Element { .. } => {
-                match self.first_child() {
-                    Some(child) if child.is_text() => {
-                        match self.doc.nodes[child.id.get_usize()].kind {
-                            NodeKind::Text(ref text) => Some(text),
-                            _ => None
-                        }
-                    }
+            NodeKind::Element { .. } => match self.first_child() {
+                Some(child) if child.is_text() => match self.doc.nodes[child.id.get_usize()].kind {
+                    NodeKind::Text(ref text) => Some(text),
                     _ => None,
-                }
-            }
+                },
+                _ => None,
+            },
             NodeKind::Comment(text) => Some(text),
             NodeKind::Text(ref text) => Some(text),
             _ => None,
@@ -1068,12 +1077,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
 
         match self.next_sibling().map(|n| n.id) {
-            Some(id) => {
-                match self.doc.nodes[id.get_usize()].kind {
-                    NodeKind::Text(ref text) => Some(text),
-                    _ => None
-                }
-            }
+            Some(id) => match self.doc.nodes[id.get_usize()].kind {
+                NodeKind::Text(ref text) => Some(text),
+                _ => None,
+            },
             None => None,
         }
     }
@@ -1112,12 +1119,19 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the next sibling of this node.
     #[inline]
     pub fn next_sibling(&self) -> Option<Self> {
-        self.d.next_subtree
+        self.d
+            .next_subtree
             .map(|id| self.doc.get_node(id).unwrap())
             .and_then(|node| {
-                let possibly_self = node.d.prev_sibling
+                let possibly_self = node
+                    .d
+                    .prev_sibling
                     .expect("next_subtree will always have a previous sibling");
-                if possibly_self == self.id { Some(node) } else { None }
+                if possibly_self == self.id {
+                    Some(node)
+                } else {
+                    None
+                }
             })
     }
 
@@ -1129,7 +1143,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns the first child of this node.
     #[inline]
     pub fn first_child(&self) -> Option<Self> {
-        self.d.last_child.map(|_| self.doc.get_node(NodeId::new(self.id.get() + 1)).unwrap())
+        self.d
+            .last_child
+            .map(|_| self.doc.get_node(NodeId::new(self.id.get() + 1)).unwrap())
     }
 
     /// Returns the first element child of this node.
@@ -1163,37 +1179,55 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns an iterator over ancestor nodes starting at this node.
     #[inline]
     pub fn ancestors(&self) -> AxisIter<'a, 'input> {
-        AxisIter { node: Some(*self), next: Node::parent }
+        AxisIter {
+            node: Some(*self),
+            next: Node::parent,
+        }
     }
 
     /// Returns an iterator over previous sibling nodes starting at this node.
     #[inline]
     pub fn prev_siblings(&self) -> AxisIter<'a, 'input> {
-        AxisIter { node: Some(*self), next: Node::prev_sibling }
+        AxisIter {
+            node: Some(*self),
+            next: Node::prev_sibling,
+        }
     }
 
     /// Returns an iterator over next sibling nodes starting at this node.
     #[inline]
     pub fn next_siblings(&self) -> AxisIter<'a, 'input> {
-        AxisIter { node: Some(*self), next: Node::next_sibling }
+        AxisIter {
+            node: Some(*self),
+            next: Node::next_sibling,
+        }
     }
 
     /// Returns an iterator over first children nodes starting at this node.
     #[inline]
     pub fn first_children(&self) -> AxisIter<'a, 'input> {
-        AxisIter { node: Some(*self), next: Node::first_child }
+        AxisIter {
+            node: Some(*self),
+            next: Node::first_child,
+        }
     }
 
     /// Returns an iterator over last children nodes starting at this node.
     #[inline]
     pub fn last_children(&self) -> AxisIter<'a, 'input> {
-        AxisIter { node: Some(*self), next: Node::last_child }
+        AxisIter {
+            node: Some(*self),
+            next: Node::last_child,
+        }
     }
 
     /// Returns an iterator over children nodes.
     #[inline]
     pub fn children(&self) -> Children<'a, 'input> {
-        Children { front: self.first_child(), back: self.last_child() }
+        Children {
+            front: self.first_child(),
+            back: self.last_child(),
+        }
     }
 
     /// Returns an iterator over this node and its descendants.
@@ -1221,8 +1255,13 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
         match self.d.kind {
             NodeKind::Root => write!(f, "Root"),
             NodeKind::Element { .. } => {
-                write!(f, "Element {{ tag_name: {:?}, attributes: {:?}, namespaces: {:?} }}",
-                       self.tag_name(), self.attributes(), self.namespaces())
+                write!(
+                    f,
+                    "Element {{ tag_name: {:?}, attributes: {:?}, namespaces: {:?} }}",
+                    self.tag_name(),
+                    self.attributes(),
+                    self.namespaces()
+                )
             }
             NodeKind::PI(pi) => {
                 write!(f, "PI {{ target: {:?}, value: {:?} }}", pi.target, pi.value)
@@ -1237,16 +1276,14 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
 #[derive(Clone, Debug)]
 pub struct Attributes<'a, 'input> {
     doc: &'a Document<'input>,
-    attrs: core::slice::Iter<'a, AttributeData<'input>>
+    attrs: core::slice::Iter<'a, AttributeData<'input>>,
 }
 
 impl<'a, 'input> Attributes<'a, 'input> {
     #[inline]
     fn new(node: &Node<'a, 'input>) -> Attributes<'a, 'input> {
         let attrs = match node.d.kind {
-            NodeKind::Element { ref attributes, .. } => {
-                &node.doc.attrs[attributes.to_urange()]
-            }
+            NodeKind::Element { ref attributes, .. } => &node.doc.attrs[attributes.to_urange()],
             _ => &[],
         };
         Attributes {
@@ -1320,7 +1357,6 @@ impl fmt::Debug for AxisIter<'_, '_> {
     }
 }
 
-
 /// Iterator over children.
 #[derive(Clone, Debug)]
 pub struct Children<'a, 'input: 'a> {
@@ -1360,7 +1396,6 @@ impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
     }
 }
 
-
 /// Iterator over a node and its descendants.
 #[derive(Clone, Debug)]
 pub struct Descendants<'a, 'input> {
@@ -1375,7 +1410,10 @@ impl<'a, 'input> Descendants<'a, 'input> {
         Self {
             doc: start.doc,
             current: start.id,
-            until: start.d.next_subtree.unwrap_or_else(|| NodeId::from(start.doc.nodes.len()))
+            until: start
+                .d
+                .next_subtree
+                .unwrap_or_else(|| NodeId::from(start.doc.nodes.len())),
         }
     }
 }

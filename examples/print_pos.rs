@@ -14,13 +14,17 @@ fn main() {
         Err(e) => {
             println!("Error: {}.", e);
             return;
-        },
+        }
     };
 
     // TODO: finish
     for node in doc.descendants() {
         if node.is_element() {
-            println!("{:?} at {}", node.tag_name(), doc.text_pos_at(node.position()));
+            println!(
+                "{:?} at {}",
+                node.tag_name(),
+                doc.text_pos_at(node.position())
+            );
         }
     }
 }

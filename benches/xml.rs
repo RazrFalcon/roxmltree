@@ -1,7 +1,6 @@
 use bencher::Bencher;
 use bencher::{benchmark_group, benchmark_main};
 
-
 fn tiny_xmlparser(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| {
@@ -28,7 +27,6 @@ fn large_xmlparser(bencher: &mut Bencher) {
         }
     })
 }
-
 
 fn tiny_xmlrs(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
@@ -57,7 +55,6 @@ fn large_xmlrs(bencher: &mut Bencher) {
     })
 }
 
-
 fn parse_via_quick_xml(text: &str) {
     let mut r = quick_xml::Reader::from_str(text);
     r.check_comments(true);
@@ -65,8 +62,8 @@ fn parse_via_quick_xml(text: &str) {
     let mut ns_buf = Vec::new();
     loop {
         match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((_, quick_xml::events::Event::Start(_))) |
-            Ok((_, quick_xml::events::Event::Empty(_))) => (),
+            Ok((_, quick_xml::events::Event::Start(_)))
+            | Ok((_, quick_xml::events::Event::Empty(_))) => (),
             Ok((_, quick_xml::events::Event::Text(ref e))) => {
                 e.unescaped().unwrap();
                 ()
@@ -93,7 +90,6 @@ fn large_quick_xml(bencher: &mut Bencher) {
     bencher.iter(|| parse_via_quick_xml(&text))
 }
 
-
 fn tiny_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
@@ -108,7 +104,6 @@ fn large_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
-
 
 fn tiny_xmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
@@ -125,7 +120,6 @@ fn large_xmltree(bencher: &mut Bencher) {
     bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
 }
 
-
 fn tiny_sdx_document(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
@@ -140,7 +134,6 @@ fn large_sdx_document(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
-
 
 fn tiny_minidom(bencher: &mut Bencher) {
     let data = std::fs::read_to_string("fonts.conf").unwrap();
@@ -198,9 +191,10 @@ fn roxmltree_iter_descendants_inexpensive(bencher: &mut Bencher) {
     let doc = roxmltree::Document::parse(&text).unwrap();
     let root = doc.root();
     bencher.iter(|| {
-        let count = root.descendants().filter(|node| {
-            node.tag_name().name() == "string"
-        }).count();
+        let count = root
+            .descendants()
+            .filter(|node| node.tag_name().name() == "string")
+            .count();
         assert!(count == 3273);
     })
 }
@@ -212,9 +206,7 @@ fn roxmltree_iter_descendants_expensive(bencher: &mut Bencher) {
     bencher.iter(|| {
         let count = root
             .descendants()
-            .filter(|node| {
-                node.is_text() && node.text().unwrap().contains("twitter")
-            })
+            .filter(|node| node.is_text() && node.text().unwrap().contains("twitter"))
             .count();
         assert!(count == 118);
     })
@@ -241,7 +233,9 @@ fn minidom_iter_descendants_inexpensive(bencher: &mut Bencher) {
         let mut count = 0;
         let mut stack: Vec<&minidom::Element> = vec![&root];
         while let Some(node) = stack.pop() {
-            if node.name() == "string" { count += 1 }
+            if node.name() == "string" {
+                count += 1
+            }
             stack.append(&mut node.children().collect::<Vec<_>>());
         }
         assert!(count == 3273);
@@ -269,14 +263,22 @@ fn xmltree_iter_descendants_inexpensive(bencher: &mut Bencher) {
         let mut count = 0;
         let mut stack: Vec<&xmltree::Element> = vec![&root];
         while let Some(node) = stack.pop() {
-            if node.name == "string" { count += 1 }
-            stack.append(&mut node
-                .children
-                .iter()
-                .filter_map(|node| {
-                    if let xmltree::XMLNode::Element(elem) = node { Some(elem) } else { None }
-                })
-                .collect::<Vec<_>>());
+            if node.name == "string" {
+                count += 1
+            }
+            stack.append(
+                &mut node
+                    .children
+                    .iter()
+                    .filter_map(|node| {
+                        if let xmltree::XMLNode::Element(elem) = node {
+                            Some(elem)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            );
         }
         assert!(count == 3273);
     })
@@ -289,40 +291,54 @@ fn xmltree_iter_descendants_expensive(bencher: &mut Bencher) {
         let mut count = 0;
         let mut stack: Vec<&xmltree::Element> = vec![&root];
         while let Some(node) = stack.pop() {
-            count += node.children
-                .iter()
-                .filter_map(|node| {
-                    if let xmltree::XMLNode::Text(text) = node { Some(text) } else { None }
-                })
-                .filter(|text| {
-                    text.contains("twitter")
-                })
-                .count();
-            stack.append(&mut node
+            count += node
                 .children
                 .iter()
                 .filter_map(|node| {
-                    node.as_element()
+                    if let xmltree::XMLNode::Text(text) = node {
+                        Some(text)
+                    } else {
+                        None
+                    }
                 })
-                .collect::<Vec<_>>());
+                .filter(|text| text.contains("twitter"))
+                .count();
+            stack.append(
+                &mut node
+                    .children
+                    .iter()
+                    .filter_map(|node| node.as_element())
+                    .collect::<Vec<_>>(),
+            );
         }
         assert!(count == 118);
     })
 }
 
-benchmark_group!(xmltree_iter,
+benchmark_group!(
+    xmltree_iter,
     xmltree_iter_descendants_inexpensive,
-    xmltree_iter_descendants_expensive);
-benchmark_group!(minidom_iter,
+    xmltree_iter_descendants_expensive
+);
+benchmark_group!(
+    minidom_iter,
     minidom_iter_descendants_inexpensive,
-    minidom_iter_descendants_expensive);
-benchmark_group!(roxmltree_iter,
+    minidom_iter_descendants_expensive
+);
+benchmark_group!(
+    roxmltree_iter,
     roxmltree_iter_descendants_inexpensive,
     roxmltree_iter_descendants_expensive,
-    roxmltree_iter_children);
+    roxmltree_iter_children
+);
 benchmark_group!(roxmltree, tiny_roxmltree, medium_roxmltree, large_roxmltree);
 benchmark_group!(xmltree, tiny_xmltree, medium_xmltree, large_xmltree);
-benchmark_group!(sdx, tiny_sdx_document, medium_sdx_document, large_sdx_document);
+benchmark_group!(
+    sdx,
+    tiny_sdx_document,
+    medium_sdx_document,
+    large_sdx_document
+);
 benchmark_group!(minidom, tiny_minidom, medium_minidom, large_minidom);
 benchmark_group!(xmlparser, tiny_xmlparser, medium_xmlparser, large_xmlparser);
 benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs);
@@ -341,7 +357,8 @@ benchmark_main!(
     quick_xml,
     roxmltree_iter,
     minidom_iter,
-    xmltree_iter);
+    xmltree_iter
+);
 
 #[cfg(feature = "libxml")]
 benchmark_main!(
@@ -355,4 +372,5 @@ benchmark_main!(
     libxml,
     roxmltree_iter,
     minidom_iter,
-    xmltree_iter);
+    xmltree_iter
+);

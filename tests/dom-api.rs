@@ -19,7 +19,10 @@ fn get_elements_by_tag_name() {
 
     let doc = Document::parse(data).unwrap();
 
-    let nodes: Vec<Node> = doc.descendants().filter(|n| n.has_tag_name("rect")).collect();
+    let nodes: Vec<Node> = doc
+        .descendants()
+        .filter(|n| n.has_tag_name("rect"))
+        .collect();
     assert_eq!(nodes.len(), 2);
 }
 
@@ -40,8 +43,10 @@ fn get_elements_by_tag_name_ns() {
 
     let doc = Document::parse(data).unwrap();
 
-    let nodes: Vec<Node> = doc.descendants()
-        .filter(|n| n.has_tag_name(("http://www.w3.org/", "rect"))).collect();
+    let nodes: Vec<Node> = doc
+        .descendants()
+        .filter(|n| n.has_tag_name(("http://www.w3.org/", "rect")))
+        .collect();
     assert_eq!(nodes.len(), 1);
 }
 
@@ -126,7 +131,11 @@ fn last_element_child() {
 
     // or
 
-    let elem = svg_elem.children().filter(|n| n.is_element()).last().unwrap();
+    let elem = svg_elem
+        .children()
+        .filter(|n| n.is_element())
+        .last()
+        .unwrap();
     assert!(elem.has_tag_name("rect"));
 }
 
@@ -143,7 +152,10 @@ fn get_element_by_id() {
 ";
 
     let doc = Document::parse(data).unwrap();
-    let elem = doc.descendants().find(|n| n.attribute("id") == Some("rect1")).unwrap();
+    let elem = doc
+        .descendants()
+        .find(|n| n.attribute("id") == Some("rect1"))
+        .unwrap();
     assert!(elem.has_tag_name("rect"));
 }
 
@@ -170,7 +182,12 @@ fn parent_element() {
 
     // or
 
-    assert!(rect.ancestors().skip(1).find(|n| n.is_element()).unwrap().has_tag_name("svg"));
+    assert!(rect
+        .ancestors()
+        .skip(1)
+        .find(|n| n.is_element())
+        .unwrap()
+        .has_tag_name("svg"));
 }
 
 // Node.contains
