@@ -85,6 +85,9 @@ pub enum Error {
     /// This error will be emitted only when `ParsingOptions::allow_dtd` is set to `false`.
     DtdDetected,
 
+    /// Indicates that the [`ParsingOptions::nodes_limit`] was reached.
+    NodesLimitReached,
+
     /// Errors detected by the `xmlparser` crate.
     ParserError(xmlparser::Error),
 }
@@ -188,6 +191,9 @@ impl core::fmt::Display for Error {
             Error::DtdDetected => {
                 write!(f, "XML with DTD detected")
             }
+            Error::NodesLimitReached => {
+                write!(f, "nodes limit reached")
+            }
             Error::ParserError(ref err) => {
                 write!(f, "{}", err)
             }
@@ -220,13 +226,25 @@ pub struct ParsingOptions {
     ///
     /// Default: false
     pub allow_dtd: bool,
+
+    /// Sets the maximum number of nodes to parse.
+    ///
+    /// Useful when dealing with random input to limit memory usage.
+    ///
+    /// The value of 0 disables the limit.
+    ///
+    /// Default: 0 (no limit)
+    pub nodes_limit: usize,
 }
 
 // Explicit for readability.
 #[allow(clippy::derivable_impls)]
 impl Default for ParsingOptions {
     fn default() -> Self {
-        ParsingOptions { allow_dtd: false }
+        ParsingOptions {
+            allow_dtd: false,
+            nodes_limit: 0,
+        }
     }
 }
 
@@ -279,10 +297,15 @@ impl<'input> Document<'input> {
         parent_id: NodeId,
         kind: NodeKind<'input>,
         pos: usize,
+        nodes_limit: usize,
         awaiting_subtree: &mut Vec<NodeId>,
-    ) -> NodeId {
+    ) -> Result<NodeId, Error> {
+        if nodes_limit != 0 && self.nodes.len() >= nodes_limit {
+            return Err(Error::NodesLimitReached);
+        }
+
         #[cfg(not(feature = "positions"))]
-        let _ = range;
+        let _ = pos;
 
         let new_child_id = NodeId::from(self.nodes.len());
 
@@ -314,7 +337,7 @@ impl<'input> Document<'input> {
             awaiting_subtree.push(NodeId::from(self.nodes.len() - 1));
         }
 
-        new_child_id
+        Ok(new_child_id)
     }
 }
 
@@ -518,15 +541,22 @@ fn process_tokens<'input>(
                     target: target.as_str(),
                     value: content.map(|v| v.as_str()),
                 });
-                doc.append(parent_id, pi, span.start(), &mut pd.awaiting_subtree);
+                doc.append(
+                    parent_id,
+                    pi,
+                    span.start(),
+                    pd.opt.nodes_limit,
+                    &mut pd.awaiting_subtree,
+                )?;
             }
             xmlparser::Token::Comment { text, span } => {
                 doc.append(
                     parent_id,
                     NodeKind::Comment(text.as_str()),
                     span.start(),
+                    pd.opt.nodes_limit,
                     &mut pd.awaiting_subtree,
-                );
+                )?;
             }
             xmlparser::Token::Text { text } => {
                 process_text(text, parent_id, loop_detector, pd, doc)?;
@@ -536,10 +566,11 @@ fn process_tokens<'input>(
                     BorrowedText::Input(text.as_str()),
                     parent_id,
                     span.start(),
+                    pd.opt.nodes_limit,
                     pd.after_text,
                     doc,
                     &mut pd.awaiting_subtree,
-                );
+                )?;
                 pd.after_text = true;
             }
             xmlparser::Token::ElementStart {
@@ -718,8 +749,9 @@ fn process_element<'input>(
                     namespaces,
                 },
                 tag_name.span.start(),
+                pd.opt.nodes_limit,
                 &mut pd.awaiting_subtree,
-            );
+            )?;
             pd.awaiting_subtree.push(new_element_id);
         }
         xmlparser::ElementEnd::Close(prefix, local) => {
@@ -763,8 +795,9 @@ fn process_element<'input>(
                     namespaces,
                 },
                 tag_name.span.start(),
+                pd.opt.nodes_limit,
                 &mut pd.awaiting_subtree,
-            );
+            )?;
             pd.parent_prefixes.push(tag_name.prefix.as_str());
         }
     }
@@ -853,10 +886,11 @@ fn process_text<'input>(
             BorrowedText::Input(text.as_str()),
             parent_id,
             text.start(),
+            pd.opt.nodes_limit,
             pd.after_text,
             doc,
             &mut pd.awaiting_subtree,
-        );
+        )?;
         pd.after_text = true;
         return Ok(());
     }
@@ -895,10 +929,11 @@ fn process_text<'input>(
                         BorrowedText::Temp(pd.buffer.to_str()),
                         parent_id,
                         text.start(),
+                        pd.opt.nodes_limit,
                         pd.after_text,
                         doc,
                         &mut pd.awaiting_subtree,
-                    );
+                    )?;
                     pd.after_text = true;
                     pd.buffer.clear();
                 }
@@ -921,10 +956,11 @@ fn process_text<'input>(
             BorrowedText::Temp(pd.buffer.to_str()),
             parent_id,
             text.start(),
+            pd.opt.nodes_limit,
             pd.after_text,
             doc,
             &mut pd.awaiting_subtree,
-        );
+        )?;
         pd.after_text = true;
         pd.buffer.clear();
     }
@@ -941,10 +977,11 @@ fn append_text<'input, 'temp>(
     text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
     pos: usize,
+    nodes_limit: usize,
     after_text: bool,
     doc: &mut Document<'input>,
     awaiting_subtree: &mut Vec<NodeId>,
-) {
+) -> Result<(), Error> {
     if after_text {
         // Prepend to a previous text node.
         if let Some(node) = doc.nodes.last_mut() {
@@ -972,8 +1009,16 @@ fn append_text<'input, 'temp>(
             BorrowedText::Input(text) => Cow::Borrowed(text),
             BorrowedText::Temp(text) => Cow::Owned(text.to_owned()),
         };
-        doc.append(parent_id, NodeKind::Text(text), pos, awaiting_subtree);
+        doc.append(
+            parent_id,
+            NodeKind::Text(text),
+            pos,
+            nodes_limit,
+            awaiting_subtree,
+        )?;
     }
+
+    Ok(())
 }
 
 enum NextChunk<'a> {

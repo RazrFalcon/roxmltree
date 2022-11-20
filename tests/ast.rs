@@ -35,7 +35,10 @@ fn actual_test(path: &str) {
     let path = path::Path::new(path);
     let expected = load_file(&path.with_extension("yaml"));
 
-    let opt = ParsingOptions { allow_dtd: true };
+    let opt = ParsingOptions {
+        allow_dtd: true,
+        nodes_limit: 0,
+    };
 
     let input_xml = load_file(&path);
     let doc = match Document::parse_with_options(&input_xml, opt) {

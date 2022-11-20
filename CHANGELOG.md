@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - `Node::position`
 - `Attribute::position`
+- `ParsingOptions::nodes_limit` to limit the maximum number of nodes to parse.
 
 ### Removed
 - 4GB input limit.
