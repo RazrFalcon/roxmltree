@@ -831,6 +831,10 @@ fn resolve_attributes<'input>(
         return Ok(ShortRange::new(0, 0));
     }
 
+    if doc.attrs.len() + pd.tmp_attrs.len() >= core::u32::MAX as usize {
+        return Err(Error::NodesLimitReached);
+    }
+
     for attr in &mut pd.tmp_attrs {
         let namespace_idx = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
