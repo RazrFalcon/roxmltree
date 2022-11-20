@@ -375,7 +375,7 @@ impl From<u32> for NodeId {
 impl From<usize> for NodeId {
     #[inline]
     fn from(id: usize) -> Self {
-        // Casting to `u32` should be safe since we have a 4GiB input data limit.
+        // We already checked that `id` is limited by u32::MAX.
         debug_assert!(id <= core::u32::MAX as usize);
         NodeId::new(id as u32)
     }

@@ -6,9 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Added
+- `positions` build feature.
 - `Node::position`
 - `Attribute::position`
 - `ParsingOptions::nodes_limit` to limit the maximum number of nodes to parse.
+
+### Changed
+- Peak memory usage reduces by up to 20% depending on an input.
+  Thanks to [@adamreichold](https://github.com/adamreichold)
+  and [@tomjw64](https://github.com/tomjw64).
 
 ### Removed
 - 4GB input limit.

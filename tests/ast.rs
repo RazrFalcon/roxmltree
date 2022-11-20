@@ -37,7 +37,7 @@ fn actual_test(path: &str) {
 
     let opt = ParsingOptions {
         allow_dtd: true,
-        nodes_limit: 0,
+        ..roxmltree::ParsingOptions::default()
     };
 
     let input_xml = load_file(&path);

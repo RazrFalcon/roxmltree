@@ -231,10 +231,8 @@ pub struct ParsingOptions {
     ///
     /// Useful when dealing with random input to limit memory usage.
     ///
-    /// The value of 0 disables the limit.
-    ///
-    /// Default: 0 (no limit)
-    pub nodes_limit: usize,
+    /// Default: u32::MAX (no limit)
+    pub nodes_limit: u32,
 }
 
 // Explicit for readability.
@@ -243,7 +241,7 @@ impl Default for ParsingOptions {
     fn default() -> Self {
         ParsingOptions {
             allow_dtd: false,
-            nodes_limit: 0,
+            nodes_limit: core::u32::MAX,
         }
     }
 }
@@ -297,10 +295,10 @@ impl<'input> Document<'input> {
         parent_id: NodeId,
         kind: NodeKind<'input>,
         pos: usize,
-        nodes_limit: usize,
+        nodes_limit: u32,
         awaiting_subtree: &mut Vec<NodeId>,
     ) -> Result<NodeId, Error> {
-        if nodes_limit != 0 && self.nodes.len() >= nodes_limit {
+        if self.nodes.len() >= nodes_limit as usize {
             return Err(Error::NodesLimitReached);
         }
 
@@ -977,7 +975,7 @@ fn append_text<'input, 'temp>(
     text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
     pos: usize,
-    nodes_limit: usize,
+    nodes_limit: u32,
     after_text: bool,
     doc: &mut Document<'input>,
     awaiting_subtree: &mut Vec<NodeId>,

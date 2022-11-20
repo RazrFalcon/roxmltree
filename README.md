@@ -146,7 +146,7 @@ particular name.
 
 ### Notes
 
-The benchmarks were taken on a 2021 MacBook Pro with the Apple M1 Pro chip with 16GB of RAM.
+The benchmarks were taken on a Apple M1.
 You can try running the benchmarks yourself by running `cargo bench` in the `benches` dir.
 
 - Since all libraries have a different XML support, benchmarking is a bit pointless.
@@ -160,6 +160,25 @@ You can try running the benchmarks yourself by running `cargo bench` in the `ben
 [quick-xml]: https://crates.io/crates/quick-xml
 [xmlparser]: https://crates.io/crates/xmlparser
 [rust-libxml]: https://github.com/KWARC/rust-libxml
+
+## Memory Overhead
+
+`roxmltree` tries to use as little memory as possible to allow parsing
+very large (multi-GB) XML files.
+
+The peak memory usage doesn't directly correlates with the file size
+but rather with the amount of nodes and attributes a file has.
+How many attributes had to be normalized (i.e. allocated).
+And how many text nodes had to be preprocessed (i.e. allocated).
+
+`roxmltree` never allocates element and attribute names, processing instructions
+and comments.
+
+By disabling the `positions` feature, you can shave by 8 bytes from each node and attribute.
+
+On average, the overhead is around 6-8x the file size.
+For example, our 1.1GB sample XML will peak at 7.6GB RAM with default features enabled
+and at 6.8GB RAM when `positions` is disabled.
 
 ## Safety
 

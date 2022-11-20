@@ -10,7 +10,7 @@ fn main() {
 
     let opt = roxmltree::ParsingOptions {
         allow_dtd: true,
-        nodes_limit: 0,
+        ..roxmltree::ParsingOptions::default()
     };
     match roxmltree::Document::parse_with_options(&text, opt) {
         Ok(doc) => print!("{:?}", doc),
