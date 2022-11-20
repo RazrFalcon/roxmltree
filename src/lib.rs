@@ -355,7 +355,7 @@ impl NodeId {
     /// Returns the `u32` representation of the `NodeId`.
     #[inline]
     pub fn get(self) -> u32 {
-        self.0.get() as u32 - 1
+        self.0.get() - 1
     }
 
     /// Returns the `usize` representation of the `NodeId`.
@@ -877,7 +877,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     pub fn lookup_prefix(&self, uri: &str) -> Option<&'a str> {
         if uri == NS_XML_URI {
-            return Some("xml");
+            return Some(NS_XML_PREFIX);
         }
 
         self.namespaces()
