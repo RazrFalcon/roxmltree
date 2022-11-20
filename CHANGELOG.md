@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `Attribute::position`
 
 ### Removed
+- 4GB input limit.
 - Do not store Node and Attribute end range in the original document.
 - Do not store attribute value range in the original document.
 - `Node::range`. Use `position` instead.

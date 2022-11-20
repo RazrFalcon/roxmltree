@@ -94,9 +94,6 @@ pub enum Error {
     /// The XML document must have at least one element.
     NoRootNode,
 
-    /// The input string should be smaller than 4GiB.
-    SizeLimit,
-
     /// An XML with DTD detected.
     ///
     /// This error will be emitted only when `ParsingOptions::allow_dtd` is set to `false`.
@@ -181,9 +178,6 @@ impl core::fmt::Display for Error {
             }
             Error::NoRootNode => {
                 write!(f, "the document does not have a root node")
-            }
-            Error::SizeLimit => {
-                write!(f, "the input string should be smaller than 4GiB")
             }
             Error::DtdDetected => {
                 write!(f, "XML with DTD detected")
@@ -440,10 +434,6 @@ impl LoopDetector {
 
 
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
-    if text.len() > core::u32::MAX as usize {
-        return Err(Error::SizeLimit);
-    }
-
     let mut pd = ParserData {
         opt,
         attrs_start_idx: 0,
