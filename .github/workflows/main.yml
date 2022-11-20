@@ -27,7 +27,7 @@ jobs:
     - name: Run tests
       run: cargo test
 
-    - name: Run tests without token-ranges
+    - name: Run tests without positions
       run: cargo test --no-default-features --features std
 
     - name: Build without std

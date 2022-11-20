@@ -395,18 +395,16 @@ struct NodeData<'input> {
     next_subtree: Option<NodeId>,
     last_child: Option<NodeId>,
     kind: NodeKind<'input>,
-    #[cfg(feature = "token-ranges")]
-    range: ShortRange,
+    #[cfg(feature = "positions")]
+    pos: usize,
 }
 
 #[derive(Clone, Debug)]
 struct AttributeData<'input> {
     name: ExpandedNameIndexed<'input>,
     value: Cow<'input, str>,
-    #[cfg(feature = "token-ranges")]
-    range: ShortRange,
-    #[cfg(feature = "token-ranges")]
-    value_range: ShortRange,
+    #[cfg(feature = "positions")]
+    pos: usize,
 }
 
 /// An attribute.
@@ -468,7 +466,7 @@ impl<'a, 'input> Attribute<'a, 'input> {
         &self.data.value
     }
 
-    /// Returns attribute's name range in bytes in the original document.
+    /// Returns attribute's position in bytes in the original document.
     ///
     /// You can calculate a human-readable text position via [Document::text_pos_at].
     ///
@@ -478,26 +476,10 @@ impl<'a, 'input> Attribute<'a, 'input> {
     /// ```
     ///
     /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
-    #[cfg(feature = "token-ranges")]
+    #[cfg(feature = "positions")]
     #[inline]
-    pub fn range(&self) -> Range {
-        self.data.range.to_urange()
-    }
-
-    /// Returns attribute's value range in bytes in the original document.
-    ///
-    /// You can calculate a human-readable text position via [Document::text_pos_at].
-    ///
-    /// ```text
-    /// <e attr='value'/>
-    ///          ^
-    /// ```
-    ///
-    /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
-    #[cfg(feature = "token-ranges")]
-    #[inline]
-    pub fn value_range(&self) -> Range {
-        self.data.value_range.to_urange()
+    pub fn position(&self) -> usize {
+        self.data.pos
     }
 }
 
@@ -1220,11 +1202,11 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         Descendants::new(*self)
     }
 
-    /// Returns node's range in bytes in the original document.
-    #[cfg(feature = "token-ranges")]
+    /// Returns node's position in bytes in the original document.
+    #[cfg(feature = "positions")]
     #[inline]
-    pub fn range(&self) -> Range {
-        self.d.range.to_urange()
+    pub fn position(&self) -> usize {
+        self.d.pos
     }
 
     /// Returns node's NodeId

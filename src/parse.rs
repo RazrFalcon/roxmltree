@@ -237,10 +237,8 @@ struct TempAttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
     value: Cow<'input, str>,
-    #[cfg(feature = "token-ranges")]
-    range: ShortRange,
-    #[cfg(feature = "token-ranges")]
-    value_range: ShortRange,
+    #[cfg(feature = "positions")]
+    pos: usize,
 }
 
 impl<'input> Document<'input> {
@@ -283,10 +281,10 @@ impl<'input> Document<'input> {
         &mut self,
         parent_id: NodeId,
         kind: NodeKind<'input>,
-        range: ShortRange,
+        pos: usize,
         awaiting_subtree: &mut Vec<NodeId>,
     ) -> NodeId {
-        #[cfg(not(feature = "token-ranges"))]
+        #[cfg(not(feature = "positions"))]
         let _ = range;
 
         let new_child_id = NodeId::from(self.nodes.len());
@@ -302,8 +300,8 @@ impl<'input> Document<'input> {
             next_subtree: None,
             last_child: None,
             kind,
-            #[cfg(feature = "token-ranges")]
-            range,
+            #[cfg(feature = "positions")]
+            pos,
         });
 
         let last_child_id = self.nodes[parent_id.get_usize()].last_child;
@@ -477,8 +475,8 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         next_subtree: None,
         last_child: None,
         kind: NodeKind::Root,
-        #[cfg(feature = "token-ranges")]
-        range: (0..text.len()).into(),
+        #[cfg(feature = "positions")]
+        pos: 0,
     });
 
     doc.namespaces.push_ns(Some(NS_XML_PREFIX), Cow::Borrowed(NS_XML_URI));
@@ -518,16 +516,16 @@ fn process_tokens<'input>(
                     target: target.as_str(),
                     value: content.map(|v| v.as_str()),
                 });
-                doc.append(parent_id, pi, span.range().into(), &mut pd.awaiting_subtree);
+                doc.append(parent_id, pi, span.start(), &mut pd.awaiting_subtree);
             }
             xmlparser::Token::Comment { text, span } => {
-                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.range().into(), &mut pd.awaiting_subtree);
+                doc.append(parent_id, NodeKind::Comment(text.as_str()), span.start(), &mut pd.awaiting_subtree);
             }
             xmlparser::Token::Text { text } => {
                 process_text(text, parent_id, loop_detector, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
-                append_text(BorrowedText::Input(text.as_str()), parent_id, span.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
+                append_text(BorrowedText::Input(text.as_str()), parent_id, span.start(), pd.after_text, doc, &mut pd.awaiting_subtree);
                 pd.after_text = true;
             }
             xmlparser::Token::ElementStart { prefix, local, span } => {
@@ -580,12 +578,10 @@ fn process_attribute<'input>(
     pd: &mut ParserData<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
-    #[cfg(not(feature = "token-ranges"))]
+    #[cfg(not(feature = "positions"))]
     let _ = token_span;
-    #[cfg(feature = "token-ranges")]
-    let range = token_span.range().into();
-    #[cfg(feature = "token-ranges")]
-    let value_range = value.range().into();
+    #[cfg(feature = "positions")]
+    let pos = token_span.start();
 
     let value = normalize_attribute(doc.text, value, &pd.entities, loop_detector, &mut pd.buffer)?;
 
@@ -641,10 +637,8 @@ fn process_attribute<'input>(
     } else {
         pd.tmp_attrs.push(TempAttributeData {
             prefix, local, value,
-            #[cfg(feature = "token-ranges")]
-            range,
-            #[cfg(feature = "token-ranges")]
-            value_range,
+            #[cfg(feature = "positions")]
+            pos,
         });
     }
 
@@ -690,7 +684,7 @@ fn process_element<'input>(
                     attributes,
                     namespaces,
                 },
-                (tag_name.span.start()..token_span.end()).into(),
+                tag_name.span.start(),
                 &mut pd.awaiting_subtree,
             );
             pd.awaiting_subtree.push(new_element_id);
@@ -703,12 +697,6 @@ fn process_element<'input>(
             // should never panic as we start with the single prefix of the
             // root node and always push another one when changing the parent
             let parent_prefix = *pd.parent_prefixes.last().unwrap();
-
-            #[cfg(feature = "token-ranges")]
-            {
-                debug_assert!(token_span.end() <= core::u32::MAX as usize);
-                parent_node.range.end = token_span.end() as u32;
-            }
 
             if let NodeKind::Element { ref tag_name, .. } = parent_node.kind {
                 if prefix != parent_prefix || local != tag_name.local_name {
@@ -740,7 +728,7 @@ fn process_element<'input>(
                     attributes,
                     namespaces,
                 },
-                (tag_name.span.start()..token_span.end()).into(),
+                tag_name.span.start(),
                 &mut pd.awaiting_subtree,
             );
             pd.parent_prefixes.push(tag_name.prefix.as_str());
@@ -808,10 +796,8 @@ fn resolve_attributes<'input>(
             name: attr_name,
             // Takes a value from a slice without consuming the slice.
             value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
-            #[cfg(feature = "token-ranges")]
-            range: attr.range,
-            #[cfg(feature = "token-ranges")]
-            value_range: attr.value_range,
+            #[cfg(feature = "positions")]
+            pos: attr.pos,
         });
     }
 
@@ -827,7 +813,7 @@ fn process_text<'input>(
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
-        append_text(BorrowedText::Input(text.as_str()), parent_id, text.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
+        append_text(BorrowedText::Input(text.as_str()), parent_id, text.start(), pd.after_text, doc, &mut pd.awaiting_subtree);
         pd.after_text = true;
         return Ok(());
     }
@@ -862,7 +848,7 @@ fn process_text<'input>(
                 is_as_is = false;
 
                 if !pd.buffer.is_empty() {
-                    append_text(BorrowedText::Temp(pd.buffer.to_str()), parent_id, text.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
+                    append_text(BorrowedText::Temp(pd.buffer.to_str()), parent_id, text.start(), pd.after_text, doc, &mut pd.awaiting_subtree);
                     pd.after_text = true;
                     pd.buffer.clear();
                 }
@@ -881,7 +867,7 @@ fn process_text<'input>(
     }
 
     if !pd.buffer.is_empty() {
-        append_text(BorrowedText::Temp(pd.buffer.to_str()), parent_id, text.range().into(), pd.after_text, doc, &mut pd.awaiting_subtree);
+        append_text(BorrowedText::Temp(pd.buffer.to_str()), parent_id, text.start(), pd.after_text, doc, &mut pd.awaiting_subtree);
         pd.after_text = true;
         pd.buffer.clear();
     }
@@ -897,7 +883,7 @@ enum BorrowedText<'input, 'temp> {
 fn append_text<'input, 'temp>(
     text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
-    range: ShortRange,
+    pos: usize,
     after_text: bool,
     doc: &mut Document<'input>,
     awaiting_subtree: &mut Vec<NodeId>
@@ -929,7 +915,7 @@ fn append_text<'input, 'temp>(
             BorrowedText::Input(text) => Cow::Borrowed(text),
             BorrowedText::Temp(text) => Cow::Owned(text.to_owned()),
         };
-        doc.append(parent_id, NodeKind::Text(text), range, awaiting_subtree);
+        doc.append(parent_id, NodeKind::Text(text), pos, awaiting_subtree);
     }
 }
 

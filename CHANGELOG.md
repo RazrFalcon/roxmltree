@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `Node::position`
+- `Attribute::position`
+
+### Removed
+- Do not store Node and Attribute end range in the original document.
+- Do not store attribute value range in the original document.
+- `Node::range`. Use `position` instead.
+- `Attribute::range`. Use `position` instead.
+- `Attribute::value_range`
 
 ## [0.15.1] - 2022-10-18
 ### Fixed

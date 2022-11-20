@@ -19,6 +19,8 @@ exclude = ["test-apps", "testing-tools"]
 xmlparser = "0.13.5"
 
 [features]
-default = ["std", "token-ranges"]
+default = ["std", "positions"]
 std = []
-token-ranges = []
+# Enables Nodes and Attributes position in the original document preserving.
+# Increases memory usage by `usize` for each Node and Attribute.
+positions = []

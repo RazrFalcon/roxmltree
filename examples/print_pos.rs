@@ -1,4 +1,4 @@
-#[cfg(feature = "token-ranges")]
+#[cfg(feature = "positions")]
 fn main() {
     let args: Vec<_> = std::env::args().collect();
 
@@ -20,10 +20,10 @@ fn main() {
     // TODO: finish
     for node in doc.descendants() {
         if node.is_element() {
-            println!("{:?} at {}", node.tag_name(), doc.text_pos_at(node.range().start));
+            println!("{:?} at {}", node.tag_name(), doc.text_pos_at(node.position()));
         }
     }
 }
 
-#[cfg(not(feature = "token-ranges"))]
+#[cfg(not(feature = "positions"))]
 fn main() {}
