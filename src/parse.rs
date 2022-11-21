@@ -1169,11 +1169,10 @@ fn get_ns_idx_by_prefix<'input>(
 
     let idx = doc.namespaces.tree[range.to_urange()]
         .iter()
-        .map(|idx| &doc.namespaces.values[*idx])
-        .position(|ns| ns.name == prefix_opt);
+        .find(|idx| doc.namespaces.values[**idx].name == prefix_opt);
 
     match idx {
-        Some(idx) => Ok(Some(range.start + idx as u32)),
+        Some(idx) => Ok(Some(*idx as u32)),
         None => {
             if !prefix.is_empty() {
                 // If an URI was not found and prefix IS NOT empty than
