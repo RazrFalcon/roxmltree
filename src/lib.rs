@@ -508,7 +508,7 @@ impl fmt::Debug for Attribute<'_, '_> {
 /// A namespace.
 ///
 /// Contains URI and *prefix* pair.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Namespace<'input> {
     name: Option<&'input str>,
     uri: Cow<'input, str>,
@@ -567,22 +567,28 @@ struct Namespaces<'input> {
 }
 
 impl<'input> Namespaces<'input> {
-    #[inline]
-    fn push_ns(&mut self, name: Option<&'input str>, uri: Cow<'input, str>) -> Result<(), Error> {
-        let value = Namespace { name, uri };
-        debug_assert_ne!(value.name, Some(""));
+    fn push_ns<'temp>(
+        &mut self,
+        name: Option<&'input str>,
+        uri: BorrowedText<'input, 'temp>,
+    ) -> Result<(), Error> {
+        debug_assert_ne!(name, Some(""));
 
-        let idx = match self
-            .sorted
-            .binary_search_by(|idx| self.values[*idx as usize].cmp(&value))
-        {
+        let idx = match self.sorted.binary_search_by(|idx| {
+            let value = &self.values[*idx as usize];
+
+            (value.name, value.uri.as_ref()).cmp(&(name, uri.as_str()))
+        }) {
             Ok(sorted_idx) => self.sorted[sorted_idx],
             Err(sorted_idx) => {
                 if self.values.len() > core::u16::MAX as usize {
                     return Err(Error::NamespacesLimitReached);
                 }
                 let idx = self.values.len() as u16;
-                self.values.push(value);
+                self.values.push(Namespace {
+                    name,
+                    uri: uri.to_cow(),
+                });
                 self.sorted.insert(sorted_idx, idx);
                 idx
             }

@@ -502,7 +502,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     });
 
     doc.namespaces
-        .push_ns(Some(NS_XML_PREFIX), Cow::Borrowed(NS_XML_URI))?;
+        .push_ns(Some(NS_XML_PREFIX), BorrowedText::Input(NS_XML_URI))?;
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
@@ -685,8 +685,7 @@ fn process_attribute<'input>(
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces
-                .push_ns(Some(local.as_str()), value.to_cow())?;
+            doc.namespaces.push_ns(Some(local.as_str()), value)?;
         }
     } else if local.as_str() == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
@@ -701,7 +700,7 @@ fn process_attribute<'input>(
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        doc.namespaces.push_ns(None, value.to_cow())?;
+        doc.namespaces.push_ns(None, value)?;
     } else {
         let value = value.to_cow();
         pd.tmp_attrs.push(TempAttributeData {
@@ -982,20 +981,20 @@ fn process_text<'input>(
     Ok(())
 }
 
-enum BorrowedText<'input, 'temp> {
+pub(crate) enum BorrowedText<'input, 'temp> {
     Input(&'input str),
     Temp(&'temp str),
 }
 
 impl<'input, 'temp> BorrowedText<'input, 'temp> {
-    fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             BorrowedText::Input(text) => text,
             BorrowedText::Temp(text) => text,
         }
     }
 
-    fn to_cow(&self) -> Cow<'input, str> {
+    pub(crate) fn to_cow(&self) -> Cow<'input, str> {
         match self {
             BorrowedText::Input(text) => Cow::Borrowed(text),
             BorrowedText::Temp(text) => Cow::Owned((*text).to_owned()),
