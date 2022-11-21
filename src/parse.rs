@@ -809,7 +809,7 @@ fn resolve_namespaces(start_idx: usize, parent_id: NodeId, doc: &mut Document) -
         for i in parent_ns.to_urange() {
             if !doc.namespaces.exists(
                 start_idx,
-                doc.namespaces.values[doc.namespaces.tree[i]].name,
+                doc.namespaces.values[doc.namespaces.tree[i] as usize].name,
             ) {
                 doc.namespaces.push_ref(i);
             }
@@ -1156,7 +1156,7 @@ fn get_ns_idx_by_prefix<'input>(
     doc: &Document<'input>,
     range: ShortRange,
     prefix: StrSpan,
-) -> Result<Option<u32>, Error> {
+) -> Result<Option<u16>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
     //
     // Example:
@@ -1169,10 +1169,10 @@ fn get_ns_idx_by_prefix<'input>(
 
     let idx = doc.namespaces.tree[range.to_urange()]
         .iter()
-        .find(|idx| doc.namespaces.values[**idx].name == prefix_opt);
+        .find(|idx| doc.namespaces.values[**idx as usize].name == prefix_opt);
 
     match idx {
-        Some(idx) => Ok(Some(*idx as u32)),
+        Some(idx) => Ok(Some(*idx)),
         None => {
             if !prefix.is_empty() {
                 // If an URI was not found and prefix IS NOT empty than

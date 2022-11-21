@@ -561,9 +561,9 @@ struct Namespaces<'input> {
     // Deduplicated namespace values used throughout the document
     values: Vec<Namespace<'input>>,
     // Indices into the above in tree order as the document is parsed
-    tree: Vec<usize>,
+    tree: Vec<u16>,
     // Indices into the above sorted by value used for deduplication
-    sorted: Vec<usize>,
+    sorted: Vec<u16>,
 }
 
 impl<'input> Namespaces<'input> {
@@ -574,7 +574,7 @@ impl<'input> Namespaces<'input> {
 
         match self
             .sorted
-            .binary_search_by(|idx| self.values[*idx].cmp(&value))
+            .binary_search_by(|idx| self.values[*idx as usize].cmp(&value))
         {
             Ok(sorted_idx) => {
                 let idx = self.sorted[sorted_idx];
@@ -582,7 +582,7 @@ impl<'input> Namespaces<'input> {
                 self.tree.push(idx);
             }
             Err(sorted_idx) => {
-                let idx = self.values.len();
+                let idx = self.values.len() as u16;
                 self.values.push(value);
 
                 self.sorted.insert(sorted_idx, idx);
@@ -602,7 +602,7 @@ impl<'input> Namespaces<'input> {
     fn exists(&self, start: usize, prefix: Option<&str>) -> bool {
         self.tree[start..]
             .iter()
-            .any(|idx| self.values[*idx].name == prefix)
+            .any(|idx| self.values[*idx as usize].name == prefix)
     }
 
     fn shrink_to_fit(&mut self) {
@@ -615,7 +615,7 @@ impl<'input> Namespaces<'input> {
 #[derive(Clone, Copy, Debug)]
 struct ExpandedNameIndexed<'input> {
     /// Indexes into `Namspaces::values`
-    namespace_idx: Option<u32>,
+    namespace_idx: Option<u16>,
     local_name: &'input str,
 }
 
@@ -1033,7 +1033,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
         let doc = self.doc;
 
-        indices.iter().map(move |idx| &doc.namespaces.values[*idx])
+        indices
+            .iter()
+            .map(move |idx| &doc.namespaces.values[*idx as usize])
     }
 
     /// Returns node's text.
