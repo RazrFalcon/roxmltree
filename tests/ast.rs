@@ -137,9 +137,10 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                         }
                     }
 
-                    if !child.namespaces().is_empty() {
+                    let namespaces = child.namespaces();
+                    if namespaces.len() != 0 {
                         let mut ns_list = Vec::new();
-                        for ns in child.namespaces() {
+                        for ns in namespaces {
                             let name = ns.name().unwrap_or("None");
                             let uri = if ns.uri().is_empty() {
                                 "\"\""

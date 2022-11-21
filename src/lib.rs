@@ -32,7 +32,6 @@ use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
-use core::ops::Deref;
 
 pub use xmlparser::TextPos;
 
@@ -509,7 +508,7 @@ impl fmt::Debug for Attribute<'_, '_> {
 /// A namespace.
 ///
 /// Contains URI and *prefix* pair.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Namespace<'input> {
     name: Option<&'input str>,
     uri: Cow<'input, str>,
@@ -525,7 +524,7 @@ impl<'input> Namespace<'input> {
     ///     "<e xmlns:n='http://www.w3.org'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().namespaces()[0].name(), Some("n"));
+    /// assert_eq!(doc.root_element().namespaces().nth(0).unwrap().name(), Some("n"));
     /// ```
     ///
     /// ```
@@ -533,7 +532,7 @@ impl<'input> Namespace<'input> {
     ///     "<e xmlns='http://www.w3.org'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().namespaces()[0].name(), None);
+    /// assert_eq!(doc.root_element().namespaces().nth(0).unwrap().name(), None);
     /// ```
     #[inline]
     pub fn name(&self) -> Option<&str> {
@@ -549,7 +548,7 @@ impl<'input> Namespace<'input> {
     ///     "<e xmlns:n='http://www.w3.org'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().namespaces()[0].uri(), "http://www.w3.org");
+    /// assert_eq!(doc.root_element().namespaces().nth(0).unwrap().uri(), "http://www.w3.org");
     /// ```
     #[inline]
     pub fn uri(&self) -> &str {
@@ -557,32 +556,65 @@ impl<'input> Namespace<'input> {
     }
 }
 
-struct Namespaces<'input>(Vec<Namespace<'input>>);
+#[derive(Default)]
+struct Namespaces<'input> {
+    // Deduplicated namespace values used throughout the document
+    values: Vec<Namespace<'input>>,
+    // Indices into the above in tree order as the document is parsed
+    tree: Vec<usize>,
+    // Indices into the above sorted by value used for deduplication
+    sorted: Vec<usize>,
+}
 
 impl<'input> Namespaces<'input> {
     #[inline]
     fn push_ns(&mut self, name: Option<&'input str>, uri: Cow<'input, str>) {
-        debug_assert_ne!(name, Some(""));
-        self.0.push(Namespace { name, uri });
+        let value = Namespace { name, uri };
+        debug_assert_ne!(value.name, Some(""));
+
+        match self
+            .sorted
+            .binary_search_by(|idx| self.values[*idx].cmp(&value))
+        {
+            Ok(sorted_idx) => {
+                let idx = self.sorted[sorted_idx];
+
+                self.tree.push(idx);
+            }
+            Err(sorted_idx) => {
+                let idx = self.values.len();
+                self.values.push(value);
+
+                self.sorted.insert(sorted_idx, idx);
+
+                self.tree.push(idx);
+            }
+        }
+    }
+
+    #[inline]
+    fn push_ref(&mut self, tree_idx: usize) {
+        let idx = self.tree[tree_idx];
+        self.tree.push(idx);
     }
 
     #[inline]
     fn exists(&self, start: usize, prefix: Option<&str>) -> bool {
-        self[start..].iter().any(|ns| ns.name == prefix)
+        self.tree[start..]
+            .iter()
+            .any(|idx| self.values[*idx].name == prefix)
     }
-}
 
-impl<'input> Deref for Namespaces<'input> {
-    type Target = Vec<Namespace<'input>>;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    fn shrink_to_fit(&mut self) {
+        self.values.shrink_to_fit();
+        self.tree.shrink_to_fit();
+        self.sorted.shrink_to_fit();
     }
 }
 
 #[derive(Clone, Copy, Debug)]
 struct ExpandedNameIndexed<'input> {
+    /// Indexes into `Namspaces::tree`
     namespace_idx: Option<u32>,
     local_name: &'input str,
 }
@@ -590,7 +622,8 @@ struct ExpandedNameIndexed<'input> {
 impl<'input> ExpandedNameIndexed<'input> {
     #[inline]
     fn namespace<'a>(&self, doc: &'a Document<'input>) -> Option<&'a Namespace<'input>> {
-        self.namespace_idx.map(|idx| &doc.namespaces[idx as usize])
+        self.namespace_idx
+            .map(|idx| &doc.namespaces.values[doc.namespaces.tree[idx as usize]])
     }
 
     #[inline]
@@ -845,7 +878,6 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     pub fn default_namespace(&self) -> Option<&'a str> {
         self.namespaces()
-            .iter()
             .find(|ns| ns.name.is_none())
             .map(|v| v.uri.as_ref())
     }
@@ -871,7 +903,6 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
 
         self.namespaces()
-            .iter()
             .find(|ns| ns.uri == uri)
             .map(|v| v.name)
             .unwrap_or(None)
@@ -894,7 +925,6 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     pub fn lookup_namespace_uri(&self, prefix: Option<&'a str>) -> Option<&'a str> {
         self.namespaces()
-            .iter()
             .find(|ns| ns.name == prefix)
             .map(|v| v.uri.as_ref())
     }
@@ -993,13 +1023,17 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().namespaces().len(), 1);
     /// ```
     #[inline]
-    pub fn namespaces(&self) -> &'a [Namespace<'input>] {
-        match self.d.kind {
+    pub fn namespaces(&self) -> impl ExactSizeIterator<Item = &'a Namespace<'input>> + fmt::Debug {
+        let indices = match self.d.kind {
             NodeKind::Element { ref namespaces, .. } => {
-                &self.doc.namespaces[namespaces.to_urange()]
+                &self.doc.namespaces.tree[namespaces.to_urange()]
             }
             _ => &[],
-        }
+        };
+
+        let doc = self.doc;
+
+        indices.iter().map(move |idx| &doc.namespaces.values[*idx])
     }
 
     /// Returns node's text.

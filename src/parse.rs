@@ -475,7 +475,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         text,
         nodes: Vec::with_capacity(nodes_capacity),
         attrs: Vec::with_capacity(attributes_capacity),
-        namespaces: Namespaces(Vec::new()),
+        namespaces: Namespaces::default(),
     };
 
     // Add a root node.
@@ -511,7 +511,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
 
     doc.nodes.shrink_to_fit();
     doc.attrs.shrink_to_fit();
-    doc.namespaces.0.shrink_to_fit();
+    doc.namespaces.shrink_to_fit();
 
     Ok(doc)
 }
@@ -725,7 +725,7 @@ fn process_element<'input>(
     }
 
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
-    pd.ns_start_idx = doc.namespaces.len();
+    pd.ns_start_idx = doc.namespaces.tree.len();
 
     let attributes = resolve_attributes(pd, namespaces, doc)?;
 
@@ -802,19 +802,21 @@ fn process_element<'input>(
 fn resolve_namespaces(start_idx: usize, parent_id: NodeId, doc: &mut Document) -> ShortRange {
     if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get_usize()].kind {
         let parent_ns = *namespaces;
-        if start_idx == doc.namespaces.len() {
+        if start_idx == doc.namespaces.tree.len() {
             return parent_ns;
         }
 
         for i in parent_ns.to_urange() {
-            if !doc.namespaces.exists(start_idx, doc.namespaces[i].name) {
-                let v = doc.namespaces[i].clone();
-                doc.namespaces.0.push(v);
+            if !doc.namespaces.exists(
+                start_idx,
+                doc.namespaces.values[doc.namespaces.tree[i]].name,
+            ) {
+                doc.namespaces.push_ref(i);
             }
         }
     }
 
-    (start_idx..doc.namespaces.len()).into()
+    (start_idx..doc.namespaces.tree.len()).into()
 }
 
 fn resolve_attributes<'input>(
@@ -1165,8 +1167,9 @@ fn get_ns_idx_by_prefix<'input>(
         Some(prefix.as_str())
     };
 
-    let idx = doc.namespaces[range.to_urange()]
+    let idx = doc.namespaces.tree[range.to_urange()]
         .iter()
+        .map(|idx| &doc.namespaces.values[*idx])
         .position(|ns| ns.name == prefix_opt);
 
     match idx {
