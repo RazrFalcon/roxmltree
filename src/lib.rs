@@ -614,7 +614,7 @@ impl<'input> Namespaces<'input> {
 
 #[derive(Clone, Copy, Debug)]
 struct ExpandedNameIndexed<'input> {
-    /// Indexes into `Namspaces::tree`
+    /// Indexes into `Namspaces::values`
     namespace_idx: Option<u32>,
     local_name: &'input str,
 }
@@ -623,7 +623,7 @@ impl<'input> ExpandedNameIndexed<'input> {
     #[inline]
     fn namespace<'a>(&self, doc: &'a Document<'input>) -> Option<&'a Namespace<'input>> {
         self.namespace_idx
-            .map(|idx| &doc.namespaces.values[doc.namespaces.tree[idx as usize]])
+            .map(|idx| &doc.namespaces.values[idx as usize])
     }
 
     #[inline]
