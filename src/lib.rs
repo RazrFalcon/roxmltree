@@ -406,7 +406,8 @@ struct NodeData<'input> {
 
 #[derive(Clone, Debug)]
 struct AttributeData<'input> {
-    name: ExpandedNameIndexed<'input>,
+    /// Indexes into `ExpandedNames::values`
+    name_idx: u32,
     value: Cow<'input, str>,
     #[cfg(feature = "positions")]
     pos: usize,
@@ -420,6 +421,10 @@ pub struct Attribute<'a, 'input: 'a> {
 }
 
 impl<'a, 'input> Attribute<'a, 'input> {
+    fn expanded_name(&self) -> ExpandedName<'a, 'input> {
+        self.doc.expanded_names.values[self.data.name_idx as usize].as_expanded_name(self.doc)
+    }
+
     /// Returns attribute's namespace URI.
     ///
     /// # Examples
@@ -434,7 +439,7 @@ impl<'a, 'input> Attribute<'a, 'input> {
     /// ```
     #[inline]
     pub fn namespace(&self) -> Option<&'a str> {
-        self.data.name.namespace(self.doc).map(Namespace::uri)
+        self.expanded_name().uri
     }
 
     /// Returns attribute's name.
@@ -451,7 +456,7 @@ impl<'a, 'input> Attribute<'a, 'input> {
     /// ```
     #[inline]
     pub fn name(&self) -> &'a str {
-        self.data.name.local_name
+        self.expanded_name().name
     }
 
     /// Returns attribute's value.
@@ -491,8 +496,7 @@ impl<'a, 'input> Attribute<'a, 'input> {
 impl PartialEq for Attribute<'_, '_> {
     #[inline]
     fn eq(&self, other: &Attribute<'_, '_>) -> bool {
-        self.data.name.as_expanded_name(self.doc) == other.data.name.as_expanded_name(other.doc)
-            && self.data.value == other.data.value
+        self.expanded_name() == other.expanded_name() && self.data.value == other.data.value
     }
 }
 
@@ -501,7 +505,7 @@ impl fmt::Debug for Attribute<'_, '_> {
         write!(
             f,
             "Attribute {{ name: {:?}, value: {:?} }}",
-            self.data.name.as_expanded_name(self.doc),
+            self.expanded_name(),
             self.data.value
         )
     }
@@ -997,7 +1001,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     {
         let name = name.into();
         self.attributes()
-            .find(|a| a.data.name.as_expanded_name(self.doc) == name)
+            .find(|a| a.expanded_name() == name)
             .map(|a| a.value())
     }
 
@@ -1011,8 +1015,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes()
-            .find(|a| a.data.name.as_expanded_name(self.doc) == name)
+        self.attributes().find(|a| a.expanded_name() == name)
     }
 
     /// Checks that element has a specified attribute.
@@ -1035,8 +1038,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes()
-            .any(|a| a.data.name.as_expanded_name(self.doc) == name)
+        self.attributes().any(|a| a.expanded_name() == name)
     }
 
     /// Returns element's attributes.

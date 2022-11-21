@@ -875,16 +875,16 @@ fn resolve_attributes<'input>(
         };
 
         // Check for duplicated attributes.
-        if doc.attrs[start_idx..]
-            .iter()
-            .any(|attr| attr.name.as_expanded_name(doc) == attr_name.as_expanded_name(doc))
-        {
+        if doc.attrs[start_idx..].iter().any(|attr| {
+            doc.expanded_names.values[attr.name_idx as usize].as_expanded_name(doc)
+                == attr_name.as_expanded_name(doc)
+        }) {
             let pos = err_pos_from_qname(doc.text, attr.prefix, attr.local);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
         doc.attrs.push(AttributeData {
-            name: attr_name,
+            name_idx: doc.expanded_names.resolve(attr_name),
             value: attr.value,
             #[cfg(feature = "positions")]
             pos: attr.pos,
