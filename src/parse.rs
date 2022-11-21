@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use xmlparser::{self, Reference, StrSpan, Stream, TextPos};
 
 use crate::{
-    AttributeData, Document, ExpandedNameIndexed, Namespaces, NodeData, NodeId, NodeKind,
-    ShortRange, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
+    AttributeData, Document, ExpandedNameIndexed, ExpandedNames, Namespaces, NodeData, NodeId,
+    NodeKind, ShortRange, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
 };
 
 /// A list of all possible errors.
@@ -488,6 +488,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         nodes: Vec::with_capacity(nodes_capacity),
         attrs: Vec::with_capacity(attributes_capacity),
         namespaces: Namespaces::default(),
+        expanded_names: ExpandedNames::default(),
     };
 
     // Add a root node.
@@ -524,6 +525,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     doc.nodes.shrink_to_fit();
     doc.attrs.shrink_to_fit();
     doc.namespaces.shrink_to_fit();
+    doc.expanded_names.shrink_to_fit();
 
     Ok(doc)
 }
@@ -745,13 +747,15 @@ fn process_element<'input>(
     match end_token {
         xmlparser::ElementEnd::Empty => {
             let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
+            let tag_name_idx = doc.expanded_names.resolve(ExpandedNameIndexed {
+                namespace_idx: tag_ns_idx,
+                local_name: tag_name.name.as_str(),
+            });
+
             let new_element_id = doc.append(
                 *parent_id,
                 NodeKind::Element {
-                    tag_name: ExpandedNameIndexed {
-                        namespace_idx: tag_ns_idx,
-                        local_name: tag_name.name.as_str(),
-                    },
+                    tag_name_idx,
                     attributes,
                     namespaces,
                 },
@@ -770,7 +774,9 @@ fn process_element<'input>(
             // root node and always push another one when changing the parent
             let parent_prefix = *pd.parent_prefixes.last().unwrap();
 
-            if let NodeKind::Element { ref tag_name, .. } = parent_node.kind {
+            if let NodeKind::Element { tag_name_idx, .. } = parent_node.kind {
+                let tag_name = &doc.expanded_names.values[tag_name_idx as usize];
+
                 if prefix != parent_prefix || local != tag_name.local_name {
                     return Err(Error::UnexpectedCloseTag {
                         expected: gen_qname_string(parent_prefix, tag_name.local_name),
@@ -791,13 +797,15 @@ fn process_element<'input>(
         }
         xmlparser::ElementEnd::Open => {
             let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
+            let tag_name_idx = doc.expanded_names.resolve(ExpandedNameIndexed {
+                namespace_idx: tag_ns_idx,
+                local_name: tag_name.name.as_str(),
+            });
+
             *parent_id = doc.append(
                 *parent_id,
                 NodeKind::Element {
-                    tag_name: ExpandedNameIndexed {
-                        namespace_idx: tag_ns_idx,
-                        local_name: tag_name.name.as_str(),
-                    },
+                    tag_name_idx,
                     attributes,
                     namespaces,
                 },

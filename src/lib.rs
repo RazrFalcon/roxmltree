@@ -80,6 +80,7 @@ pub struct Document<'input> {
     nodes: Vec<NodeData<'input>>,
     attrs: Vec<AttributeData<'input>>,
     namespaces: Namespaces<'input>,
+    expanded_names: ExpandedNames<'input>,
 }
 
 impl<'input> Document<'input> {
@@ -383,7 +384,8 @@ impl From<usize> for NodeId {
 enum NodeKind<'input> {
     Root,
     Element {
-        tag_name: ExpandedNameIndexed<'input>,
+        /// Indexes into `ExpandedNames::values`
+        tag_name_idx: u32,
         attributes: ShortRange,
         namespaces: ShortRange,
     },
@@ -619,7 +621,36 @@ impl<'input> Namespaces<'input> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Default)]
+struct ExpandedNames<'input> {
+    values: Vec<ExpandedNameIndexed<'input>>,
+    sorted: Vec<u32>,
+}
+
+impl<'input> ExpandedNames<'input> {
+    #[inline]
+    fn resolve(&mut self, name: ExpandedNameIndexed<'input>) -> u32 {
+        match self
+            .sorted
+            .binary_search_by(|idx| self.values[*idx as usize].cmp(&name))
+        {
+            Ok(sorted_idx) => self.sorted[sorted_idx],
+            Err(sorted_idx) => {
+                let idx = self.values.len() as u32;
+                self.values.push(name);
+                self.sorted.insert(sorted_idx, idx);
+                idx
+            }
+        }
+    }
+
+    fn shrink_to_fit(&mut self) {
+        self.values.shrink_to_fit();
+        self.sorted.shrink_to_fit();
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ExpandedNameIndexed<'input> {
     /// Indexes into `Namspaces::values`
     namespace_idx: Option<u16>,
@@ -835,7 +866,9 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     #[inline]
     pub fn tag_name(&self) -> ExpandedName<'a, 'input> {
         match self.d.kind {
-            NodeKind::Element { ref tag_name, .. } => tag_name.as_expanded_name(self.doc),
+            NodeKind::Element { tag_name_idx, .. } => {
+                self.doc.expanded_names.values[tag_name_idx as usize].as_expanded_name(self.doc)
+            }
             _ => "".into(),
         }
     }
@@ -860,10 +893,14 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         let name = name.into();
 
         match self.d.kind {
-            NodeKind::Element { ref tag_name, .. } => match name.namespace() {
-                Some(_) => tag_name.as_expanded_name(self.doc) == name,
-                None => tag_name.local_name == name.name,
-            },
+            NodeKind::Element { tag_name_idx, .. } => {
+                let tag_name = &self.doc.expanded_names.values[tag_name_idx as usize];
+
+                match name.namespace() {
+                    Some(_) => tag_name.as_expanded_name(self.doc) == name,
+                    None => tag_name.local_name == name.name,
+                }
+            }
             _ => false,
         }
     }
