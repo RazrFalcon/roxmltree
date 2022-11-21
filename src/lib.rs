@@ -1030,19 +1030,18 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().namespaces().len(), 1);
     /// ```
     #[inline]
-    pub fn namespaces(&self) -> impl ExactSizeIterator<Item = &'a Namespace<'input>> + fmt::Debug {
-        let indices = match self.d.kind {
+    pub fn namespaces(&self) -> NamespaceIter<'a, 'input> {
+        let namespaces = match self.d.kind {
             NodeKind::Element { ref namespaces, .. } => {
                 &self.doc.namespaces.tree[namespaces.to_urange()]
             }
             _ => &[],
         };
 
-        let doc = self.doc;
-
-        indices
-            .iter()
-            .map(move |idx| &doc.namespaces.values[*idx as usize])
+        NamespaceIter {
+            doc: self.doc,
+            namespaces: namespaces.iter(),
+        }
     }
 
     /// Returns node's text.
@@ -1430,23 +1429,30 @@ impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
 }
 
 /// Iterator over a node and its descendants.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Descendants<'a, 'input> {
     doc: &'a Document<'input>,
-    current: NodeId,
-    until: NodeId,
+    nodes: core::iter::Enumerate<core::slice::Iter<'a, NodeData<'input>>>,
+    from: usize,
 }
 
 impl<'a, 'input> Descendants<'a, 'input> {
     #[inline]
     fn new(start: Node<'a, 'input>) -> Self {
+        let from = start.id.get_usize();
+
+        let until = start
+            .d
+            .next_subtree
+            .map(NodeId::get_usize)
+            .unwrap_or(start.doc.nodes.len());
+
+        let nodes = start.doc.nodes[from..until].iter().enumerate();
+
         Self {
             doc: start.doc,
-            current: start.id,
-            until: start
-                .d
-                .next_subtree
-                .unwrap_or_else(|| NodeId::from(start.doc.nodes.len())),
+            nodes,
+            from,
         }
     }
 }
@@ -1456,13 +1462,91 @@ impl<'a, 'input> Iterator for Descendants<'a, 'input> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let next = if self.current == self.until {
-            None
-        } else {
-            Some(self.doc.get_node(self.current).unwrap())
-        };
+        self.nodes.next().map(|(idx, data)| Node {
+            id: NodeId::from(self.from + idx),
+            d: data,
+            doc: self.doc,
+        })
+    }
 
-        self.current = NodeId::new(self.current.get() + 1);
-        next
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.nodes.nth(n).map(|(idx, data)| Node {
+            id: NodeId::from(self.from + idx),
+            d: data,
+            doc: self.doc,
+        })
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.nodes.size_hint()
     }
 }
+
+impl<'a, 'input> DoubleEndedIterator for Descendants<'a, 'input> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.nodes.next_back().map(|(idx, data)| Node {
+            id: NodeId::from(self.from + idx),
+            d: data,
+            doc: self.doc,
+        })
+    }
+}
+
+impl ExactSizeIterator for Descendants<'_, '_> {}
+
+impl fmt::Debug for Descendants<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_struct("Descendants")
+            .field("doc", &self.doc)
+            .field(
+                "nodes",
+                &alloc::format!("[{} remaining node(s)]", self.nodes.len()),
+            )
+            .field("from", &self.from)
+            .finish()
+    }
+}
+
+/// Iterator over the namespaces attached to a node.
+#[derive(Clone, Debug)]
+pub struct NamespaceIter<'a, 'input> {
+    doc: &'a Document<'input>,
+    namespaces: core::slice::Iter<'a, u16>,
+}
+
+impl<'a, 'input> Iterator for NamespaceIter<'a, 'input> {
+    type Item = &'a Namespace<'input>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.namespaces
+            .next()
+            .map(|idx| &self.doc.namespaces.values[*idx as usize])
+    }
+
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.namespaces
+            .nth(n)
+            .map(|idx| &self.doc.namespaces.values[*idx as usize])
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.namespaces.size_hint()
+    }
+}
+
+impl<'a, 'input> DoubleEndedIterator for NamespaceIter<'a, 'input> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.namespaces
+            .next()
+            .map(|idx| &self.doc.namespaces.values[*idx as usize])
+    }
+}
+
+impl ExactSizeIterator for NamespaceIter<'_, '_> {}
