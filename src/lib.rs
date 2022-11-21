@@ -568,28 +568,29 @@ struct Namespaces<'input> {
 
 impl<'input> Namespaces<'input> {
     #[inline]
-    fn push_ns(&mut self, name: Option<&'input str>, uri: Cow<'input, str>) {
+    fn push_ns(&mut self, name: Option<&'input str>, uri: Cow<'input, str>) -> Result<(), Error> {
         let value = Namespace { name, uri };
         debug_assert_ne!(value.name, Some(""));
 
-        match self
+        let idx = match self
             .sorted
             .binary_search_by(|idx| self.values[*idx as usize].cmp(&value))
         {
-            Ok(sorted_idx) => {
-                let idx = self.sorted[sorted_idx];
-
-                self.tree.push(idx);
-            }
+            Ok(sorted_idx) => self.sorted[sorted_idx],
             Err(sorted_idx) => {
+                if self.values.len() > core::u16::MAX as usize {
+                    return Err(Error::NamespacesLimitReached);
+                }
                 let idx = self.values.len() as u16;
                 self.values.push(value);
-
                 self.sorted.insert(sorted_idx, idx);
-
-                self.tree.push(idx);
+                idx
             }
-        }
+        };
+
+        self.tree.push(idx);
+
+        Ok(())
     }
 
     #[inline]
