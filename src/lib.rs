@@ -490,7 +490,7 @@ impl<'a, 'input> Attribute<'a, 'input> {
 impl PartialEq for Attribute<'_, '_> {
     #[inline]
     fn eq(&self, other: &Attribute<'_, '_>) -> bool {
-        self.data.name.as_expanded_name(self.doc) == other.data.name.as_expanded_name(self.doc)
+        self.data.name.as_expanded_name(self.doc) == other.data.name.as_expanded_name(other.doc)
             && self.data.value == other.data.value
     }
 }
