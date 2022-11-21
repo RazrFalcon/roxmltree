@@ -88,6 +88,12 @@ pub enum Error {
     /// Indicates that the [`ParsingOptions::nodes_limit`] was reached.
     NodesLimitReached,
 
+    /// Indicates that too many attributes were parsed.
+    AttributesLimitReached,
+
+    /// Indicates that too many namespaces were parsed.
+    NamespacesLimitReached,
+
     /// Errors detected by the `xmlparser` crate.
     ParserError(xmlparser::Error),
 }
@@ -193,6 +199,12 @@ impl core::fmt::Display for Error {
             }
             Error::NodesLimitReached => {
                 write!(f, "nodes limit reached")
+            }
+            Error::AttributesLimitReached => {
+                write!(f, "more than 2^32 attributes were parsed")
+            }
+            Error::NamespacesLimitReached => {
+                write!(f, "more than 2^16 unique namespaces were parsed")
             }
             Error::ParserError(ref err) => {
                 write!(f, "{}", err)
@@ -490,7 +502,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     });
 
     doc.namespaces
-        .push_ns(Some(NS_XML_PREFIX), Cow::Borrowed(NS_XML_URI));
+        .push_ns(Some(NS_XML_PREFIX), Cow::Borrowed(NS_XML_URI))?;
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
@@ -673,7 +685,7 @@ fn process_attribute<'input>(
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces.push_ns(Some(local.as_str()), value);
+            doc.namespaces.push_ns(Some(local.as_str()), value)?;
         }
     } else if local.as_str() == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
@@ -688,7 +700,7 @@ fn process_attribute<'input>(
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        doc.namespaces.push_ns(None, value);
+        doc.namespaces.push_ns(None, value)?;
     } else {
         pd.tmp_attrs.push(TempAttributeData {
             prefix,
@@ -829,7 +841,7 @@ fn resolve_attributes<'input>(
     }
 
     if doc.attrs.len() + pd.tmp_attrs.len() >= core::u32::MAX as usize {
-        return Err(Error::NodesLimitReached);
+        return Err(Error::AttributesLimitReached);
     }
 
     let start_idx = doc.attrs.len();
