@@ -654,12 +654,12 @@ fn process_attribute<'input>(
 
     if prefix.as_str() == XMLNS {
         // The xmlns namespace MUST NOT be declared as the default namespace.
-        if value == NS_XMLNS_URI {
+        if value.as_str() == NS_XMLNS_URI {
             let pos = err_pos_from_qname(doc.text, prefix, local);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        let is_xml_ns_uri = value == NS_XML_URI;
+        let is_xml_ns_uri = value.as_str() == NS_XML_URI;
 
         // The prefix 'xml' is by definition bound to the namespace name
         // http://www.w3.org/XML/1998/namespace.
@@ -685,23 +685,25 @@ fn process_attribute<'input>(
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces.push_ns(Some(local.as_str()), value)?;
+            doc.namespaces
+                .push_ns(Some(local.as_str()), value.to_cow())?;
         }
     } else if local.as_str() == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
-        if value == NS_XML_URI {
+        if value.as_str() == NS_XML_URI {
             let pos = err_pos_from_span(doc.text, local);
             return Err(Error::UnexpectedXmlUri(pos));
         }
 
         // The xmlns namespace MUST NOT be declared as the default namespace.
-        if value == NS_XMLNS_URI {
+        if value.as_str() == NS_XMLNS_URI {
             let pos = err_pos_from_span(doc.text, local);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        doc.namespaces.push_ns(None, value)?;
+        doc.namespaces.push_ns(None, value.to_cow())?;
     } else {
+        let value = value.to_cow();
         pd.tmp_attrs.push(TempAttributeData {
             prefix,
             local,
@@ -985,6 +987,22 @@ enum BorrowedText<'input, 'temp> {
     Temp(&'temp str),
 }
 
+impl<'input, 'temp> BorrowedText<'input, 'temp> {
+    fn as_str(&self) -> &str {
+        match self {
+            BorrowedText::Input(text) => text,
+            BorrowedText::Temp(text) => text,
+        }
+    }
+
+    fn to_cow(&self) -> Cow<'input, str> {
+        match self {
+            BorrowedText::Input(text) => Cow::Borrowed(text),
+            BorrowedText::Temp(text) => Cow::Owned((*text).to_owned()),
+        }
+    }
+}
+
 fn append_text<'input, 'temp>(
     text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
@@ -998,11 +1016,7 @@ fn append_text<'input, 'temp>(
         // Prepend to a previous text node.
         if let Some(node) = doc.nodes.last_mut() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
-                let text = match text {
-                    BorrowedText::Input(text) => text,
-                    BorrowedText::Temp(text) => text,
-                };
-
+                let text = text.as_str();
                 match prev_text {
                     Cow::Borrowed(s) => {
                         let mut concat_text = String::with_capacity(s.len() + text.len());
@@ -1017,10 +1031,7 @@ fn append_text<'input, 'temp>(
             }
         }
     } else {
-        let text = match text {
-            BorrowedText::Input(text) => Cow::Borrowed(text),
-            BorrowedText::Temp(text) => Cow::Owned(text.to_owned()),
-        };
+        let text = text.to_cow();
         doc.append(
             parent_id,
             NodeKind::Text(text),
@@ -1073,19 +1084,19 @@ fn parse_next_chunk<'a>(
 }
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
-fn normalize_attribute<'input>(
+fn normalize_attribute<'input, 'temp>(
     input: &'input str,
     text: StrSpan<'input>,
     entities: &[Entity],
     loop_detector: &mut LoopDetector,
-    buffer: &mut TextBuffer,
-) -> Result<Cow<'input, str>, Error> {
+    buffer: &'temp mut TextBuffer,
+) -> Result<BorrowedText<'input, 'temp>, Error> {
     if is_normalization_required(&text) {
         buffer.clear();
         _normalize_attribute(input, text, entities, loop_detector, buffer)?;
-        Ok(Cow::Owned(buffer.to_str().to_owned()))
+        Ok(BorrowedText::Temp(buffer.to_str()))
     } else {
-        Ok(Cow::Borrowed(text.as_str()))
+        Ok(BorrowedText::Input(text.as_str()))
     }
 }
 
