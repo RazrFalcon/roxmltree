@@ -346,7 +346,6 @@ struct Entity<'input> {
 
 struct ParserData<'input> {
     opt: ParsingOptions,
-    attrs_start_idx: usize,
     ns_start_idx: usize,
     tmp_attrs: Vec<TempAttributeData<'input>>,
     awaiting_subtree: Vec<NodeId>,
@@ -458,7 +457,6 @@ impl LoopDetector {
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     let mut pd = ParserData {
         opt,
-        attrs_start_idx: 0,
         ns_start_idx: 1,
         tmp_attrs: Vec::with_capacity(16),
         entities: Vec::new(),
@@ -730,8 +728,6 @@ fn process_element<'input>(
     pd.ns_start_idx = doc.namespaces.len();
 
     let attributes = resolve_attributes(pd, namespaces, doc)?;
-    pd.attrs_start_idx = doc.attrs.len();
-    pd.tmp_attrs.clear();
 
     match end_token {
         xmlparser::ElementEnd::Empty => {
@@ -826,7 +822,6 @@ fn resolve_attributes<'input>(
     namespaces: ShortRange,
     doc: &mut Document<'input>,
 ) -> Result<ShortRange, Error> {
-    let start_idx = pd.attrs_start_idx;
     if pd.tmp_attrs.is_empty() {
         return Ok(ShortRange::new(0, 0));
     }
@@ -835,7 +830,9 @@ fn resolve_attributes<'input>(
         return Err(Error::NodesLimitReached);
     }
 
-    for attr in &mut pd.tmp_attrs {
+    let start_idx = doc.attrs.len();
+
+    for attr in pd.tmp_attrs.drain(..) {
         let namespace_idx = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace. This namespace is added
@@ -865,8 +862,7 @@ fn resolve_attributes<'input>(
 
         doc.attrs.push(AttributeData {
             name: attr_name,
-            // Takes a value from a slice without consuming the slice.
-            value: core::mem::replace(&mut attr.value, Cow::Borrowed("")),
+            value: attr.value,
             #[cfg(feature = "positions")]
             pos: attr.pos,
         });
