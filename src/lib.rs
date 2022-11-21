@@ -707,9 +707,7 @@ impl Eq for Node<'_, '_> {}
 impl PartialEq for Node<'_, '_> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-            && core::ptr::eq(self.doc as *const _, other.doc as *const _)
-            && core::ptr::eq(self.d as *const _, other.d as *const _)
+        (self.id, self.doc as *const _) == (other.id, other.doc as *const _)
     }
 }
 
@@ -721,15 +719,7 @@ impl PartialOrd for Node<'_, '_> {
 
 impl Ord for Node<'_, '_> {
     fn cmp(&self, other: &Self) -> Ordering {
-        let id_cmp = self.id.0.cmp(&other.id.0);
-        match id_cmp {
-            Ordering::Equal => {
-                let this_doc_ptr = self.doc as *const Document;
-                let other_doc_ptr = other.doc as *const Document;
-                this_doc_ptr.cmp(&other_doc_ptr)
-            }
-            _ => id_cmp,
-        }
+        (self.id.0, self.doc as *const _).cmp(&(other.id.0, other.doc as *const _))
     }
 }
 
