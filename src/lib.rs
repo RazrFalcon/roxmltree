@@ -561,9 +561,9 @@ struct Namespaces<'input> {
     // Deduplicated namespace values used throughout the document
     values: Vec<Namespace<'input>>,
     // Indices into the above in tree order as the document is parsed
-    tree_order: Vec<u16>,
+    tree_order: Vec<NamespaceIdx>,
     // Indices into the above sorted by value used for deduplication
-    sorted_order: Vec<u16>,
+    sorted_order: Vec<NamespaceIdx>,
 }
 
 impl<'input> Namespaces<'input> {
@@ -575,7 +575,7 @@ impl<'input> Namespaces<'input> {
         debug_assert_ne!(name, Some(""));
 
         let idx = match self.sorted_order.binary_search_by(|idx| {
-            let value = &self.values[*idx as usize];
+            let value = &self.values[idx.0 as usize];
 
             (value.name, value.uri.as_ref()).cmp(&(name, uri.as_str()))
         }) {
@@ -584,7 +584,7 @@ impl<'input> Namespaces<'input> {
                 if self.values.len() > core::u16::MAX as usize {
                     return Err(Error::NamespacesLimitReached);
                 }
-                let idx = self.values.len() as u16;
+                let idx = NamespaceIdx(self.values.len() as u16);
                 self.values.push(Namespace {
                     name,
                     uri: uri.to_cow(),
@@ -609,7 +609,7 @@ impl<'input> Namespaces<'input> {
     fn exists(&self, start: usize, prefix: Option<&str>) -> bool {
         self.tree_order[start..]
             .iter()
-            .any(|idx| self.values[*idx as usize].name == prefix)
+            .any(|idx| self.values[idx.0 as usize].name == prefix)
     }
 
     fn shrink_to_fit(&mut self) {
@@ -617,20 +617,27 @@ impl<'input> Namespaces<'input> {
         self.tree_order.shrink_to_fit();
         self.sorted_order.shrink_to_fit();
     }
+
+    #[inline]
+    fn get(&self, idx: NamespaceIdx) -> &Namespace<'input> {
+        &self.values[idx.0 as usize]
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
+#[repr(transparent)]
+struct NamespaceIdx(u16);
+
+#[derive(Clone, Copy, Debug)]
 struct ExpandedNameIndexed<'input> {
-    /// Indexes into `Namspaces::values`
-    namespace_idx: Option<u16>,
+    namespace_idx: Option<NamespaceIdx>,
     local_name: &'input str,
 }
 
 impl<'input> ExpandedNameIndexed<'input> {
     #[inline]
     fn namespace<'a>(&self, doc: &'a Document<'input>) -> Option<&'a Namespace<'input>> {
-        self.namespace_idx
-            .map(|idx| &doc.namespaces.values[idx as usize])
+        self.namespace_idx.map(|idx| doc.namespaces.get(idx))
     }
 
     #[inline]
@@ -1514,7 +1521,7 @@ impl fmt::Debug for Descendants<'_, '_> {
 #[derive(Clone, Debug)]
 pub struct NamespaceIter<'a, 'input> {
     doc: &'a Document<'input>,
-    namespaces: core::slice::Iter<'a, u16>,
+    namespaces: core::slice::Iter<'a, NamespaceIdx>,
 }
 
 impl<'a, 'input> Iterator for NamespaceIter<'a, 'input> {
@@ -1524,14 +1531,14 @@ impl<'a, 'input> Iterator for NamespaceIter<'a, 'input> {
     fn next(&mut self) -> Option<Self::Item> {
         self.namespaces
             .next()
-            .map(|idx| &self.doc.namespaces.values[*idx as usize])
+            .map(|idx| self.doc.namespaces.get(*idx))
     }
 
     #[inline]
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.namespaces
             .nth(n)
-            .map(|idx| &self.doc.namespaces.values[*idx as usize])
+            .map(|idx| self.doc.namespaces.get(*idx))
     }
 
     #[inline]
@@ -1545,7 +1552,7 @@ impl<'a, 'input> DoubleEndedIterator for NamespaceIter<'a, 'input> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.namespaces
             .next()
-            .map(|idx| &self.doc.namespaces.values[*idx as usize])
+            .map(|idx| self.doc.namespaces.get(*idx))
     }
 }
 
