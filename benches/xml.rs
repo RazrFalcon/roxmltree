@@ -28,6 +28,15 @@ fn large_xmlparser(bencher: &mut Bencher) {
     })
 }
 
+fn huge_xmlparser(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("huge.xml").unwrap();
+    bencher.iter(|| {
+        for t in xmlparser::Tokenizer::from(text.as_str()) {
+            let _ = t.unwrap();
+        }
+    })
+}
+
 fn tiny_xmlrs(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| {
@@ -48,6 +57,15 @@ fn medium_xmlrs(bencher: &mut Bencher) {
 
 fn large_xmlrs(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
+    bencher.iter(|| {
+        for event in xml::EventReader::new(text.as_bytes()) {
+            let _ = event.unwrap();
+        }
+    })
+}
+
+fn huge_xmlrs(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("huge.xml").unwrap();
     bencher.iter(|| {
         for event in xml::EventReader::new(text.as_bytes()) {
             let _ = event.unwrap();
@@ -90,6 +108,11 @@ fn large_quick_xml(bencher: &mut Bencher) {
     bencher.iter(|| parse_via_quick_xml(&text))
 }
 
+fn huge_quick_xml(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("huge.xml").unwrap();
+    bencher.iter(|| parse_via_quick_xml(&text))
+}
+
 fn tiny_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
@@ -102,6 +125,11 @@ fn medium_roxmltree(bencher: &mut Bencher) {
 
 fn large_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
+    bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
+}
+
+fn huge_roxmltree(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("huge.xml").unwrap();
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
@@ -120,6 +148,11 @@ fn large_xmltree(bencher: &mut Bencher) {
     bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
 }
 
+fn huge_xmltree(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("huge.xml").unwrap();
+    bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
+}
+
 fn tiny_sdx_document(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
@@ -132,6 +165,11 @@ fn medium_sdx_document(bencher: &mut Bencher) {
 
 fn large_sdx_document(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
+    bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
+}
+
+fn huge_sdx_document(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("huge.xml").unwrap();
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
 
@@ -151,6 +189,13 @@ fn medium_minidom(bencher: &mut Bencher) {
 
 fn large_minidom(bencher: &mut Bencher) {
     let data = std::fs::read_to_string("large.plist").unwrap();
+    bencher.iter(|| {
+        let _root: minidom::Element = data.parse().unwrap();
+    })
+}
+
+fn huge_minidom(bencher: &mut Bencher) {
+    let data = std::fs::read_to_string("huge.xml").unwrap();
     bencher.iter(|| {
         let _root: minidom::Element = data.parse().unwrap();
     })
@@ -179,6 +224,16 @@ fn medium_libxml(bencher: &mut Bencher) {
 #[cfg(feature = "libxml")]
 fn large_libxml(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
+    bencher.iter(|| {
+        libxml::parser::Parser::default()
+            .parse_string(&text)
+            .unwrap()
+    })
+}
+
+#[cfg(feature = "libxml")]
+fn huge_libxml(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("huge.xml").unwrap();
     bencher.iter(|| {
         libxml::parser::Parser::default()
             .parse_string(&text)
@@ -331,20 +386,57 @@ benchmark_group!(
     roxmltree_iter_descendants_expensive,
     roxmltree_iter_children
 );
-benchmark_group!(roxmltree, tiny_roxmltree, medium_roxmltree, large_roxmltree);
-benchmark_group!(xmltree, tiny_xmltree, medium_xmltree, large_xmltree);
+benchmark_group!(
+    roxmltree,
+    tiny_roxmltree,
+    medium_roxmltree,
+    large_roxmltree,
+    huge_roxmltree
+);
+benchmark_group!(
+    xmltree,
+    tiny_xmltree,
+    medium_xmltree,
+    large_xmltree,
+    huge_xmltree
+);
 benchmark_group!(
     sdx,
     tiny_sdx_document,
     medium_sdx_document,
-    large_sdx_document
+    large_sdx_document,
+    huge_sdx_document,
 );
-benchmark_group!(minidom, tiny_minidom, medium_minidom, large_minidom);
-benchmark_group!(xmlparser, tiny_xmlparser, medium_xmlparser, large_xmlparser);
-benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs);
-benchmark_group!(quick_xml, tiny_quick_xml, medium_quick_xml, large_quick_xml);
+benchmark_group!(
+    minidom,
+    tiny_minidom,
+    medium_minidom,
+    large_minidom,
+    huge_minidom
+);
+benchmark_group!(
+    xmlparser,
+    tiny_xmlparser,
+    medium_xmlparser,
+    large_xmlparser,
+    huge_xmlparser
+);
+benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs, huge_xmlrs);
+benchmark_group!(
+    quick_xml,
+    tiny_quick_xml,
+    medium_quick_xml,
+    large_quick_xml,
+    huge_quick_xml
+);
 #[cfg(feature = "libxml")]
-benchmark_group!(libxml, tiny_libxml, medium_libxml, large_libxml);
+benchmark_group!(
+    libxml,
+    tiny_libxml,
+    medium_libxml,
+    large_libxml,
+    huge_libxml
+);
 
 #[cfg(not(feature = "libxml"))]
 benchmark_main!(
