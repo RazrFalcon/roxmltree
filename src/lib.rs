@@ -561,9 +561,9 @@ struct Namespaces<'input> {
     // Deduplicated namespace values used throughout the document
     values: Vec<Namespace<'input>>,
     // Indices into the above in tree order as the document is parsed
-    tree: Vec<u16>,
+    tree_order: Vec<u16>,
     // Indices into the above sorted by value used for deduplication
-    sorted: Vec<u16>,
+    sorted_order: Vec<u16>,
 }
 
 impl<'input> Namespaces<'input> {
@@ -574,12 +574,12 @@ impl<'input> Namespaces<'input> {
     ) -> Result<(), Error> {
         debug_assert_ne!(name, Some(""));
 
-        let idx = match self.sorted.binary_search_by(|idx| {
+        let idx = match self.sorted_order.binary_search_by(|idx| {
             let value = &self.values[*idx as usize];
 
             (value.name, value.uri.as_ref()).cmp(&(name, uri.as_str()))
         }) {
-            Ok(sorted_idx) => self.sorted[sorted_idx],
+            Ok(sorted_idx) => self.sorted_order[sorted_idx],
             Err(sorted_idx) => {
                 if self.values.len() > core::u16::MAX as usize {
                     return Err(Error::NamespacesLimitReached);
@@ -589,33 +589,33 @@ impl<'input> Namespaces<'input> {
                     name,
                     uri: uri.to_cow(),
                 });
-                self.sorted.insert(sorted_idx, idx);
+                self.sorted_order.insert(sorted_idx, idx);
                 idx
             }
         };
 
-        self.tree.push(idx);
+        self.tree_order.push(idx);
 
         Ok(())
     }
 
     #[inline]
     fn push_ref(&mut self, tree_idx: usize) {
-        let idx = self.tree[tree_idx];
-        self.tree.push(idx);
+        let idx = self.tree_order[tree_idx];
+        self.tree_order.push(idx);
     }
 
     #[inline]
     fn exists(&self, start: usize, prefix: Option<&str>) -> bool {
-        self.tree[start..]
+        self.tree_order[start..]
             .iter()
             .any(|idx| self.values[*idx as usize].name == prefix)
     }
 
     fn shrink_to_fit(&mut self) {
         self.values.shrink_to_fit();
-        self.tree.shrink_to_fit();
-        self.sorted.shrink_to_fit();
+        self.tree_order.shrink_to_fit();
+        self.sorted_order.shrink_to_fit();
     }
 }
 
@@ -1033,7 +1033,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     pub fn namespaces(&self) -> NamespaceIter<'a, 'input> {
         let namespaces = match self.d.kind {
             NodeKind::Element { ref namespaces, .. } => {
-                &self.doc.namespaces.tree[namespaces.to_urange()]
+                &self.doc.namespaces.tree_order[namespaces.to_urange()]
             }
             _ => &[],
         };

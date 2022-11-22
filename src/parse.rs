@@ -738,7 +738,7 @@ fn process_element<'input>(
     }
 
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
-    pd.ns_start_idx = doc.namespaces.tree.len();
+    pd.ns_start_idx = doc.namespaces.tree_order.len();
 
     let attributes = resolve_attributes(pd, namespaces, doc)?;
 
@@ -815,21 +815,21 @@ fn process_element<'input>(
 fn resolve_namespaces(start_idx: usize, parent_id: NodeId, doc: &mut Document) -> ShortRange {
     if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get_usize()].kind {
         let parent_ns = *namespaces;
-        if start_idx == doc.namespaces.tree.len() {
+        if start_idx == doc.namespaces.tree_order.len() {
             return parent_ns;
         }
 
         for i in parent_ns.to_urange() {
             if !doc.namespaces.exists(
                 start_idx,
-                doc.namespaces.values[doc.namespaces.tree[i] as usize].name,
+                doc.namespaces.values[doc.namespaces.tree_order[i] as usize].name,
             ) {
                 doc.namespaces.push_ref(i);
             }
         }
     }
 
-    (start_idx..doc.namespaces.tree.len()).into()
+    (start_idx..doc.namespaces.tree_order.len()).into()
 }
 
 fn resolve_attributes<'input>(
@@ -1189,7 +1189,7 @@ fn get_ns_idx_by_prefix<'input>(
         Some(prefix.as_str())
     };
 
-    let idx = doc.namespaces.tree[range.to_urange()]
+    let idx = doc.namespaces.tree_order[range.to_urange()]
         .iter()
         .find(|idx| doc.namespaces.values[**idx as usize].name == prefix_opt);
 
