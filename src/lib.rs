@@ -1387,23 +1387,30 @@ impl<'a, 'input: 'a> DoubleEndedIterator for Children<'a, 'input> {
 }
 
 /// Iterator over a node and its descendants.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Descendants<'a, 'input> {
     doc: &'a Document<'input>,
-    current: NodeId,
-    until: NodeId,
+    nodes: core::iter::Enumerate<core::slice::Iter<'a, NodeData<'input>>>,
+    from: usize,
 }
 
 impl<'a, 'input> Descendants<'a, 'input> {
     #[inline]
     fn new(start: Node<'a, 'input>) -> Self {
+        let from = start.id.get_usize();
+
+        let until = start
+            .d
+            .next_subtree
+            .map(NodeId::get_usize)
+            .unwrap_or(start.doc.nodes.len());
+
+        let nodes = start.doc.nodes[from..until].iter().enumerate();
+
         Self {
             doc: start.doc,
-            current: start.id,
-            until: start
-                .d
-                .next_subtree
-                .unwrap_or_else(|| NodeId::from(start.doc.nodes.len())),
+            nodes,
+            from,
         }
     }
 }
@@ -1413,13 +1420,50 @@ impl<'a, 'input> Iterator for Descendants<'a, 'input> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let next = if self.current == self.until {
-            None
-        } else {
-            Some(self.doc.get_node(self.current).unwrap())
-        };
+        self.nodes.next().map(|(idx, data)| Node {
+            id: NodeId::from(self.from + idx),
+            d: data,
+            doc: self.doc,
+        })
+    }
 
-        self.current = NodeId::new(self.current.get() + 1);
-        next
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.nodes.nth(n).map(|(idx, data)| Node {
+            id: NodeId::from(self.from + idx),
+            d: data,
+            doc: self.doc,
+        })
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.nodes.size_hint()
+    }
+}
+
+impl<'a, 'input> DoubleEndedIterator for Descendants<'a, 'input> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.nodes.next_back().map(|(idx, data)| Node {
+            id: NodeId::from(self.from + idx),
+            d: data,
+            doc: self.doc,
+        })
+    }
+}
+
+impl ExactSizeIterator for Descendants<'_, '_> {}
+
+impl fmt::Debug for Descendants<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_struct("Descendants")
+            .field("doc", &self.doc)
+            .field(
+                "nodes",
+                &alloc::format!("[{} remaining node(s)]", self.nodes.len()),
+            )
+            .field("from", &self.from)
+            .finish()
     }
 }
