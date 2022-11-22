@@ -74,16 +74,15 @@ fn huge_xmlrs(bencher: &mut Bencher) {
 }
 
 fn parse_via_quick_xml(text: &str) {
-    let mut r = quick_xml::Reader::from_str(text);
+    let mut r = quick_xml::NsReader::from_str(text);
     r.check_comments(true);
     let mut buf = Vec::new();
-    let mut ns_buf = Vec::new();
     loop {
-        match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+        match r.read_resolved_event_into(&mut buf) {
             Ok((_, quick_xml::events::Event::Start(_)))
             | Ok((_, quick_xml::events::Event::Empty(_))) => (),
             Ok((_, quick_xml::events::Event::Text(ref e))) => {
-                e.unescaped().unwrap();
+                e.unescape().unwrap();
                 ()
             }
             Ok((_, quick_xml::events::Event::Eof)) => break,
@@ -189,13 +188,6 @@ fn medium_minidom(bencher: &mut Bencher) {
 
 fn large_minidom(bencher: &mut Bencher) {
     let data = std::fs::read_to_string("large.plist").unwrap();
-    bencher.iter(|| {
-        let _root: minidom::Element = data.parse().unwrap();
-    })
-}
-
-fn huge_minidom(bencher: &mut Bencher) {
-    let data = std::fs::read_to_string("huge.xml").unwrap();
     bencher.iter(|| {
         let _root: minidom::Element = data.parse().unwrap();
     })
@@ -412,7 +404,6 @@ benchmark_group!(
     tiny_minidom,
     medium_minidom,
     large_minidom,
-    huge_minidom
 );
 benchmark_group!(
     xmlparser,
