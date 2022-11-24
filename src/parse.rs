@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use xmlparser::{self, Reference, StrSpan, Stream, TextPos};
 
 use crate::{
-    AttributeData, Document, ExpandedNameIndexed, Namespaces, NodeData, NodeId, NodeKind,
-    ShortRange, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
+    AttributeData, Document, ExpandedNameIndexed, NamespaceIdx, Namespaces, NodeData, NodeId,
+    NodeKind, ShortRange, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
 };
 
 /// A list of all possible errors.
@@ -738,7 +738,7 @@ fn process_element<'input>(
     }
 
     let namespaces = resolve_namespaces(pd.ns_start_idx, *parent_id, doc);
-    pd.ns_start_idx = doc.namespaces.tree.len();
+    pd.ns_start_idx = doc.namespaces.tree_order.len();
 
     let attributes = resolve_attributes(pd, namespaces, doc)?;
 
@@ -815,21 +815,21 @@ fn process_element<'input>(
 fn resolve_namespaces(start_idx: usize, parent_id: NodeId, doc: &mut Document) -> ShortRange {
     if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get_usize()].kind {
         let parent_ns = *namespaces;
-        if start_idx == doc.namespaces.tree.len() {
+        if start_idx == doc.namespaces.tree_order.len() {
             return parent_ns;
         }
 
         for i in parent_ns.to_urange() {
             if !doc.namespaces.exists(
                 start_idx,
-                doc.namespaces.values[doc.namespaces.tree[i] as usize].name,
+                doc.namespaces.get(doc.namespaces.tree_order[i]).name,
             ) {
                 doc.namespaces.push_ref(i);
             }
         }
     }
 
-    (start_idx..doc.namespaces.tree.len()).into()
+    (start_idx..doc.namespaces.tree_order.len()).into()
 }
 
 fn resolve_attributes<'input>(
@@ -852,7 +852,7 @@ fn resolve_attributes<'input>(
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace. This namespace is added
             // to the document on creation and is always element 0.
-            Some(0)
+            Some(NamespaceIdx(0))
         } else if attr.prefix.is_empty() {
             // 'The namespace name for an unprefixed attribute name
             // always has no value.'
@@ -1178,7 +1178,7 @@ fn get_ns_idx_by_prefix<'input>(
     doc: &Document<'input>,
     range: ShortRange,
     prefix: StrSpan,
-) -> Result<Option<u16>, Error> {
+) -> Result<Option<NamespaceIdx>, Error> {
     // Prefix CAN be empty when the default namespace was defined.
     //
     // Example:
@@ -1189,9 +1189,9 @@ fn get_ns_idx_by_prefix<'input>(
         Some(prefix.as_str())
     };
 
-    let idx = doc.namespaces.tree[range.to_urange()]
+    let idx = doc.namespaces.tree_order[range.to_urange()]
         .iter()
-        .find(|idx| doc.namespaces.values[**idx as usize].name == prefix_opt);
+        .find(|idx| doc.namespaces.get(**idx).name == prefix_opt);
 
     match idx {
         Some(idx) => Ok(Some(*idx)),
