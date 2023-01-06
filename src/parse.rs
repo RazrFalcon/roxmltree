@@ -80,6 +80,9 @@ pub enum Error {
     /// The XML document must have at least one element.
     NoRootNode,
 
+    /// The root node was opened but never closed.
+    UnclosedRootNode,
+
     /// An XML with DTD detected.
     ///
     /// This error will be emitted only when `ParsingOptions::allow_dtd` is set to `false`.
@@ -193,6 +196,9 @@ impl core::fmt::Display for Error {
             }
             Error::NoRootNode => {
                 write!(f, "the document does not have a root node")
+            }
+            Error::UnclosedRootNode => {
+                write!(f, "the root node was opened but never closed")
             }
             Error::DtdDetected => {
                 write!(f, "XML with DTD detected")
@@ -519,6 +525,10 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
 
     if !doc.root().children().any(|n| n.is_element()) {
         return Err(Error::NoRootNode);
+    }
+
+    if pd.parent_prefixes.len() > 1 {
+        return Err(Error::UnclosedRootNode);
     }
 
     doc.nodes.shrink_to_fit();
@@ -1002,6 +1012,7 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 fn append_text<'input, 'temp>(
     text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
@@ -1174,8 +1185,8 @@ fn _normalize_attribute(
     Ok(())
 }
 
-fn get_ns_idx_by_prefix<'input>(
-    doc: &Document<'input>,
+fn get_ns_idx_by_prefix(
+    doc: &Document,
     range: ShortRange,
     prefix: StrSpan,
 ) -> Result<Option<NamespaceIdx>, Error> {

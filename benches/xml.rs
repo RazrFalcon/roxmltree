@@ -399,12 +399,7 @@ benchmark_group!(
     large_sdx_document,
     huge_sdx_document,
 );
-benchmark_group!(
-    minidom,
-    tiny_minidom,
-    medium_minidom,
-    large_minidom,
-);
+benchmark_group!(minidom, tiny_minidom, medium_minidom, large_minidom,);
 benchmark_group!(
     xmlparser,
     tiny_xmlparser,

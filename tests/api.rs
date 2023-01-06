@@ -1,3 +1,5 @@
+#![allow(clippy::bool_assert_comparison)]
+
 extern crate roxmltree;
 
 use roxmltree::*;
