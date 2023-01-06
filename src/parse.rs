@@ -1002,6 +1002,7 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 fn append_text<'input, 'temp>(
     text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
@@ -1174,8 +1175,8 @@ fn _normalize_attribute(
     Ok(())
 }
 
-fn get_ns_idx_by_prefix<'input>(
-    doc: &Document<'input>,
+fn get_ns_idx_by_prefix(
+    doc: &Document,
     range: ShortRange,
     prefix: StrSpan,
 ) -> Result<Option<NamespaceIdx>, Error> {

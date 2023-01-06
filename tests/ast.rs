@@ -40,7 +40,7 @@ fn actual_test(path: &str) {
         ..roxmltree::ParsingOptions::default()
     };
 
-    let input_xml = load_file(&path);
+    let input_xml = load_file(path);
     let doc = match Document::parse_with_options(&input_xml, opt) {
         Ok(v) => v,
         Err(e) => {
@@ -53,7 +53,7 @@ fn actual_test(path: &str) {
 }
 
 fn load_file(path: &path::Path) -> String {
-    let mut file = fs::File::open(&path).unwrap();
+    let mut file = fs::File::open(path).unwrap();
     let mut text = String::new();
     file.read_to_string(&mut text).unwrap();
     text
@@ -117,7 +117,7 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                     }
 
                     let attributes = child.attributes();
-                    if !(attributes.len() == 0) {
+                    if attributes.len() != 0 {
                         let mut attrs = Vec::new();
                         for attr in attributes {
                             match attr.namespace() {
@@ -149,7 +149,7 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                             };
                             ns_list.push((name, uri));
                         }
-                        ns_list.sort_by(|a, b| a.0.cmp(&b.0));
+                        ns_list.sort_by(|a, b| a.0.cmp(b.0));
 
                         writeln_indented!(depth + 2, s, "namespaces:");
                         for (name, uri) in ns_list {
