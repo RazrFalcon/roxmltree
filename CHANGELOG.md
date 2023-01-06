@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.0] - 2023-01-06
+### Added
+- Stored namespaces are deduplicated now, which can reduce memory usage on large files up to 10%.
+  Thanks to [@adamreichold](https://github.com/adamreichold)
+
+### Changed
+- `Node::namespaces` returns an iterator and not a slice now.
+
+### Fixed
+- Unclosed root element is an error now.
+  Thanks to [@adamreichold](https://github.com/adamreichold)
+
 ## [0.16.0] - 2022-11-20
 ### Added
 - `positions` build feature.
@@ -17,6 +29,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Peak memory usage reduces by up to 20% depending on an input.
   Thanks to [@adamreichold](https://github.com/adamreichold)
   and [@tomjw64](https://github.com/tomjw64).
+- `Node::attributes` returns an iterator and not a slice now.
 
 ### Removed
 - 4GB input limit.
@@ -208,7 +221,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 [@tomjw64]: https://github.com/tomjw64
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.16.0..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.17.0..HEAD
+[0.17.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.14.1...v0.15.0
