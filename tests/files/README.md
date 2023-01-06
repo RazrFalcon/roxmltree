@@ -85,3 +85,5 @@
 - tree_002 - BOM
 - tree_003 - Windows-1251 encoding
 - tree_err_001 - no elements
+- tree_err_002 - root element not closed
+- tree_err_003 - child element not closed

@@ -288,3 +288,5 @@ test!(tree_001);
 test!(tree_002);
 // test!(tree_003); // unsupported
 test!(tree_err_001);
+test!(tree_err_002);
+test!(tree_err_003);
