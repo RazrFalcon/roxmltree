@@ -380,6 +380,7 @@ impl From<usize> for NodeId {
     }
 }
 
+#[derive(Debug)]
 enum NodeKind<'input> {
     Root,
     Element {
@@ -392,6 +393,7 @@ enum NodeKind<'input> {
     Text(Cow<'input, str>),
 }
 
+#[derive(Debug)]
 struct NodeData<'input> {
     parent: Option<NodeId>,
     prev_sibling: Option<NodeId>,
@@ -1312,7 +1314,7 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
 }
 
 /// Iterator over a node's attributes
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Attributes<'a, 'input> {
     doc: &'a Document<'input>,
     attrs: core::slice::Iter<'a, AttributeData<'input>>,
@@ -1368,6 +1370,14 @@ impl<'a, 'input> DoubleEndedIterator for Attributes<'a, 'input> {
 }
 
 impl ExactSizeIterator for Attributes<'_, '_> {}
+
+impl fmt::Debug for Attributes<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_struct("Attributes")
+            .field("attrs", &self.attrs)
+            .finish()
+    }
+}
 
 /// Iterator over specified axis.
 #[derive(Clone)]
@@ -1507,18 +1517,14 @@ impl ExactSizeIterator for Descendants<'_, '_> {}
 impl fmt::Debug for Descendants<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.debug_struct("Descendants")
-            .field("doc", &self.doc)
-            .field(
-                "nodes",
-                &alloc::format!("[{} remaining node(s)]", self.nodes.len()),
-            )
+            .field("nodes", &self.nodes)
             .field("from", &self.from)
             .finish()
     }
 }
 
 /// Iterator over the namespaces attached to a node.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct NamespaceIter<'a, 'input> {
     doc: &'a Document<'input>,
     namespaces: core::slice::Iter<'a, NamespaceIdx>,
@@ -1557,3 +1563,11 @@ impl<'a, 'input> DoubleEndedIterator for NamespaceIter<'a, 'input> {
 }
 
 impl ExactSizeIterator for NamespaceIter<'_, '_> {}
+
+impl fmt::Debug for NamespaceIter<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_struct("NamespaceIter")
+            .field("namespaces", &self.namespaces)
+            .finish()
+    }
+}
