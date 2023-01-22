@@ -450,7 +450,7 @@ impl<'a, 'input> Attribute<'a, 'input> {
     /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().name(), "a");
     /// ```
     #[inline]
-    pub fn name(&self) -> &'a str {
+    pub fn name(&self) -> &'input str {
         self.data.name.local_name
     }
 
@@ -537,7 +537,7 @@ impl<'input> Namespace<'input> {
     /// assert_eq!(doc.root_element().namespaces().nth(0).unwrap().name(), None);
     /// ```
     #[inline]
-    pub fn name(&self) -> Option<&str> {
+    pub fn name(&self) -> Option<&'input str> {
         self.name
     }
 
@@ -913,7 +913,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     ///
     /// assert_eq!(doc.root_element().lookup_prefix(""), Some("n"));
     /// ```
-    pub fn lookup_prefix(&self, uri: &str) -> Option<&'a str> {
+    pub fn lookup_prefix(&self, uri: &str) -> Option<&'input str> {
         if uri == NS_XML_URI {
             return Some(NS_XML_PREFIX);
         }
@@ -939,7 +939,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     ///
     /// assert_eq!(doc.root_element().lookup_namespace_uri(None), Some("http://www.w3.org"));
     /// ```
-    pub fn lookup_namespace_uri(&self, prefix: Option<&'a str>) -> Option<&'a str> {
+    pub fn lookup_namespace_uri(&self, prefix: Option<&str>) -> Option<&'a str> {
         self.namespaces()
             .find(|ns| ns.name == prefix)
             .map(|v| v.uri.as_ref())
