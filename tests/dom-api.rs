@@ -154,7 +154,7 @@ fn get_element_by_id() {
     let doc = Document::parse(data).unwrap();
     let elem = doc
         .descendants()
-        .find(|n| n.attribute("id") == Some("rect1"))
+        .find(|n| n.attribute("id").map(AsRef::as_ref) == Some("rect1"))
         .unwrap();
     assert!(elem.has_tag_name("rect"));
 }

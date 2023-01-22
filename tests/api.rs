@@ -31,13 +31,16 @@ fn get_text_01() {
     let doc = Document::parse(data).unwrap();
     let root = doc.root_element();
 
-    assert_eq!(root.text(), Some("\n    Text1\n    "));
+    assert_eq!(root.text().map(AsRef::as_ref), Some("\n    Text1\n    "));
     assert_eq!(root.tail(), None);
 
     let item = root.children().nth(1).unwrap();
 
-    assert_eq!(item.text(), Some("\n        Text2\n    "));
-    assert_eq!(item.tail(), Some("\n    Text3\n"));
+    assert_eq!(
+        item.text().map(AsRef::as_ref),
+        Some("\n        Text2\n    ")
+    );
+    assert_eq!(item.tail().map(AsRef::as_ref), Some("\n    Text3\n"));
 }
 
 #[test]
@@ -47,7 +50,7 @@ fn get_text_02() {
     let doc = Document::parse(data).unwrap();
     let root = doc.root_element();
 
-    assert_eq!(root.text(), Some("'"));
+    assert_eq!(root.text().map(AsRef::as_ref), Some("'"));
 }
 
 #[test]
@@ -60,10 +63,14 @@ fn api_01() {
     let doc = Document::parse(data).unwrap();
     let p = doc.root_element();
 
-    assert_eq!(p.attribute("attr"), Some("no_ns"));
+    assert_eq!(p.attribute("attr").map(AsRef::as_ref), Some("no_ns"));
     assert_eq!(p.has_attribute("attr"), true);
 
-    assert_eq!(p.attribute(("http://www.w3.org", "attr")), Some("a_ns"));
+    assert_eq!(
+        p.attribute(("http://www.w3.org", "attr"))
+            .map(AsRef::as_ref),
+        Some("a_ns")
+    );
     assert_eq!(p.has_attribute(("http://www.w3.org", "attr")), true);
 
     assert_eq!(p.attribute("attr2"), None);
@@ -123,10 +130,13 @@ fn lookup_namespace_uri() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
     assert_eq!(
-        node.lookup_namespace_uri(Some("n1")),
+        node.lookup_namespace_uri(Some("n1")).map(AsRef::as_ref),
         Some("http://www.w3.org")
     );
-    assert_eq!(node.lookup_namespace_uri(None), Some("http://www.w4.org"));
+    assert_eq!(
+        node.lookup_namespace_uri(None).map(AsRef::as_ref),
+        Some("http://www.w4.org")
+    );
     assert_eq!(node.lookup_namespace_uri(Some("n2")), None);
 }
 

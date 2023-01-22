@@ -389,7 +389,7 @@ enum NodeKind<'input> {
         namespaces: ShortRange,
     },
     PI(PI<'input>),
-    Comment(&'input str),
+    Comment(Cow<'input, str>),
     Text(Cow<'input, str>),
 }
 
@@ -430,10 +430,10 @@ impl<'a, 'input> Attribute<'a, 'input> {
     /// ).unwrap();
     ///
     /// assert_eq!(doc.root_element().attributes().nth(0).unwrap().namespace(), None);
-    /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().namespace(), Some("http://www.w3.org"));
+    /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().namespace().map(AsRef::as_ref), Some("http://www.w3.org"));
     /// ```
     #[inline]
-    pub fn namespace(&self) -> Option<&'a str> {
+    pub fn namespace(&self) -> Option<&'a Cow<'input, str>> {
         self.data.name.namespace(self.doc).map(Namespace::uri)
     }
 
@@ -467,7 +467,7 @@ impl<'a, 'input> Attribute<'a, 'input> {
     /// assert_eq!(doc.root_element().attributes().nth(1).unwrap().value(), "c");
     /// ```
     #[inline]
-    pub fn value(&self) -> &'a str {
+    pub fn value(&self) -> &'a Cow<'input, str> {
         &self.data.value
     }
 
@@ -553,8 +553,8 @@ impl<'input> Namespace<'input> {
     /// assert_eq!(doc.root_element().namespaces().nth(0).unwrap().uri(), "http://www.w3.org");
     /// ```
     #[inline]
-    pub fn uri(&self) -> &str {
-        self.uri.as_ref()
+    pub fn uri(&self) -> &Cow<'input, str> {
+        &self.uri
     }
 }
 
@@ -645,7 +645,7 @@ impl<'input> ExpandedNameIndexed<'input> {
     #[inline]
     fn as_expanded_name<'a>(&self, doc: &'a Document<'input>) -> ExpandedName<'a, 'input> {
         ExpandedName {
-            uri: self.namespace(doc).map(Namespace::uri),
+            uri: self.namespace(doc).map(|ns| ns.uri().as_ref()),
             name: self.local_name,
         }
     }
@@ -884,7 +884,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     /// let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().default_namespace(), Some("http://www.w3.org"));
+    /// assert_eq!(doc.root_element().default_namespace().map(AsRef::as_ref), Some("http://www.w3.org"));
     /// ```
     ///
     /// ```
@@ -892,10 +892,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     ///
     /// assert_eq!(doc.root_element().default_namespace(), None);
     /// ```
-    pub fn default_namespace(&self) -> Option<&'a str> {
+    pub fn default_namespace(&self) -> Option<&'a Cow<'input, str>> {
         self.namespaces()
             .find(|ns| ns.name.is_none())
-            .map(|v| v.uri.as_ref())
+            .map(|v| &v.uri)
     }
 
     /// Returns a prefix for a given namespace URI.
@@ -931,18 +931,18 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     /// let doc = roxmltree::Document::parse("<e xmlns:n='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().lookup_namespace_uri(Some("n")), Some("http://www.w3.org"));
+    /// assert_eq!(doc.root_element().lookup_namespace_uri(Some("n")).map(AsRef::as_ref), Some("http://www.w3.org"));
     /// ```
     ///
     /// ```
     /// let doc = roxmltree::Document::parse("<e xmlns='http://www.w3.org'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().lookup_namespace_uri(None), Some("http://www.w3.org"));
+    /// assert_eq!(doc.root_element().lookup_namespace_uri(None).map(AsRef::as_ref), Some("http://www.w3.org"));
     /// ```
-    pub fn lookup_namespace_uri(&self, prefix: Option<&str>) -> Option<&'a str> {
+    pub fn lookup_namespace_uri(&self, prefix: Option<&str>) -> Option<&'a Cow<'input, str>> {
         self.namespaces()
             .find(|ns| ns.name == prefix)
-            .map(|v| v.uri.as_ref())
+            .map(|v| &v.uri)
     }
 
     /// Returns element's attribute value.
@@ -952,7 +952,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     /// let doc = roxmltree::Document::parse("<e a='b'/>").unwrap();
     ///
-    /// assert_eq!(doc.root_element().attribute("a"), Some("b"));
+    /// assert_eq!(doc.root_element().attribute("a").map(AsRef::as_ref), Some("b"));
     /// ```
     ///
     /// ```
@@ -960,10 +960,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     ///     "<e xmlns:n='http://www.w3.org' a='b' n:a='c'/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.root_element().attribute("a"), Some("b"));
-    /// assert_eq!(doc.root_element().attribute(("http://www.w3.org", "a")), Some("c"));
+    /// assert_eq!(doc.root_element().attribute("a").map(AsRef::as_ref), Some("b"));
+    /// assert_eq!(doc.root_element().attribute(("http://www.w3.org", "a")).map(AsRef::as_ref), Some("c"));
     /// ```
-    pub fn attribute<'n, 'm, N>(&self, name: N) -> Option<&'a str>
+    pub fn attribute<'n, 'm, N>(&self, name: N) -> Option<&'a Cow<'input, str>>
     where
         N: Into<ExpandedName<'n, 'm>>,
     {
@@ -1068,19 +1068,19 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// </p>
     /// ").unwrap();
     ///
-    /// assert_eq!(doc.root_element().text(),
+    /// assert_eq!(doc.root_element().text().map(AsRef::as_ref),
     ///            Some("\n    text\n"));
-    /// assert_eq!(doc.root_element().first_child().unwrap().text(),
+    /// assert_eq!(doc.root_element().first_child().unwrap().text().map(AsRef::as_ref),
     ///            Some("\n    text\n"));
     /// ```
     ///
     /// ```
     /// let doc = roxmltree::Document::parse("<!-- comment --><e/>").unwrap();
     ///
-    /// assert_eq!(doc.root().first_child().unwrap().text(), Some(" comment "));
+    /// assert_eq!(doc.root().first_child().unwrap().text().map(AsRef::as_ref), Some(" comment "));
     /// ```
     #[inline]
-    pub fn text(&self) -> Option<&'a str> {
+    pub fn text(&self) -> Option<&'a Cow<'input, str>> {
         match self.d.kind {
             NodeKind::Element { .. } => match self.first_child() {
                 Some(child) if child.is_text() => match self.doc.nodes[child.id.get_usize()].kind {
@@ -1089,7 +1089,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
                 },
                 _ => None,
             },
-            NodeKind::Comment(text) => Some(text),
+            NodeKind::Comment(ref text) => Some(text),
             NodeKind::Text(ref text) => Some(text),
             _ => None,
         }
@@ -1109,10 +1109,10 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ").unwrap();
     ///
     /// let p = doc.descendants().find(|n| n.has_tag_name("p")).unwrap();
-    /// assert_eq!(p.tail(), Some("\n    text2\n"));
+    /// assert_eq!(p.tail().map(AsRef::as_ref), Some("\n    text2\n"));
     /// ```
     #[inline]
-    pub fn tail(&self) -> Option<&'a str> {
+    pub fn tail(&self) -> Option<&'a Cow<'input, str>> {
         if !self.is_element() {
             return None;
         }
@@ -1307,7 +1307,7 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
             NodeKind::PI(pi) => {
                 write!(f, "PI {{ target: {:?}, value: {:?} }}", pi.target, pi.value)
             }
-            NodeKind::Comment(text) => write!(f, "Comment({:?})", text),
+            NodeKind::Comment(ref text) => write!(f, "Comment({:?})", text),
             NodeKind::Text(ref text) => write!(f, "Text({:?})", text),
         }
     }
