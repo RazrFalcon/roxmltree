@@ -1,4 +1,4 @@
-use alloc::borrow::{Cow, ToOwned};
+use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -6,7 +6,7 @@ use xmlparser::{self, Reference, StrSpan, Stream, TextPos};
 
 use crate::{
     AttributeData, Document, ExpandedNameIndexed, NamespaceIdx, Namespaces, NodeData, NodeId,
-    NodeKind, ShortRange, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
+    NodeKind, SharedString, ShortRange, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
 };
 
 /// A list of all possible errors.
@@ -267,7 +267,7 @@ impl Default for ParsingOptions {
 struct TempAttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
-    value: Cow<'input, str>,
+    value: SharedString<'input>,
     #[cfg(feature = "positions")]
     pos: usize,
 }
@@ -1004,10 +1004,10 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
         }
     }
 
-    pub(crate) fn to_cow(&self) -> Cow<'input, str> {
+    pub(crate) fn to_cow(&self) -> SharedString<'input> {
         match self {
-            BorrowedText::Input(text) => Cow::Borrowed(text),
-            BorrowedText::Temp(text) => Cow::Owned((*text).to_owned()),
+            BorrowedText::Input(text) => SharedString::Borrowed(text),
+            BorrowedText::Temp(text) => SharedString::Owned(Rc::new(text.to_string())),
         }
     }
 }
@@ -1028,14 +1028,18 @@ fn append_text<'input, 'temp>(
             if let NodeKind::Text(ref mut prev_text) = node.kind {
                 let text = text.as_str();
                 match prev_text {
-                    Cow::Borrowed(s) => {
+                    SharedString::Borrowed(s) => {
                         let mut concat_text = String::with_capacity(s.len() + text.len());
                         concat_text.push_str(s);
                         concat_text.push_str(text);
-                        *prev_text = Cow::Owned(concat_text);
+                        *prev_text = SharedString::Owned(Rc::new(concat_text));
                     }
-                    Cow::Owned(ref mut s) => {
-                        s.push_str(text);
+                    SharedString::Owned(ref mut s) => {
+                        // During parsing, our shared string is never cloned.
+                        // Therefore the counter must be zero.
+                        assert_eq!(Rc::strong_count(s), 1);
+
+                        Rc::make_mut(s).push_str(text);
                     }
                 }
             }

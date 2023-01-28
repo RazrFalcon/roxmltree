@@ -26,12 +26,14 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-use alloc::borrow::Cow;
-use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
+
+use alloc::rc::Rc;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 pub use xmlparser::TextPos;
 
@@ -389,7 +391,7 @@ enum NodeKind<'input> {
     },
     PI(PI<'input>),
     Comment(&'input str),
-    Text(Cow<'input, str>),
+    Text(SharedString<'input>),
 }
 
 struct NodeData<'input> {
@@ -402,10 +404,50 @@ struct NodeData<'input> {
     pos: usize,
 }
 
+/// A shared XML string.
+///
+/// Can be used even after dropping the [`Document`].
+#[derive(Clone, Eq, Debug)]
+pub enum SharedString<'input> {
+    /// A raw slice of the input string.
+    Borrowed(&'input str),
+    /// A reference-counted String.
+    Owned(Rc<String>),
+}
+
+impl SharedString<'_> {
+    fn as_str(&self) -> &str {
+        match self {
+            SharedString::Borrowed(s) => s,
+            SharedString::Owned(s) => s.as_str(),
+        }
+    }
+}
+
+impl PartialEq for SharedString<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        &*self == &*other
+    }
+}
+
+impl core::fmt::Display for SharedString<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl core::ops::Deref for SharedString<'_> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
 #[derive(Clone, Debug)]
 struct AttributeData<'input> {
     name: ExpandedNameIndexed<'input>,
-    value: Cow<'input, str>,
+    value: SharedString<'input>,
     #[cfg(feature = "positions")]
     pos: usize,
 }
@@ -469,6 +511,14 @@ impl<'a, 'input> Attribute<'a, 'input> {
         &self.data.value
     }
 
+    /// Returns attribute's shared value.
+    ///
+    /// Unlike a string returned by `value()`, `SharedString` can outlive the [`Document`].
+    #[inline]
+    pub fn shared_value(&self) -> SharedString<'input> {
+        self.data.value.clone()
+    }
+
     /// Returns attribute's position in bytes in the original document.
     ///
     /// You can calculate a human-readable text position via [Document::text_pos_at].
@@ -511,7 +561,7 @@ impl fmt::Debug for Attribute<'_, '_> {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Namespace<'input> {
     name: Option<&'input str>,
-    uri: Cow<'input, str>,
+    uri: SharedString<'input>,
 }
 
 impl<'input> Namespace<'input> {
@@ -917,7 +967,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
 
         self.namespaces()
-            .find(|ns| ns.uri == uri)
+            .find(|ns| &*ns.uri == uri)
             .map(|v| v.name)
             .unwrap_or(None)
     }
