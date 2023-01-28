@@ -1007,7 +1007,7 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
     pub(crate) fn to_cow(&self) -> SharedString<'input> {
         match self {
             BorrowedText::Input(text) => SharedString::Borrowed(text),
-            BorrowedText::Temp(text) => SharedString::Owned(Rc::new(text.to_string())),
+            BorrowedText::Temp(text) => SharedString::Owned(Rc::from(*text)),
         }
     }
 }
@@ -1032,14 +1032,14 @@ fn append_text<'input, 'temp>(
                         let mut concat_text = String::with_capacity(s.len() + text.len());
                         concat_text.push_str(s);
                         concat_text.push_str(text);
-                        *prev_text = SharedString::Owned(Rc::new(concat_text));
+                        *prev_text = SharedString::Owned(Rc::from(concat_text));
                     }
-                    SharedString::Owned(ref mut s) => {
-                        // During parsing, our shared string is never cloned.
-                        // Therefore the counter must be zero.
-                        assert_eq!(Rc::strong_count(s), 1);
-
-                        Rc::make_mut(s).push_str(text);
+                    SharedString::Owned(s) => {
+                        // TODO: find a way to not reallocate the string.
+                        let mut concat_text = String::with_capacity(s.len() + text.len());
+                        concat_text.push_str(s);
+                        concat_text.push_str(text);
+                        *prev_text = SharedString::Owned(Rc::from(concat_text));
                     }
                 }
             }

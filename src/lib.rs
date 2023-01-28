@@ -32,7 +32,6 @@ use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
 
 use alloc::rc::Rc;
-use alloc::string::String;
 use alloc::vec::Vec;
 
 pub use xmlparser::TextPos;
@@ -412,14 +411,15 @@ pub enum SharedString<'input> {
     /// A raw slice of the input string.
     Borrowed(&'input str),
     /// A reference-counted String.
-    Owned(Rc<String>),
+    Owned(Rc<str>),
 }
 
 impl SharedString<'_> {
-    fn as_str(&self) -> &str {
+    /// Returns a string slice.
+    pub fn as_str(&self) -> &str {
         match self {
-            SharedString::Borrowed(s) => s,
-            SharedString::Owned(s) => s.as_str(),
+            SharedString::Borrowed(ref s) => s,
+            SharedString::Owned(s) => s,
         }
     }
 }
