@@ -26,7 +26,6 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
@@ -390,7 +389,7 @@ enum NodeKind<'input> {
     },
     PI(PI<'input>),
     Comment(&'input str),
-    Text(Cow<'input, str>),
+    Text(Text<'input>),
 }
 
 #[derive(Debug)]
@@ -407,7 +406,7 @@ struct NodeData<'input> {
 #[derive(Clone, Debug)]
 struct AttributeData<'input> {
     name: ExpandedNameIndexed<'input>,
-    value: Cow<'input, str>,
+    value: Text<'input>,
     #[cfg(feature = "positions")]
     pos: usize,
 }
@@ -468,7 +467,7 @@ impl<'a, 'input> Attribute<'a, 'input> {
     /// ```
     #[inline]
     pub fn value(&self) -> &'a str {
-        &self.data.value
+        self.data.value.as_str()
     }
 
     /// Returns attribute's position in bytes in the original document.
@@ -513,7 +512,7 @@ impl fmt::Debug for Attribute<'_, '_> {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Namespace<'input> {
     name: Option<&'input str>,
-    uri: Cow<'input, str>,
+    uri: Text<'input>,
 }
 
 impl<'input> Namespace<'input> {
@@ -554,7 +553,7 @@ impl<'input> Namespace<'input> {
     /// ```
     #[inline]
     pub fn uri(&self) -> &str {
-        self.uri.as_ref()
+        self.uri.as_str()
     }
 }
 
@@ -579,7 +578,7 @@ impl<'input> Namespaces<'input> {
         let idx = match self.sorted_order.binary_search_by(|idx| {
             let value = &self.values[idx.0 as usize];
 
-            (value.name, value.uri.as_ref()).cmp(&(name, uri.as_str()))
+            (value.name, value.uri.as_str()).cmp(&(name, uri.as_str()))
         }) {
             Ok(sorted_idx) => self.sorted_order[sorted_idx],
             Err(sorted_idx) => {
@@ -589,7 +588,7 @@ impl<'input> Namespaces<'input> {
                 let idx = NamespaceIdx(self.values.len() as u16);
                 self.values.push(Namespace {
                     name,
-                    uri: uri.to_cow(),
+                    uri: uri.into(),
                 });
                 self.sorted_order.insert(sorted_idx, idx);
                 idx
@@ -895,7 +894,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     pub fn default_namespace(&self) -> Option<&'a str> {
         self.namespaces()
             .find(|ns| ns.name.is_none())
-            .map(|v| v.uri.as_ref())
+            .map(|v| v.uri.as_str())
     }
 
     /// Returns a prefix for a given namespace URI.
@@ -919,7 +918,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
 
         self.namespaces()
-            .find(|ns| ns.uri == uri)
+            .find(|ns| ns.uri.as_str() == uri)
             .map(|v| v.name)
             .unwrap_or(None)
     }
@@ -942,7 +941,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     pub fn lookup_namespace_uri(&self, prefix: Option<&str>) -> Option<&'a str> {
         self.namespaces()
             .find(|ns| ns.name == prefix)
-            .map(|v| v.uri.as_ref())
+            .map(|v| v.uri.as_str())
     }
 
     /// Returns element's attribute value.
@@ -1084,13 +1083,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         match self.d.kind {
             NodeKind::Element { .. } => match self.first_child() {
                 Some(child) if child.is_text() => match self.doc.nodes[child.id.get_usize()].kind {
-                    NodeKind::Text(ref text) => Some(text),
+                    NodeKind::Text(ref text) => Some(text.as_str()),
                     _ => None,
                 },
                 _ => None,
             },
             NodeKind::Comment(text) => Some(text),
-            NodeKind::Text(ref text) => Some(text),
+            NodeKind::Text(ref text) => Some(text.as_str()),
             _ => None,
         }
     }
@@ -1119,7 +1118,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
         match self.next_sibling().map(|n| n.id) {
             Some(id) => match self.doc.nodes[id.get_usize()].kind {
-                NodeKind::Text(ref text) => Some(text),
+                NodeKind::Text(ref text) => Some(text.as_str()),
                 _ => None,
             },
             None => None,

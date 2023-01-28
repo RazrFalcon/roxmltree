@@ -1,5 +1,5 @@
-use alloc::borrow::{Cow, ToOwned};
 use alloc::string::{String, ToString};
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use xmlparser::{self, Reference, StrSpan, Stream, TextPos};
@@ -267,7 +267,7 @@ impl Default for ParsingOptions {
 struct TempAttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
-    value: Cow<'input, str>,
+    value: Text<'input>,
     #[cfg(feature = "positions")]
     pos: usize,
 }
@@ -712,7 +712,7 @@ fn process_attribute<'input>(
 
         doc.namespaces.push_ns(None, value)?;
     } else {
-        let value = value.to_cow();
+        let value = value.into();
         pd.tmp_attrs.push(TempAttributeData {
             prefix,
             local,
@@ -991,6 +991,30 @@ fn process_text<'input>(
     Ok(())
 }
 
+#[derive(Clone, Debug, Eq)]
+pub(crate) enum Text<'input> {
+    Borrowed(&'input str),
+    Owned(String),
+    #[allow(dead_code)]
+    Shared(Arc<str>),
+}
+
+impl Text<'_> {
+    pub(crate) fn as_str(&self) -> &str {
+        match self {
+            Text::Borrowed(text) => text,
+            Text::Owned(text) => text,
+            Text::Shared(text) => text,
+        }
+    }
+}
+
+impl PartialEq for Text<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
 pub(crate) enum BorrowedText<'input, 'temp> {
     Input(&'input str),
     Temp(&'temp str),
@@ -1003,11 +1027,13 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
             BorrowedText::Temp(text) => text,
         }
     }
+}
 
-    pub(crate) fn to_cow(&self) -> Cow<'input, str> {
-        match self {
-            BorrowedText::Input(text) => Cow::Borrowed(text),
-            BorrowedText::Temp(text) => Cow::Owned((*text).to_owned()),
+impl<'input, 'temp> From<BorrowedText<'input, 'temp>> for Text<'input> {
+    fn from(text: BorrowedText<'input, 'temp>) -> Self {
+        match text {
+            BorrowedText::Input(text) => Text::Borrowed(text),
+            BorrowedText::Temp(text) => Text::Owned(String::from(text)),
         }
     }
 }
@@ -1028,20 +1054,21 @@ fn append_text<'input, 'temp>(
             if let NodeKind::Text(ref mut prev_text) = node.kind {
                 let text = text.as_str();
                 match prev_text {
-                    Cow::Borrowed(s) => {
+                    Text::Borrowed(s) => {
                         let mut concat_text = String::with_capacity(s.len() + text.len());
                         concat_text.push_str(s);
                         concat_text.push_str(text);
-                        *prev_text = Cow::Owned(concat_text);
+                        *prev_text = Text::Owned(concat_text);
                     }
-                    Cow::Owned(ref mut s) => {
+                    Text::Owned(ref mut s) => {
                         s.push_str(text);
                     }
+                    Text::Shared(_) => unreachable!(),
                 }
             }
         }
     } else {
-        let text = text.to_cow();
+        let text = text.into();
         doc.append(
             parent_id,
             NodeKind::Text(text),
