@@ -1,3 +1,5 @@
+use core::mem::replace;
+
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -530,6 +532,14 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         &mut doc,
     )?;
 
+    if pd.opt.shared_text {
+        if let Some(node) = doc.nodes.last_mut() {
+            if let NodeKind::Text(ref mut prev_text) = node.kind {
+                prev_text.make_shared();
+            }
+        }
+    }
+
     if !doc.root().children().any(|n| n.is_element()) {
         return Err(Error::NoRootNode);
     }
@@ -556,6 +566,24 @@ fn process_tokens<'input>(
 ) -> Result<(), Error> {
     for token in parser {
         let token = token?;
+
+        match token {
+            xmlparser::Token::ProcessingInstruction { .. }
+            | xmlparser::Token::Comment { .. }
+            | xmlparser::Token::ElementStart { .. }
+            | xmlparser::Token::ElementEnd { .. } => {
+                if pd.opt.shared_text {
+                    if let Some(node) = doc.nodes.last_mut() {
+                        if let NodeKind::Text(ref mut prev_text) = node.kind {
+                            prev_text.make_shared();
+                        }
+                    }
+                }
+                pd.after_text = false;
+            }
+            _ => {}
+        }
+
         match token {
             xmlparser::Token::ProcessingInstruction {
                 target,
@@ -635,16 +663,6 @@ fn process_tokens<'input>(
                         value,
                     });
                 }
-            }
-            _ => {}
-        }
-
-        match token {
-            xmlparser::Token::ProcessingInstruction { .. }
-            | xmlparser::Token::Comment { .. }
-            | xmlparser::Token::ElementStart { .. }
-            | xmlparser::Token::ElementEnd { .. } => {
-                pd.after_text = false;
             }
             _ => {}
         }
@@ -1015,6 +1033,19 @@ impl Text<'_> {
         }
     }
 
+    pub(crate) fn make_shared(&mut self) {
+        match self {
+            Text::Borrowed(text) => {
+                *self = Text::Shared(Arc::from(*text));
+            }
+            #[allow(clippy::mem_replace_with_default)]
+            Text::Owned(text) => {
+                *self = Text::Shared(Arc::from(replace(text, String::new())));
+            }
+            Text::Shared(_) => {}
+        }
+    }
+
     pub(crate) fn as_shared(&self) -> Option<&Arc<str>> {
         match self {
             Text::Borrowed(_) | Text::Owned(_) => None,
@@ -1092,7 +1123,6 @@ fn append_text<'input, 'temp>(
             }
         }
     } else {
-        // FIXME: convert to shared only after element ends
         let text = text.into_text(false);
         doc.append(
             parent_id,
