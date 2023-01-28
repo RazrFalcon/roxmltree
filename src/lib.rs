@@ -31,7 +31,7 @@ use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
 
-use alloc::rc::Rc;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 pub use xmlparser::TextPos;
@@ -411,7 +411,7 @@ pub enum SharedString<'input> {
     /// A raw slice of the input string.
     Borrowed(&'input str),
     /// A reference-counted String.
-    Owned(Rc<str>),
+    Owned(Arc<str>),
 }
 
 impl SharedString<'_> {

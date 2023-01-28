@@ -1,5 +1,5 @@
-use alloc::rc::Rc;
 use alloc::string::{String, ToString};
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use xmlparser::{self, Reference, StrSpan, Stream, TextPos};
@@ -1007,7 +1007,7 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
     pub(crate) fn to_cow(&self) -> SharedString<'input> {
         match self {
             BorrowedText::Input(text) => SharedString::Borrowed(text),
-            BorrowedText::Temp(text) => SharedString::Owned(Rc::from(*text)),
+            BorrowedText::Temp(text) => SharedString::Owned(Arc::from(*text)),
         }
     }
 }
@@ -1032,14 +1032,14 @@ fn append_text<'input, 'temp>(
                         let mut concat_text = String::with_capacity(s.len() + text.len());
                         concat_text.push_str(s);
                         concat_text.push_str(text);
-                        *prev_text = SharedString::Owned(Rc::from(concat_text));
+                        *prev_text = SharedString::Owned(Arc::from(concat_text));
                     }
                     SharedString::Owned(s) => {
                         // TODO: find a way to not reallocate the string.
                         let mut concat_text = String::with_capacity(s.len() + text.len());
                         concat_text.push_str(s);
                         concat_text.push_str(text);
-                        *prev_text = SharedString::Owned(Rc::from(concat_text));
+                        *prev_text = SharedString::Owned(Arc::from(concat_text));
                     }
                 }
             }
