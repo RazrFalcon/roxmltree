@@ -251,6 +251,9 @@ pub struct ParsingOptions {
     ///
     /// Default: u32::MAX (no limit)
     pub nodes_limit: u32,
+
+    /// Convert text into shared ownership representation after parsing.
+    pub shared_text: bool,
 }
 
 // Explicit for readability.
@@ -260,6 +263,7 @@ impl Default for ParsingOptions {
         ParsingOptions {
             allow_dtd: false,
             nodes_limit: core::u32::MAX,
+            shared_text: true,
         }
     }
 }
@@ -507,8 +511,11 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         pos: 0,
     });
 
-    doc.namespaces
-        .push_ns(Some(NS_XML_PREFIX), BorrowedText::Input(NS_XML_URI))?;
+    doc.namespaces.push_ns(
+        Some(NS_XML_PREFIX),
+        BorrowedText::Input(NS_XML_URI),
+        pd.opt.shared_text,
+    )?;
 
     let parser = xmlparser::Tokenizer::from(text);
     let parent_id = doc.root().id;
@@ -584,7 +591,7 @@ fn process_tokens<'input>(
                     BorrowedText::Input(text.as_str()),
                     parent_id,
                     span.start(),
-                    pd.opt.nodes_limit,
+                    &pd.opt,
                     pd.after_text,
                     doc,
                     &mut pd.awaiting_subtree,
@@ -695,7 +702,8 @@ fn process_attribute<'input>(
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces.push_ns(Some(local.as_str()), value)?;
+            doc.namespaces
+                .push_ns(Some(local.as_str()), value, pd.opt.shared_text)?;
         }
     } else if local.as_str() == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
@@ -710,9 +718,9 @@ fn process_attribute<'input>(
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        doc.namespaces.push_ns(None, value)?;
+        doc.namespaces.push_ns(None, value, pd.opt.shared_text)?;
     } else {
-        let value = value.into();
+        let value = value.into_text(pd.opt.shared_text);
         pd.tmp_attrs.push(TempAttributeData {
             prefix,
             local,
@@ -909,7 +917,7 @@ fn process_text<'input>(
             BorrowedText::Input(text.as_str()),
             parent_id,
             text.start(),
-            pd.opt.nodes_limit,
+            &pd.opt,
             pd.after_text,
             doc,
             &mut pd.awaiting_subtree,
@@ -952,7 +960,7 @@ fn process_text<'input>(
                         BorrowedText::Temp(pd.buffer.to_str()),
                         parent_id,
                         text.start(),
-                        pd.opt.nodes_limit,
+                        &pd.opt,
                         pd.after_text,
                         doc,
                         &mut pd.awaiting_subtree,
@@ -979,7 +987,7 @@ fn process_text<'input>(
             BorrowedText::Temp(pd.buffer.to_str()),
             parent_id,
             text.start(),
-            pd.opt.nodes_limit,
+            &pd.opt,
             pd.after_text,
             doc,
             &mut pd.awaiting_subtree,
@@ -995,7 +1003,6 @@ fn process_text<'input>(
 pub(crate) enum Text<'input> {
     Borrowed(&'input str),
     Owned(String),
-    #[allow(dead_code)]
     Shared(Arc<str>),
 }
 
@@ -1005,6 +1012,13 @@ impl Text<'_> {
             Text::Borrowed(text) => text,
             Text::Owned(text) => text,
             Text::Shared(text) => text,
+        }
+    }
+
+    pub(crate) fn as_shared(&self) -> Option<&Arc<str>> {
+        match self {
+            Text::Borrowed(_) | Text::Owned(_) => None,
+            Text::Shared(text) => Some(text),
         }
     }
 }
@@ -1027,13 +1041,23 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
             BorrowedText::Temp(text) => text,
         }
     }
-}
 
-impl<'input, 'temp> From<BorrowedText<'input, 'temp>> for Text<'input> {
-    fn from(text: BorrowedText<'input, 'temp>) -> Self {
-        match text {
-            BorrowedText::Input(text) => Text::Borrowed(text),
-            BorrowedText::Temp(text) => Text::Owned(String::from(text)),
+    pub(crate) fn into_text(self, shared: bool) -> Text<'input> {
+        match self {
+            BorrowedText::Input(text) => {
+                if shared {
+                    Text::Shared(Arc::from(text))
+                } else {
+                    Text::Borrowed(text)
+                }
+            }
+            BorrowedText::Temp(text) => {
+                if shared {
+                    Text::Shared(Arc::from(text))
+                } else {
+                    Text::Owned(String::from(text))
+                }
+            }
         }
     }
 }
@@ -1043,7 +1067,7 @@ fn append_text<'input, 'temp>(
     text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
     pos: usize,
-    nodes_limit: u32,
+    opt: &ParsingOptions,
     after_text: bool,
     doc: &mut Document<'input>,
     awaiting_subtree: &mut Vec<NodeId>,
@@ -1068,12 +1092,13 @@ fn append_text<'input, 'temp>(
             }
         }
     } else {
-        let text = text.into();
+        // FIXME: convert to shared only after element ends
+        let text = text.into_text(false);
         doc.append(
             parent_id,
             NodeKind::Text(text),
             pos,
-            nodes_limit,
+            opt.nodes_limit,
             awaiting_subtree,
         )?;
     }

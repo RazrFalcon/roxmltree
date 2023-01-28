@@ -26,11 +26,13 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
+
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 
 pub use xmlparser::TextPos;
 
@@ -470,6 +472,13 @@ impl<'a, 'input> Attribute<'a, 'input> {
         self.data.value.as_str()
     }
 
+    /// Returns a shared ownership representation of the attribute's value.
+    ///
+    /// Sharing must be enabled via [`ParsingOptions::shared_text`].
+    pub fn shared_value(&self) -> Option<&Arc<str>> {
+        self.data.value.as_shared()
+    }
+
     /// Returns attribute's position in bytes in the original document.
     ///
     /// You can calculate a human-readable text position via [Document::text_pos_at].
@@ -572,6 +581,7 @@ impl<'input> Namespaces<'input> {
         &mut self,
         name: Option<&'input str>,
         uri: BorrowedText<'input, 'temp>,
+        shared_text: bool,
     ) -> Result<(), Error> {
         debug_assert_ne!(name, Some(""));
 
@@ -588,7 +598,7 @@ impl<'input> Namespaces<'input> {
                 let idx = NamespaceIdx(self.values.len() as u16);
                 self.values.push(Namespace {
                     name,
-                    uri: uri.into(),
+                    uri: uri.into_text(shared_text),
                 });
                 self.sorted_order.insert(sorted_idx, idx);
                 idx
