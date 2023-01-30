@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `StringStorage` that exposes an internal string storage.
+- Allocated strings can be stored as `Rc<str>` and `Arc<str>` now.
+- `Node::text_storage`
+- `Node::tail_storage`
+- `Node::comment`
+- `Attribute::value_storage`
+
+### Changed
+- `Node::text` no longer returns comments text. Use `Node::comment` instead.
 
 ## [0.17.0] - 2023-01-06
 ### Added

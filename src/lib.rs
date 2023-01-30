@@ -449,7 +449,7 @@ impl StringStorage<'_> {
     /// Returns a string slice.
     pub fn as_str(&self) -> &str {
         match self {
-            StringStorage::Borrowed(ref s) => s,
+            StringStorage::Borrowed(s) => s,
             StringStorage::Owned(s) => s,
         }
     }
@@ -457,7 +457,7 @@ impl StringStorage<'_> {
 
 impl PartialEq for StringStorage<'_> {
     fn eq(&self, other: &Self) -> bool {
-        &*self == &*other
+        self.as_str() == other.as_str()
     }
 }
 
@@ -542,13 +542,12 @@ impl<'a, 'input> Attribute<'a, 'input> {
         &self.data.value
     }
 
-    /// Returns attribute's shared value.
+    /// Returns attribute's value storage.
     ///
-    /// Unlike a string returned by `value()`, `StringStorage` can outlive the [`Document`].
-    #[cfg(any(feature = "rc-strings", feature = "arc-strings"))]
+    /// Useful when you need a more low-level access to an allocated string.
     #[inline]
-    pub fn shared_value(&self) -> StringStorage<'input> {
-        self.data.value.clone()
+    pub fn value_storage(&self) -> &StringStorage<'input> {
+        &self.data.value
     }
 
     /// Returns attribute's position in bytes in the original document.
@@ -1136,7 +1135,6 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns node's text.
     ///
     /// - for an element will return a first text child
-    /// - for a comment will return a self text
     /// - for a text node will return a self text
     ///
     /// # Examples
@@ -1153,14 +1151,15 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// assert_eq!(doc.root_element().first_child().unwrap().text(),
     ///            Some("\n    text\n"));
     /// ```
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("<!-- comment --><e/>").unwrap();
-    ///
-    /// assert_eq!(doc.root().first_child().unwrap().text(), Some(" comment "));
-    /// ```
     #[inline]
     pub fn text(&self) -> Option<&'a str> {
+        self.text_storage().map(|s| s.as_str())
+    }
+
+    /// Returns node's text storage.
+    ///
+    /// Useful when you need a more low-level access to an allocated string.
+    pub fn text_storage(&self) -> Option<&'a StringStorage<'input>> {
         match self.d.kind {
             NodeKind::Element { .. } => match self.first_child() {
                 Some(child) if child.is_text() => match self.doc.nodes[child.id.get_usize()].kind {
@@ -1169,7 +1168,6 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
                 },
                 _ => None,
             },
-            NodeKind::Comment(text) => Some(text),
             NodeKind::Text(ref text) => Some(text),
             _ => None,
         }
@@ -1193,6 +1191,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     #[inline]
     pub fn tail(&self) -> Option<&'a str> {
+        self.tail_storage().map(|s| s.as_str())
+    }
+
+    /// Returns element's tail text storage.
+    ///
+    /// Useful when you need a more low-level access to an allocated string.
+    pub fn tail_storage(&self) -> Option<&'a StringStorage<'input>> {
         if !self.is_element() {
             return None;
         }
@@ -1203,6 +1208,23 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
                 _ => None,
             },
             None => None,
+        }
+    }
+
+    /// Returns node's comment content.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let doc = roxmltree::Document::parse("<!-- comment --><e/>").unwrap();
+    ///
+    /// assert_eq!(doc.root().first_child().unwrap().comment(), Some(" comment "));
+    /// ```
+    #[inline]
+    pub fn comment(&self) -> Option<&'input str> {
+        match self.d.kind {
+            NodeKind::Comment(text) => Some(text),
+            _ => None,
         }
     }
 
