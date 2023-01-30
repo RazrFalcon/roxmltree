@@ -385,7 +385,7 @@ enum NodeKind<'input> {
         namespaces: ShortRange,
     },
     PI(PI<'input>),
-    Comment(&'input str),
+    Comment(StringStorage<'input>),
     Text(StringStorage<'input>),
 }
 
@@ -1135,6 +1135,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns node's text.
     ///
     /// - for an element will return a first text child
+    /// - for a comment will return a self text
     /// - for a text node will return a self text
     ///
     /// # Examples
@@ -1150,6 +1151,12 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     ///            Some("\n    text\n"));
     /// assert_eq!(doc.root_element().first_child().unwrap().text(),
     ///            Some("\n    text\n"));
+    /// ```
+    ///
+    /// ```
+    /// let doc = roxmltree::Document::parse("<!-- comment --><e/>").unwrap();
+    ///
+    /// assert_eq!(doc.root().first_child().unwrap().text(), Some(" comment "));
     /// ```
     #[inline]
     pub fn text(&self) -> Option<&'a str> {
@@ -1168,6 +1175,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
                 },
                 _ => None,
             },
+            NodeKind::Comment(ref text) => Some(text),
             NodeKind::Text(ref text) => Some(text),
             _ => None,
         }
@@ -1208,23 +1216,6 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
                 _ => None,
             },
             None => None,
-        }
-    }
-
-    /// Returns node's comment content.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let doc = roxmltree::Document::parse("<!-- comment --><e/>").unwrap();
-    ///
-    /// assert_eq!(doc.root().first_child().unwrap().comment(), Some(" comment "));
-    /// ```
-    #[inline]
-    pub fn comment(&self) -> Option<&'input str> {
-        match self.d.kind {
-            NodeKind::Comment(text) => Some(text),
-            _ => None,
         }
     }
 
@@ -1409,8 +1400,8 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
             NodeKind::PI(pi) => {
                 write!(f, "PI {{ target: {:?}, value: {:?} }}", pi.target, pi.value)
             }
-            NodeKind::Comment(text) => write!(f, "Comment({:?})", text),
-            NodeKind::Text(ref text) => write!(f, "Text({:?})", text),
+            NodeKind::Comment(ref text) => write!(f, "Comment({:?})", text.as_str()),
+            NodeKind::Text(ref text) => write!(f, "Text({:?})", text.as_str()),
         }
     }
 }

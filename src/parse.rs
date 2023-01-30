@@ -569,7 +569,7 @@ fn process_tokens<'input>(
             xmlparser::Token::Comment { text, span } => {
                 doc.append(
                     parent_id,
-                    NodeKind::Comment(text.as_str()),
+                    NodeKind::Comment(StringStorage::Borrowed(text.as_str())),
                     span.start(),
                     pd.opt.nodes_limit,
                     &mut pd.awaiting_subtree,

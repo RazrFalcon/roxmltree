@@ -166,7 +166,7 @@ fn _to_yaml(doc: &Document, s: &mut String) -> Result<(), fmt::Error> {
                     writeln_indented!(depth, s, "- Text: {:?}", child.text().unwrap());
                 }
                 NodeType::Comment => {
-                    writeln_indented!(depth, s, "- Comment: {:?}", child.comment().unwrap());
+                    writeln_indented!(depth, s, "- Comment: {:?}", child.text().unwrap());
                 }
                 NodeType::PI => {
                     if child.parent().unwrap().is_root() {
