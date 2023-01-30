@@ -31,7 +31,6 @@ use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
 
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 pub use xmlparser::TextPos;
@@ -310,7 +309,6 @@ struct ShortRange {
 impl From<Range> for ShortRange {
     #[inline]
     fn from(range: Range) -> Self {
-        // Casting to `u32` should be safe since we have a 4GiB input data limit.
         debug_assert!(range.start <= core::u32::MAX as usize);
         debug_assert!(range.end <= core::u32::MAX as usize);
         ShortRange::new(range.start as u32, range.end as u32)
@@ -342,13 +340,11 @@ pub struct NodeId(NonZeroU32);
 
 impl NodeId {
     /// Construct a new `NodeId` from a `u32`.
-    ///
-    /// `u32` is more than enough since we have a 4GiB input data limit anyway.
     #[inline]
     pub fn new(id: u32) -> Self {
         debug_assert!(id < core::u32::MAX);
 
-        // We are using `NonZeroUsize` to reduce overhead of `Option<NodeId>`.
+        // We are using `NonZeroU32` to reduce overhead of `Option<NodeId>`.
         NodeId(NonZeroU32::new(id + 1).unwrap())
     }
 
@@ -390,7 +386,7 @@ enum NodeKind<'input> {
     },
     PI(PI<'input>),
     Comment(&'input str),
-    Text(SharedString<'input>),
+    Text(StringStorage<'input>),
 }
 
 struct NodeData<'input> {
@@ -403,40 +399,75 @@ struct NodeData<'input> {
     pos: usize,
 }
 
-/// A shared XML string.
+#[cfg(all(feature = "rc-strings", feature = "arc-strings"))]
+compile_error!("only one shared string type can be enable");
+
+/// A string storage.
 ///
-/// Can be used even after dropping the [`Document`].
+/// Used by text nodes and attributes values.
+///
+/// We try our best to keep parsed strings as `&str`, but in some cases post-processing
+/// is necessary and we have to allocates them.<br>
+/// By default, strings are allocated as `String`. This is fine in most cases,
+/// unless you want them to outlive the [`Document`].
+/// In which case we can use `Rc<str>` or `Arc<str>`.
 #[derive(Clone, Eq, Debug)]
-pub enum SharedString<'input> {
+pub enum StringStorage<'input> {
     /// A raw slice of the input string.
     Borrowed(&'input str),
-    /// A reference-counted String.
-    Owned(Arc<str>),
+
+    /// An owned string.
+    #[cfg(all(not(feature = "rc-strings"), not(feature = "arc-strings")))]
+    Owned(alloc::string::String),
+    /// A reference-counted string.
+    #[cfg(all(feature = "rc-strings", not(feature = "arc-strings")))]
+    Owned(alloc::rc::Rc<str>),
+    /// A reference-counted string.
+    #[cfg(all(not(feature = "rc-strings"), feature = "arc-strings"))]
+    Owned(alloc::sync::Arc<str>),
 }
 
-impl SharedString<'_> {
+impl StringStorage<'_> {
+    /// Creates a new owned string from `&str` or `String`.
+    #[cfg(all(not(feature = "rc-strings"), not(feature = "arc-strings")))]
+    pub fn new_owned<T: Into<alloc::string::String>>(s: T) -> Self {
+        Self::Owned(s.into())
+    }
+
+    /// Creates a new owned string from `&str` or `String`.
+    #[cfg(all(feature = "rc-strings", not(feature = "arc-strings")))]
+    pub fn new_owned<T: Into<alloc::rc::Rc<str>>>(s: T) -> Self {
+        Self::Owned(s.into())
+    }
+
+    /// Creates a new owned string from `&str` or `String`.
+    #[cfg(all(not(feature = "rc-strings"), feature = "arc-strings"))]
+    pub fn new_owned<T: Into<alloc::sync::Arc<str>>>(s: T) -> Self {
+        Self::Owned(s.into())
+    }
+
     /// Returns a string slice.
     pub fn as_str(&self) -> &str {
         match self {
-            SharedString::Borrowed(ref s) => s,
-            SharedString::Owned(s) => s,
+            StringStorage::Borrowed(ref s) => s,
+            StringStorage::Owned(s) => s,
         }
     }
 }
 
-impl PartialEq for SharedString<'_> {
+impl PartialEq for StringStorage<'_> {
     fn eq(&self, other: &Self) -> bool {
         &*self == &*other
     }
 }
 
-impl core::fmt::Display for SharedString<'_> {
+impl core::fmt::Display for StringStorage<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
     }
 }
 
-impl core::ops::Deref for SharedString<'_> {
+impl core::ops::Deref for StringStorage<'_> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -447,7 +478,7 @@ impl core::ops::Deref for SharedString<'_> {
 #[derive(Clone, Debug)]
 struct AttributeData<'input> {
     name: ExpandedNameIndexed<'input>,
-    value: SharedString<'input>,
+    value: StringStorage<'input>,
     #[cfg(feature = "positions")]
     pos: usize,
 }
@@ -513,9 +544,10 @@ impl<'a, 'input> Attribute<'a, 'input> {
 
     /// Returns attribute's shared value.
     ///
-    /// Unlike a string returned by `value()`, `SharedString` can outlive the [`Document`].
+    /// Unlike a string returned by `value()`, `StringStorage` can outlive the [`Document`].
+    #[cfg(any(feature = "rc-strings", feature = "arc-strings"))]
     #[inline]
-    pub fn shared_value(&self) -> SharedString<'input> {
+    pub fn shared_value(&self) -> StringStorage<'input> {
         self.data.value.clone()
     }
 
@@ -561,7 +593,7 @@ impl fmt::Debug for Attribute<'_, '_> {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Namespace<'input> {
     name: Option<&'input str>,
-    uri: SharedString<'input>,
+    uri: StringStorage<'input>,
 }
 
 impl<'input> Namespace<'input> {
@@ -637,7 +669,7 @@ impl<'input> Namespaces<'input> {
                 let idx = NamespaceIdx(self.values.len() as u16);
                 self.values.push(Namespace {
                     name,
-                    uri: uri.to_cow(),
+                    uri: uri.to_shared(),
                 });
                 self.sorted_order.insert(sorted_idx, idx);
                 idx

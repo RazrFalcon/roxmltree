@@ -1,12 +1,11 @@
 use alloc::string::{String, ToString};
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use xmlparser::{self, Reference, StrSpan, Stream, TextPos};
 
 use crate::{
     AttributeData, Document, ExpandedNameIndexed, NamespaceIdx, Namespaces, NodeData, NodeId,
-    NodeKind, SharedString, ShortRange, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
+    NodeKind, ShortRange, StringStorage, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
 };
 
 /// A list of all possible errors.
@@ -267,7 +266,7 @@ impl Default for ParsingOptions {
 struct TempAttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
-    value: SharedString<'input>,
+    value: StringStorage<'input>,
     #[cfg(feature = "positions")]
     pos: usize,
 }
@@ -712,7 +711,7 @@ fn process_attribute<'input>(
 
         doc.namespaces.push_ns(None, value)?;
     } else {
-        let value = value.to_cow();
+        let value = value.to_shared();
         pd.tmp_attrs.push(TempAttributeData {
             prefix,
             local,
@@ -1004,10 +1003,10 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
         }
     }
 
-    pub(crate) fn to_cow(&self) -> SharedString<'input> {
+    pub(crate) fn to_shared(&self) -> StringStorage<'input> {
         match self {
-            BorrowedText::Input(text) => SharedString::Borrowed(text),
-            BorrowedText::Temp(text) => SharedString::Owned(Arc::from(*text)),
+            BorrowedText::Input(text) => StringStorage::Borrowed(text),
+            BorrowedText::Temp(text) => StringStorage::new_owned(*text),
         }
     }
 }
@@ -1028,24 +1027,24 @@ fn append_text<'input, 'temp>(
             if let NodeKind::Text(ref mut prev_text) = node.kind {
                 let text = text.as_str();
                 match prev_text {
-                    SharedString::Borrowed(s) => {
+                    StringStorage::Borrowed(s) => {
                         let mut concat_text = String::with_capacity(s.len() + text.len());
                         concat_text.push_str(s);
                         concat_text.push_str(text);
-                        *prev_text = SharedString::Owned(Arc::from(concat_text));
+                        *prev_text = StringStorage::new_owned(concat_text);
                     }
-                    SharedString::Owned(s) => {
+                    StringStorage::Owned(s) => {
                         // TODO: find a way to not reallocate the string.
                         let mut concat_text = String::with_capacity(s.len() + text.len());
                         concat_text.push_str(s);
                         concat_text.push_str(text);
-                        *prev_text = SharedString::Owned(Arc::from(concat_text));
+                        *prev_text = StringStorage::new_owned(concat_text);
                     }
                 }
             }
         }
     } else {
-        let text = text.to_cow();
+        let text = text.to_shared();
         doc.append(
             parent_id,
             NodeKind::Text(text),

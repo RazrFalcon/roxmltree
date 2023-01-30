@@ -24,3 +24,6 @@ std = []
 # Enables Nodes and Attributes position in the original document preserving.
 # Increases memory usage by `usize` for each Node and Attribute.
 positions = []
+# See `StringStorage` type documentation for the details.
+rc-strings = []
+arc-strings = []
