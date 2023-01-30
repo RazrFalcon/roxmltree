@@ -1025,22 +1025,13 @@ fn append_text<'input, 'temp>(
         // Prepend to a previous text node.
         if let Some(node) = doc.nodes.last_mut() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
-                let text = text.as_str();
-                match prev_text {
-                    StringStorage::Borrowed(s) => {
-                        let mut concat_text = String::with_capacity(s.len() + text.len());
-                        concat_text.push_str(s);
-                        concat_text.push_str(text);
-                        *prev_text = StringStorage::new_owned(concat_text);
-                    }
-                    StringStorage::Owned(s) => {
-                        // TODO: find a way to not reallocate the string.
-                        let mut concat_text = String::with_capacity(s.len() + text.len());
-                        concat_text.push_str(s);
-                        concat_text.push_str(text);
-                        *prev_text = StringStorage::new_owned(concat_text);
-                    }
-                }
+                let text_str = text.as_str();
+                let prev_text_str = prev_text.as_str();
+
+                let mut concat_text = String::with_capacity(text_str.len() + prev_text_str.len());
+                concat_text.push_str(prev_text_str);
+                concat_text.push_str(text_str);
+                *prev_text = StringStorage::new_owned(concat_text);
             }
         }
     } else {
