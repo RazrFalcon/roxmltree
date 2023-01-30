@@ -431,19 +431,19 @@ impl StringStorage<'_> {
     /// Creates a new owned string from `&str` or `String`.
     #[cfg(all(not(feature = "rc-strings"), not(feature = "arc-strings")))]
     pub fn new_owned<T: Into<alloc::string::String>>(s: T) -> Self {
-        Self::Owned(s.into())
+        StringStorage::Owned(s.into())
     }
 
     /// Creates a new owned string from `&str` or `String`.
     #[cfg(all(feature = "rc-strings", not(feature = "arc-strings")))]
     pub fn new_owned<T: Into<alloc::rc::Rc<str>>>(s: T) -> Self {
-        Self::Owned(s.into())
+        StringStorage::Owned(s.into())
     }
 
     /// Creates a new owned string from `&str` or `String`.
     #[cfg(all(not(feature = "rc-strings"), feature = "arc-strings"))]
     pub fn new_owned<T: Into<alloc::sync::Arc<str>>>(s: T) -> Self {
-        Self::Owned(s.into())
+        StringStorage::Owned(s.into())
     }
 
     /// Returns a string slice.
