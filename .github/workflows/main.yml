@@ -32,9 +32,3 @@ jobs:
 
     - name: Build without std
       run: cargo build --no-default-features
-
-    - name: Build with rc-strings
-      run: cargo build --no-default-features --features rc-strings
-
-    - name: Build with arc-strings
-      run: cargo build --no-default-features --features arc-strings

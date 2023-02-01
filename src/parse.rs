@@ -711,7 +711,7 @@ fn process_attribute<'input>(
 
         doc.namespaces.push_ns(None, value)?;
     } else {
-        let value = value.to_shared();
+        let value = value.to_storage();
         pd.tmp_attrs.push(TempAttributeData {
             prefix,
             local,
@@ -1003,7 +1003,7 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
         }
     }
 
-    pub(crate) fn to_shared(&self) -> StringStorage<'input> {
+    pub(crate) fn to_storage(&self) -> StringStorage<'input> {
         match self {
             BorrowedText::Input(text) => StringStorage::Borrowed(text),
             BorrowedText::Temp(text) => StringStorage::new_owned(*text),
@@ -1035,7 +1035,7 @@ fn append_text<'input, 'temp>(
             }
         }
     } else {
-        let text = text.to_shared();
+        let text = text.to_storage();
         doc.append(
             parent_id,
             NodeKind::Text(text),

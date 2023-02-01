@@ -399,49 +399,25 @@ struct NodeData<'input> {
     pos: usize,
 }
 
-#[cfg(all(feature = "rc-strings", feature = "arc-strings"))]
-compile_error!("only one shared string type can be enable");
-
 /// A string storage.
 ///
 /// Used by text nodes and attributes values.
 ///
 /// We try our best to keep parsed strings as `&str`, but in some cases post-processing
-/// is necessary and we have to allocates them.<br>
-/// By default, strings are allocated as `String`. This is fine in most cases,
-/// unless you want them to outlive the [`Document`].
-/// In which case we can use `Rc<str>` or `Arc<str>`.
+/// is necessary and we have to allocates them.
+///
+/// All owned, allocated strings are stored as `Arc<str>`.
 #[derive(Clone, Eq, Debug)]
 pub enum StringStorage<'input> {
     /// A raw slice of the input string.
     Borrowed(&'input str),
 
-    /// An owned string.
-    #[cfg(all(not(feature = "rc-strings"), not(feature = "arc-strings")))]
-    Owned(alloc::string::String),
     /// A reference-counted string.
-    #[cfg(all(feature = "rc-strings", not(feature = "arc-strings")))]
-    Owned(alloc::rc::Rc<str>),
-    /// A reference-counted string.
-    #[cfg(all(not(feature = "rc-strings"), feature = "arc-strings"))]
     Owned(alloc::sync::Arc<str>),
 }
 
 impl StringStorage<'_> {
     /// Creates a new owned string from `&str` or `String`.
-    #[cfg(all(not(feature = "rc-strings"), not(feature = "arc-strings")))]
-    pub fn new_owned<T: Into<alloc::string::String>>(s: T) -> Self {
-        StringStorage::Owned(s.into())
-    }
-
-    /// Creates a new owned string from `&str` or `String`.
-    #[cfg(all(feature = "rc-strings", not(feature = "arc-strings")))]
-    pub fn new_owned<T: Into<alloc::rc::Rc<str>>>(s: T) -> Self {
-        StringStorage::Owned(s.into())
-    }
-
-    /// Creates a new owned string from `&str` or `String`.
-    #[cfg(all(not(feature = "rc-strings"), feature = "arc-strings"))]
     pub fn new_owned<T: Into<alloc::sync::Arc<str>>>(s: T) -> Self {
         StringStorage::Owned(s.into())
     }
@@ -668,7 +644,7 @@ impl<'input> Namespaces<'input> {
                 let idx = NamespaceIdx(self.values.len() as u16);
                 self.values.push(Namespace {
                     name,
-                    uri: uri.to_shared(),
+                    uri: uri.to_storage(),
                 });
                 self.sorted_order.insert(sorted_idx, idx);
                 idx
