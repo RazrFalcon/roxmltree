@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Added
 - `StringStorage` that exposes an internal string storage.
-- Allocated strings can be stored as `Rc<str>` and `Arc<str>` now.
+- Allocated strings are stored as `Arc<str>` and not `String` now.
 - `Node::text_storage`
 - `Node::tail_storage`
 - `Attribute::value_storage`
