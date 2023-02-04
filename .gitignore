@@ -1,5 +1,3 @@
 target
-**/*.rs.bk
-/.idea
-/roxmltree.iml
 Cargo.lock
+.DS_Store

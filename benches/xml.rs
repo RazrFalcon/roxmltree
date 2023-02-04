@@ -172,27 +172,6 @@ fn huge_sdx_document(bencher: &mut Bencher) {
     bencher.iter(|| sxd_document::parser::parse(&text).unwrap())
 }
 
-fn tiny_minidom(bencher: &mut Bencher) {
-    let data = std::fs::read_to_string("fonts.conf").unwrap();
-    bencher.iter(|| {
-        let _root: minidom::Element = data.parse().unwrap();
-    })
-}
-
-fn medium_minidom(bencher: &mut Bencher) {
-    let data = std::fs::read_to_string("medium.svg").unwrap();
-    bencher.iter(|| {
-        let _root: minidom::Element = data.parse().unwrap();
-    })
-}
-
-fn large_minidom(bencher: &mut Bencher) {
-    let data = std::fs::read_to_string("large.plist").unwrap();
-    bencher.iter(|| {
-        let _root: minidom::Element = data.parse().unwrap();
-    })
-}
-
 #[cfg(feature = "libxml")]
 fn tiny_libxml(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
@@ -273,36 +252,6 @@ fn roxmltree_iter_children(bencher: &mut Bencher) {
     });
 }
 
-fn minidom_iter_descendants_inexpensive(bencher: &mut Bencher) {
-    let data = std::fs::read_to_string("large.plist").unwrap();
-    let root: minidom::Element = data.parse().unwrap();
-    bencher.iter(|| {
-        let mut count = 0;
-        let mut stack: Vec<&minidom::Element> = vec![&root];
-        while let Some(node) = stack.pop() {
-            if node.name() == "string" {
-                count += 1
-            }
-            stack.append(&mut node.children().collect::<Vec<_>>());
-        }
-        assert!(count == 3273);
-    })
-}
-
-fn minidom_iter_descendants_expensive(bencher: &mut Bencher) {
-    let data = std::fs::read_to_string("large.plist").unwrap();
-    let root: minidom::Element = data.parse().unwrap();
-    bencher.iter(|| {
-        let mut count = 0;
-        let mut stack: Vec<&minidom::Element> = vec![&root];
-        while let Some(node) = stack.pop() {
-            count += node.texts().filter(|text| text.contains("twitter")).count();
-            stack.append(&mut node.children().collect::<Vec<_>>());
-        }
-        assert!(count == 118);
-    })
-}
-
 fn xmltree_iter_descendants_inexpensive(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
     let root = xmltree::Element::parse(text.as_bytes()).unwrap();
@@ -368,11 +317,6 @@ benchmark_group!(
     xmltree_iter_descendants_expensive
 );
 benchmark_group!(
-    minidom_iter,
-    minidom_iter_descendants_inexpensive,
-    minidom_iter_descendants_expensive
-);
-benchmark_group!(
     roxmltree_iter,
     roxmltree_iter_descendants_inexpensive,
     roxmltree_iter_descendants_expensive,
@@ -399,7 +343,6 @@ benchmark_group!(
     large_sdx_document,
     huge_sdx_document,
 );
-benchmark_group!(minidom, tiny_minidom, medium_minidom, large_minidom,);
 benchmark_group!(
     xmlparser,
     tiny_xmlparser,
@@ -429,12 +372,10 @@ benchmark_main!(
     roxmltree,
     xmltree,
     sdx,
-    minidom,
     xmlparser,
     xmlrs,
     quick_xml,
     roxmltree_iter,
-    minidom_iter,
     xmltree_iter
 );
 
@@ -443,12 +384,10 @@ benchmark_main!(
     roxmltree,
     xmltree,
     sdx,
-    minidom,
     xmlparser,
     xmlrs,
     quick_xml,
     libxml,
     roxmltree_iter,
-    minidom_iter,
     xmltree_iter
 );

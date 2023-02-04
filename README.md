@@ -8,8 +8,8 @@ Represents an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree
 
 ```rust
 // Find element by id.
-let doc = roxmltree::Document::parse("<rect id='rect1'/>").unwrap();
-let elem = doc.descendants().find(|n| n.attribute("id") == Some("rect1")).unwrap();
+let doc = roxmltree::Document::parse("<rect id='rect1'/>")?;
+let elem = doc.descendants().find(|n| n.attribute("id") == Some("rect1"))?;
 assert!(elem.has_tag_name("rect"));
 ```
 
@@ -32,28 +32,28 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 
 ## Alternatives
 
-| Feature/Crate                   | roxmltree        | [libxml2]           | [xmltree]        | [sxd-document]   | [minidom]        |
-| ------------------------------- | :--------------: | :-----------------: | :--------------: | :--------------: | :--------------: |
-| Element namespace resolving     | ✓                | ✓                   | ✓                | ~<sup>1</sup>    | ✓                |
-| Attribute namespace resolving   | ✓                | ✓                   |                  | ✓                | ✓                |
-| [Entity references]             | ✓                | ✓                   | ×                | ×                | ×                |
-| [Character references]          | ✓                | ✓                   | ✓                | ✓                | ✓                |
-| [Attribute-Value normalization] | ✓                | ✓                   |                  |                  |                  |
-| Comments                        | ✓                | ✓                   |                  | ✓                |                  |
-| Processing instructions         | ✓                | ✓                   | ✓                | ✓                |                  |
-| UTF-8 BOM                       | ✓                | ✓                   | ×                | ×                | ✓                |
-| Non UTF-8 input                 |                  | ✓                   |                  |                  |                  |
-| Complete DTD support            |                  | ✓                   |                  |                  |                  |
-| Position preserving<sup>2</sup> | ✓                | ✓                   |                  |                  |                  |
-| HTML support                    |                  | ✓                   |                  |                  |                  |
-| Tree modification               |                  | ✓                   | ✓                | ✓                | ✓                |
-| Writing                         |                  | ✓                   | ✓                | ✓                | ✓                |
-| No **unsafe**                   | ✓                |                     | ✓                |                  | ~<sup>3</sup>    |
-| Language                        | Rust             | C                   | Rust             | Rust             | Rust             |
-| Size overhead<sup>4</sup>       | ~61KiB           | ~1.4MiB<sup>5</sup> | ~106KiB          | ~121KiB          | **~58KiB**       |
-| Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                | 2                |
-| Tested version                  | 0.16.0           | 2.9.8               | 0.10.2           | 0.3.2            | 0.12.0           |
-| License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              | MIT              |
+| Feature/Crate                   | roxmltree        | [libxml2]           | [xmltree]        | [sxd-document]   |
+| ------------------------------- | :--------------: | :-----------------: | :--------------: | :--------------: |
+| Element namespace resolving     | ✓                | ✓                   | ✓                | ~<sup>1</sup>    |
+| Attribute namespace resolving   | ✓                | ✓                   |                  | ✓                |
+| [Entity references]             | ✓                | ✓                   | ×                | ×                |
+| [Character references]          | ✓                | ✓                   | ✓                | ✓                |
+| [Attribute-Value normalization] | ✓                | ✓                   |                  |                  |
+| Comments                        | ✓                | ✓                   |                  | ✓                |
+| Processing instructions         | ✓                | ✓                   | ✓                | ✓                |
+| UTF-8 BOM                       | ✓                | ✓                   | ×                | ×                |
+| Non UTF-8 input                 |                  | ✓                   |                  |                  |
+| Complete DTD support            |                  | ✓                   |                  |                  |
+| Position preserving<sup>2</sup> | ✓                | ✓                   |                  |                  |
+| HTML support                    |                  | ✓                   |                  |                  |
+| Tree modification               |                  | ✓                   | ✓                | ✓                |
+| Writing                         |                  | ✓                   | ✓                | ✓                |
+| No **unsafe**                   | ✓                |                     | ✓                |                  |
+| Language                        | Rust             | C                   | Rust             | Rust             |
+| Size overhead<sup>4</sup>       | **~55KiB**       | ~1.4MiB<sup>5</sup> | ~78KiB           | ~102KiB          |
+| Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                |
+| Tested version                  | 0.18.0           | 2.9.8               | 0.10.2           | 0.3.2            |
+| License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              |
 
 Legend:
 
@@ -81,64 +81,67 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 [libxml2]: http://xmlsoft.org/
 [xmltree]: https://crates.io/crates/xmltree
 [sxd-document]: https://crates.io/crates/sxd-document
-[minidom]: https://gitlab.com/xmpp-rs/xmpp-rs/-/tree/main/minidom
 
 ## Performance
 
 ### Parsing
 
 ```text
-test large_roxmltree     ... bench:   1,550,600 ns/iter (+/- 90,292)
-test large_libxml        ... bench:   3,257,226 ns/iter (+/- 203,441)
-test large_sdx_document  ... bench:   3,809,712 ns/iter (+/- 95,477)
-test large_minidom       ... bench:   5,393,247 ns/iter (+/- 152,617)
-test large_xmltree       ... bench:  16,149,937 ns/iter (+/- 464,889)
+test huge_roxmltree      ... bench:   3,152,020 ns/iter (+/- 38,556)
+test huge_libxml         ... bench:   6,779,906 ns/iter (+/- 184,744)
+test huge_sdx_document   ... bench:   8,289,337 ns/iter (+/- 378,131)
+test huge_xmltree        ... bench:  45,309,549 ns/iter (+/- 1,591,562)
 
-test medium_roxmltree    ... bench:     431,244 ns/iter (+/- 33,706)
-test medium_libxml       ... bench:     937,626 ns/iter (+/- 25,933)
-test medium_minidom      ... bench:   1,258,619 ns/iter (+/- 15,863)
-test medium_sdx_document ... bench:   1,497,293 ns/iter (+/- 44,276)
-test medium_xmltree      ... bench:   4,962,228 ns/iter (+/- 192,942)
+test large_roxmltree     ... bench:   1,568,688 ns/iter (+/- 9,956)
+test large_libxml        ... bench:   3,199,587 ns/iter (+/- 139,486)
+test large_sdx_document  ... bench:   3,731,708 ns/iter (+/- 92,787)
+test large_xmltree       ... bench:  15,605,566 ns/iter (+/- 331,504)
 
-test tiny_roxmltree      ... bench:       2,378 ns/iter (+/- 140)
-test tiny_minidom        ... bench:       9,188 ns/iter (+/- 1,641)
-test tiny_libxml         ... bench:       9,238 ns/iter (+/- 240)
-test tiny_sdx_document   ... bench:      10,578 ns/iter (+/- 264)
-test tiny_xmltree        ... bench:      22,561 ns/iter (+/- 603)
+test medium_roxmltree    ... bench:     430,778 ns/iter (+/- 18,070)
+test medium_libxml       ... bench:     932,408 ns/iter (+/- 8,763)
+test medium_sdx_document ... bench:   1,452,152 ns/iter (+/- 54,983)
+test medium_xmltree      ... bench:   4,903,558 ns/iter (+/- 116,875)
+
+test tiny_roxmltree      ... bench:       2,630 ns/iter (+/- 41)
+test tiny_libxml         ... bench:       9,113 ns/iter (+/- 183)
+test tiny_sdx_document   ... bench:      10,388 ns/iter (+/- 116)
+test tiny_xmltree        ... bench:      22,067 ns/iter (+/- 228)
 ```
 
 *roxmltree* uses [xmlparser] internally,
 while *sdx-document* uses its own implementation,
-*xmltree* uses the [xml-rs]
-and *minidom* uses [quick-xml].
+*xmltree* uses the [xml-rs].
 Here is a comparison between *xmlparser*, *xml-rs* and *quick-xml*:
 
 ```text
-test large_xmlparser     ... bench:     760,960 ns/iter (+/- 15,320)
-test large_quick_xml     ... bench:     977,787 ns/iter (+/- 32,916)
-test large_xmlrs         ... bench:  13,112,612 ns/iter (+/- 311,702)
+test huge_xmlparser      ... bench:   1,744,585 ns/iter (+/- 28,509)
+test huge_quick_xml      ... bench:   2,818,954 ns/iter (+/- 66,923)
+test huge_xmlrs          ... bench:  41,072,412 ns/iter (+/- 519,803)
 
-test medium_quick_xml    ... bench:     229,251 ns/iter (+/- 10,529)
-test medium_xmlparser    ... bench:     263,752 ns/iter (+/- 12,571)
-test medium_xmlrs        ... bench:   4,671,499 ns/iter (+/- 97,025)
+test large_xmlparser     ... bench:     756,125 ns/iter (+/- 13,995)
+test large_quick_xml     ... bench:   1,401,189 ns/iter (+/- 28,295)
+test large_xmlrs         ... bench:  12,920,333 ns/iter (+/- 143,508)
 
-test tiny_quick_xml      ... bench:       1,806 ns/iter (+/- 56)
-test tiny_xmlparser      ... bench:       1,070 ns/iter (+/- 15)
-test tiny_xmlrs          ... bench:      19,276 ns/iter (+/- 579)
+test medium_quick_xml    ... bench:     216,080 ns/iter (+/- 5,479)
+test medium_xmlparser    ... bench:     258,587 ns/iter (+/- 3,684)
+test medium_xmlrs        ... bench:   4,629,016 ns/iter (+/- 109,023)
+
+test tiny_xmlparser      ... bench:       1,087 ns/iter (+/- 16)
+test tiny_quick_xml      ... bench:       2,420 ns/iter (+/- 51)
+test tiny_xmlrs          ... bench:      18,974 ns/iter (+/- 162)
 ```
 
 ### Iteration
 
 ```text
-test xmltree_iter_descendants_expensive     ... bench:     406,101 ns/iter (+/- 10,184)
-test roxmltree_iter_descendants_expensive   ... bench:     579,130 ns/iter (+/- 6,607)
-test minidom_iter_descendants_expensive     ... bench:     717,989 ns/iter (+/- 31,789)
 
-test roxmltree_iter_descendants_inexpensive ... bench:      22,903 ns/iter (+/- 780)
-test xmltree_iter_descendants_inexpensive   ... bench:     127,131 ns/iter (+/- 3,250)
-test minidom_iter_descendants_inexpensive   ... bench:     143,045 ns/iter (+/- 16,683)
+test roxmltree_iter_descendants_expensive   ... bench:     255,261 ns/iter (+/- 1,424)
+test xmltree_iter_descendants_expensive     ... bench:     354,316 ns/iter (+/- 3,383)
 
-test roxmltree_iter_children                ... bench:       1,398 ns/iter (+/- 68)
+test roxmltree_iter_descendants_inexpensive ... bench:      20,736 ns/iter (+/- 218)
+test xmltree_iter_descendants_inexpensive   ... bench:     125,849 ns/iter (+/- 1,200)
+
+test roxmltree_iter_children                ... bench:       1,409 ns/iter (+/- 54)
 ```
 
 Where expensive refers to the matching done on each element. In these
@@ -148,7 +151,7 @@ particular name.
 
 ### Notes
 
-The benchmarks were taken on a Apple M1.
+The benchmarks were taken on a Apple M1 Pro.
 You can try running the benchmarks yourself by running `cargo bench` in the `benches` dir.
 
 - Since all libraries have a different XML support, benchmarking is a bit pointless.

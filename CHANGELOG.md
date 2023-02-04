@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.18.0] - 2023-02-04
 ### Added
 - `StringStorage` that exposes an internal string storage.
 - Allocated strings are stored as `Arc<str>` and not `String` now.
@@ -15,6 +17,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Removed
 - `Node::position`. Use `Node::range` instead.
+
+### Fixed
+- Some methods return longer lifetimes now.
+  Thanks to [@adamreichold](https://github.com/adamreichold)
+- Overly verbose Debug implementations.
+  Thanks to [@adamreichold](https://github.com/adamreichold)
 
 ## [0.17.0] - 2023-01-06
 ### Added
@@ -231,7 +239,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 [@tomjw64]: https://github.com/tomjw64
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.17.0..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.18.0..HEAD
+[0.18.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.0...v0.15.1
