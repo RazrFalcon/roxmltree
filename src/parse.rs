@@ -311,7 +311,7 @@ impl<'input> Document<'input> {
         &mut self,
         parent_id: NodeId,
         kind: NodeKind<'input>,
-        pos: usize,
+        range: core::ops::Range<usize>,
         nodes_limit: u32,
         awaiting_subtree: &mut Vec<NodeId>,
     ) -> Result<NodeId, Error> {
@@ -320,7 +320,7 @@ impl<'input> Document<'input> {
         }
 
         #[cfg(not(feature = "positions"))]
-        let _ = pos;
+        let _ = range;
 
         let new_child_id = NodeId::from(self.nodes.len());
 
@@ -336,7 +336,7 @@ impl<'input> Document<'input> {
             last_child: None,
             kind,
             #[cfg(feature = "positions")]
-            pos,
+            range,
         });
 
         let last_child_id = self.nodes[parent_id.get_usize()].last_child;
@@ -503,7 +503,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         last_child: None,
         kind: NodeKind::Root,
         #[cfg(feature = "positions")]
-        pos: 0,
+        range: (0..text.len()).into(),
     });
 
     doc.namespaces
@@ -561,7 +561,7 @@ fn process_tokens<'input>(
                 doc.append(
                     parent_id,
                     pi,
-                    span.start(),
+                    span.range(),
                     pd.opt.nodes_limit,
                     &mut pd.awaiting_subtree,
                 )?;
@@ -570,7 +570,7 @@ fn process_tokens<'input>(
                 doc.append(
                     parent_id,
                     NodeKind::Comment(StringStorage::Borrowed(text.as_str())),
-                    span.start(),
+                    span.range(),
                     pd.opt.nodes_limit,
                     &mut pd.awaiting_subtree,
                 )?;
@@ -582,7 +582,7 @@ fn process_tokens<'input>(
                 append_text(
                     BorrowedText::Input(text.as_str()),
                     parent_id,
-                    span.start(),
+                    span.range(),
                     pd.opt.nodes_limit,
                     pd.after_text,
                     doc,
@@ -764,7 +764,7 @@ fn process_element<'input>(
                     attributes,
                     namespaces,
                 },
-                tag_name.span.start(),
+                tag_name.span.start()..token_span.end(),
                 pd.opt.nodes_limit,
                 &mut pd.awaiting_subtree,
             )?;
@@ -778,6 +778,11 @@ fn process_element<'input>(
             // should never panic as we start with the single prefix of the
             // root node and always push another one when changing the parent
             let parent_prefix = *pd.parent_prefixes.last().unwrap();
+
+            #[cfg(feature = "positions")]
+            {
+                parent_node.range.end = token_span.end();
+            }
 
             if let NodeKind::Element { ref tag_name, .. } = parent_node.kind {
                 if prefix != parent_prefix || local != tag_name.local_name {
@@ -810,7 +815,7 @@ fn process_element<'input>(
                     attributes,
                     namespaces,
                 },
-                tag_name.span.start(),
+                tag_name.span.start()..token_span.end(),
                 pd.opt.nodes_limit,
                 &mut pd.awaiting_subtree,
             )?;
@@ -907,7 +912,7 @@ fn process_text<'input>(
         append_text(
             BorrowedText::Input(text.as_str()),
             parent_id,
-            text.start(),
+            text.range(),
             pd.opt.nodes_limit,
             pd.after_text,
             doc,
@@ -950,7 +955,7 @@ fn process_text<'input>(
                     append_text(
                         BorrowedText::Temp(pd.buffer.to_str()),
                         parent_id,
-                        text.start(),
+                        text.range(),
                         pd.opt.nodes_limit,
                         pd.after_text,
                         doc,
@@ -977,7 +982,7 @@ fn process_text<'input>(
         append_text(
             BorrowedText::Temp(pd.buffer.to_str()),
             parent_id,
-            text.start(),
+            text.range(),
             pd.opt.nodes_limit,
             pd.after_text,
             doc,
@@ -1015,7 +1020,7 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
 fn append_text<'input, 'temp>(
     text: BorrowedText<'input, 'temp>,
     parent_id: NodeId,
-    pos: usize,
+    range: core::ops::Range<usize>,
     nodes_limit: u32,
     after_text: bool,
     doc: &mut Document<'input>,
@@ -1039,7 +1044,7 @@ fn append_text<'input, 'temp>(
         doc.append(
             parent_id,
             NodeKind::Text(text),
-            pos,
+            range,
             nodes_limit,
             awaiting_subtree,
         )?;

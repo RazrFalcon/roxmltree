@@ -143,9 +143,11 @@ fn text_pos_01() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(doc.text_pos_at(doc.root().position()), TextPos::new(1, 1));
+    assert_eq!(doc.text_pos_at(doc.root().range().start), TextPos::new(1, 1));
+    assert_eq!(doc.text_pos_at(doc.root().range().end), TextPos::new(5, 1));
 
-    assert_eq!(doc.text_pos_at(node.position()), TextPos::new(1, 1));
+    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
+    assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(4, 5));
 
     if let Some(attr) = node.attribute_node("a") {
         assert_eq!(doc.text_pos_at(attr.position()), TextPos::new(1, 4));
@@ -153,13 +155,13 @@ fn text_pos_01() {
 
     // first child is a text/whitespace, not a comment
     let comm = node.first_child().unwrap().next_sibling().unwrap();
-    assert_eq!(doc.text_pos_at(comm.position()), TextPos::new(2, 5));
+    assert_eq!(doc.text_pos_at(comm.range().start), TextPos::new(2, 5));
 
     let p = comm.next_sibling().unwrap().next_sibling().unwrap();
-    assert_eq!(doc.text_pos_at(p.position()), TextPos::new(3, 5));
+    assert_eq!(doc.text_pos_at(p.range().start), TextPos::new(3, 5));
 
     let text = p.first_child().unwrap();
-    assert_eq!(doc.text_pos_at(text.position()), TextPos::new(3, 8));
+    assert_eq!(doc.text_pos_at(text.range().start), TextPos::new(3, 8));
 }
 
 #[cfg(feature = "positions")]
@@ -170,7 +172,7 @@ fn text_pos_02() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(doc.text_pos_at(node.position()), TextPos::new(1, 1));
+    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
 
     if let Some(attr) = node.attribute_node(("http://www.w3.org", "a")) {
         assert_eq!(doc.text_pos_at(attr.position()), TextPos::new(1, 36));
@@ -188,7 +190,8 @@ fn text_pos_03() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(doc.text_pos_at(node.position()), TextPos::new(2, 1));
+    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(2, 1));
+    assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(2, 5));
 }
 
 #[test]

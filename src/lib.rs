@@ -398,7 +398,7 @@ struct NodeData<'input> {
     last_child: Option<NodeId>,
     kind: NodeKind<'input>,
     #[cfg(feature = "positions")]
-    pos: usize,
+    range: core::ops::Range<usize>,
 }
 
 /// A string storage.
@@ -1348,11 +1348,11 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         Descendants::new(*self)
     }
 
-    /// Returns node's position in bytes in the original document.
+    /// Returns node's range in bytes in the original document.
     #[cfg(feature = "positions")]
     #[inline]
-    pub fn position(&self) -> usize {
-        self.d.pos
+    pub fn range(&self) -> core::ops::Range<usize> {
+        self.d.range.clone()
     }
 
     /// Returns node's NodeId

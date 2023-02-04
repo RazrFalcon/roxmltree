@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `Node::text_storage`
 - `Node::tail_storage`
 - `Attribute::value_storage`
+- `Node::range`
+
+### Removed
+- `Node::position`. Use `Node::range` instead.
 
 ## [0.17.0] - 2023-01-06
 ### Added
