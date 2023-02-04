@@ -26,12 +26,12 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-use alloc::borrow::Cow;
-use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
+
+use alloc::vec::Vec;
 
 pub use xmlparser::TextPos;
 
@@ -309,7 +309,6 @@ struct ShortRange {
 impl From<Range> for ShortRange {
     #[inline]
     fn from(range: Range) -> Self {
-        // Casting to `u32` should be safe since we have a 4GiB input data limit.
         debug_assert!(range.start <= core::u32::MAX as usize);
         debug_assert!(range.end <= core::u32::MAX as usize);
         ShortRange::new(range.start as u32, range.end as u32)
@@ -341,13 +340,11 @@ pub struct NodeId(NonZeroU32);
 
 impl NodeId {
     /// Construct a new `NodeId` from a `u32`.
-    ///
-    /// `u32` is more than enough since we have a 4GiB input data limit anyway.
     #[inline]
     pub fn new(id: u32) -> Self {
         debug_assert!(id < core::u32::MAX);
 
-        // We are using `NonZeroUsize` to reduce overhead of `Option<NodeId>`.
+        // We are using `NonZeroU32` to reduce overhead of `Option<NodeId>`.
         NodeId(NonZeroU32::new(id + 1).unwrap())
     }
 
@@ -389,8 +386,8 @@ enum NodeKind<'input> {
         namespaces: ShortRange,
     },
     PI(PI<'input>),
-    Comment(&'input str),
-    Text(Cow<'input, str>),
+    Comment(StringStorage<'input>),
+    Text(StringStorage<'input>),
 }
 
 #[derive(Debug)]
@@ -404,10 +401,62 @@ struct NodeData<'input> {
     pos: usize,
 }
 
+/// A string storage.
+///
+/// Used by text nodes and attributes values.
+///
+/// We try our best to keep parsed strings as `&str`, but in some cases post-processing
+/// is necessary and we have to allocates them.
+///
+/// All owned, allocated strings are stored as `Arc<str>`.
+#[derive(Clone, Eq, Debug)]
+pub enum StringStorage<'input> {
+    /// A raw slice of the input string.
+    Borrowed(&'input str),
+
+    /// A reference-counted string.
+    Owned(alloc::sync::Arc<str>),
+}
+
+impl StringStorage<'_> {
+    /// Creates a new owned string from `&str` or `String`.
+    pub fn new_owned<T: Into<alloc::sync::Arc<str>>>(s: T) -> Self {
+        StringStorage::Owned(s.into())
+    }
+
+    /// Returns a string slice.
+    pub fn as_str(&self) -> &str {
+        match self {
+            StringStorage::Borrowed(s) => s,
+            StringStorage::Owned(s) => s,
+        }
+    }
+}
+
+impl PartialEq for StringStorage<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl core::fmt::Display for StringStorage<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl core::ops::Deref for StringStorage<'_> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
 #[derive(Clone, Debug)]
 struct AttributeData<'input> {
     name: ExpandedNameIndexed<'input>,
-    value: Cow<'input, str>,
+    value: StringStorage<'input>,
     #[cfg(feature = "positions")]
     pos: usize,
 }
@@ -471,6 +520,14 @@ impl<'a, 'input> Attribute<'a, 'input> {
         &self.data.value
     }
 
+    /// Returns attribute's value storage.
+    ///
+    /// Useful when you need a more low-level access to an allocated string.
+    #[inline]
+    pub fn value_storage(&self) -> &StringStorage<'input> {
+        &self.data.value
+    }
+
     /// Returns attribute's position in bytes in the original document.
     ///
     /// You can calculate a human-readable text position via [Document::text_pos_at].
@@ -513,7 +570,7 @@ impl fmt::Debug for Attribute<'_, '_> {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Namespace<'input> {
     name: Option<&'input str>,
-    uri: Cow<'input, str>,
+    uri: StringStorage<'input>,
 }
 
 impl<'input> Namespace<'input> {
@@ -589,7 +646,7 @@ impl<'input> Namespaces<'input> {
                 let idx = NamespaceIdx(self.values.len() as u16);
                 self.values.push(Namespace {
                     name,
-                    uri: uri.to_cow(),
+                    uri: uri.to_storage(),
                 });
                 self.sorted_order.insert(sorted_idx, idx);
                 idx
@@ -919,7 +976,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         }
 
         self.namespaces()
-            .find(|ns| ns.uri == uri)
+            .find(|ns| &*ns.uri == uri)
             .map(|v| v.name)
             .unwrap_or(None)
     }
@@ -1081,6 +1138,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     #[inline]
     pub fn text(&self) -> Option<&'a str> {
+        self.text_storage().map(|s| s.as_str())
+    }
+
+    /// Returns node's text storage.
+    ///
+    /// Useful when you need a more low-level access to an allocated string.
+    pub fn text_storage(&self) -> Option<&'a StringStorage<'input>> {
         match self.d.kind {
             NodeKind::Element { .. } => match self.first_child() {
                 Some(child) if child.is_text() => match self.doc.nodes[child.id.get_usize()].kind {
@@ -1089,7 +1153,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
                 },
                 _ => None,
             },
-            NodeKind::Comment(text) => Some(text),
+            NodeKind::Comment(ref text) => Some(text),
             NodeKind::Text(ref text) => Some(text),
             _ => None,
         }
@@ -1113,6 +1177,13 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// ```
     #[inline]
     pub fn tail(&self) -> Option<&'a str> {
+        self.tail_storage().map(|s| s.as_str())
+    }
+
+    /// Returns element's tail text storage.
+    ///
+    /// Useful when you need a more low-level access to an allocated string.
+    pub fn tail_storage(&self) -> Option<&'a StringStorage<'input>> {
         if !self.is_element() {
             return None;
         }
@@ -1307,8 +1378,8 @@ impl<'a, 'input: 'a> fmt::Debug for Node<'a, 'input> {
             NodeKind::PI(pi) => {
                 write!(f, "PI {{ target: {:?}, value: {:?} }}", pi.target, pi.value)
             }
-            NodeKind::Comment(text) => write!(f, "Comment({:?})", text),
-            NodeKind::Text(ref text) => write!(f, "Text({:?})", text),
+            NodeKind::Comment(ref text) => write!(f, "Comment({:?})", text.as_str()),
+            NodeKind::Text(ref text) => write!(f, "Text({:?})", text.as_str()),
         }
     }
 }

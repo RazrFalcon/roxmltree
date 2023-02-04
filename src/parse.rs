@@ -1,4 +1,3 @@
-use alloc::borrow::{Cow, ToOwned};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -6,7 +5,7 @@ use xmlparser::{self, Reference, StrSpan, Stream, TextPos};
 
 use crate::{
     AttributeData, Document, ExpandedNameIndexed, NamespaceIdx, Namespaces, NodeData, NodeId,
-    NodeKind, ShortRange, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
+    NodeKind, ShortRange, StringStorage, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
 };
 
 /// A list of all possible errors.
@@ -267,7 +266,7 @@ impl Default for ParsingOptions {
 struct TempAttributeData<'input> {
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
-    value: Cow<'input, str>,
+    value: StringStorage<'input>,
     #[cfg(feature = "positions")]
     pos: usize,
 }
@@ -570,7 +569,7 @@ fn process_tokens<'input>(
             xmlparser::Token::Comment { text, span } => {
                 doc.append(
                     parent_id,
-                    NodeKind::Comment(text.as_str()),
+                    NodeKind::Comment(StringStorage::Borrowed(text.as_str())),
                     span.start(),
                     pd.opt.nodes_limit,
                     &mut pd.awaiting_subtree,
@@ -712,7 +711,7 @@ fn process_attribute<'input>(
 
         doc.namespaces.push_ns(None, value)?;
     } else {
-        let value = value.to_cow();
+        let value = value.to_storage();
         pd.tmp_attrs.push(TempAttributeData {
             prefix,
             local,
@@ -1004,10 +1003,10 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
         }
     }
 
-    pub(crate) fn to_cow(&self) -> Cow<'input, str> {
+    pub(crate) fn to_storage(&self) -> StringStorage<'input> {
         match self {
-            BorrowedText::Input(text) => Cow::Borrowed(text),
-            BorrowedText::Temp(text) => Cow::Owned((*text).to_owned()),
+            BorrowedText::Input(text) => StringStorage::Borrowed(text),
+            BorrowedText::Temp(text) => StringStorage::new_owned(*text),
         }
     }
 }
@@ -1026,22 +1025,17 @@ fn append_text<'input, 'temp>(
         // Prepend to a previous text node.
         if let Some(node) = doc.nodes.last_mut() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
-                let text = text.as_str();
-                match prev_text {
-                    Cow::Borrowed(s) => {
-                        let mut concat_text = String::with_capacity(s.len() + text.len());
-                        concat_text.push_str(s);
-                        concat_text.push_str(text);
-                        *prev_text = Cow::Owned(concat_text);
-                    }
-                    Cow::Owned(ref mut s) => {
-                        s.push_str(text);
-                    }
-                }
+                let text_str = text.as_str();
+                let prev_text_str = prev_text.as_str();
+
+                let mut concat_text = String::with_capacity(text_str.len() + prev_text_str.len());
+                concat_text.push_str(prev_text_str);
+                concat_text.push_str(text_str);
+                *prev_text = StringStorage::new_owned(concat_text);
             }
         }
     } else {
-        let text = text.to_cow();
+        let text = text.to_storage();
         doc.append(
             parent_id,
             NodeKind::Text(text),
