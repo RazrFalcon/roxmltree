@@ -143,7 +143,10 @@ fn text_pos_01() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(doc.text_pos_at(doc.root().range().start), TextPos::new(1, 1));
+    assert_eq!(
+        doc.text_pos_at(doc.root().range().start),
+        TextPos::new(1, 1)
+    );
     assert_eq!(doc.text_pos_at(doc.root().range().end), TextPos::new(5, 1));
 
     assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
