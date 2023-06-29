@@ -503,7 +503,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         last_child: None,
         kind: NodeKind::Root,
         #[cfg(feature = "positions")]
-        range: (0..text.len()).into(),
+        range: 0..text.len(),
     });
 
     doc.namespaces

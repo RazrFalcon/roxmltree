@@ -755,12 +755,12 @@ impl ExpandedName<'static, 'static> {
     /// ```rust
     /// use roxmltree::ExpandedName;
     /// const DAV_HREF: ExpandedName =
-    ///     ExpandedName::from_static(("urn:ietf:params:xml:ns:caldav:", "calendar-data"));
+    ///     ExpandedName::from_static("urn:ietf:params:xml:ns:caldav:", "calendar-data");
     /// ```
-    pub const fn from_static(v: (&'static str, &'static str)) -> Self {
-        ExpandedName {
-            uri: Some(v.0),
-            name: v.1,
+    pub const fn from_static(uri: &'static str, name: &'static str) -> Self {
+        Self {
+            uri: Some(uri),
+            name,
         }
     }
 }
