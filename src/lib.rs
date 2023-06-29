@@ -747,6 +747,24 @@ impl<'a, 'b> ExpandedName<'a, 'b> {
     }
 }
 
+impl ExpandedName<'static, 'static> {
+    /// Create a new instance from static data.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use roxmltree::ExpandedName;
+    /// const DAV_HREF: ExpandedName =
+    ///     ExpandedName::from_static(("urn:ietf:params:xml:ns:caldav:", "calendar-data"));
+    /// ```
+    pub const fn from_static(v: (&'static str, &'static str)) -> Self {
+        ExpandedName {
+            uri: Some(v.0),
+            name: v.1,
+        }
+    }
+}
+
 impl fmt::Debug for ExpandedName<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self.namespace() {
