@@ -16,11 +16,11 @@ members = ["benches"]
 exclude = ["test-apps", "testing-tools"]
 
 [dependencies]
-xmlparser = "0.13.5"
+xmlparser = { version = "0.13.5", default-features = false }
 
 [features]
 default = ["std", "positions"]
-std = []
+std = ["xmlparser/std"]
 # Enables Nodes and Attributes position in the original document preserving.
 # Increases memory usage by `usize` for each Node and Attribute.
 positions = []
