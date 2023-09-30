@@ -52,7 +52,7 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | Language                        | Rust             | C                   | Rust             | Rust             |
 | Size overhead<sup>4</sup>       | **~55KiB**       | ~1.4MiB<sup>5</sup> | ~78KiB           | ~102KiB          |
 | Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                |
-| Tested version                  | 0.18.0           | 2.9.8               | 0.10.2           | 0.3.2            |
+| Tested version                  | 0.18.0           | Apple-provided      | 0.10.3           | 0.3.2            |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              |
 
 Legend:
@@ -87,25 +87,25 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 ### Parsing
 
 ```text
-test huge_roxmltree      ... bench:   3,152,020 ns/iter (+/- 38,556)
-test huge_libxml         ... bench:   6,779,906 ns/iter (+/- 184,744)
-test huge_sdx_document   ... bench:   8,289,337 ns/iter (+/- 378,131)
-test huge_xmltree        ... bench:  45,309,549 ns/iter (+/- 1,591,562)
+test huge_roxmltree      ... bench:   3,147,424 ns/iter (+/- 49,153)
+test huge_libxml         ... bench:   6,850,666 ns/iter (+/- 306,180)
+test huge_sdx_document   ... bench:   9,440,412 ns/iter (+/- 117,106)
+test huge_xmltree        ... bench:  41,662,316 ns/iter (+/- 850,360)
 
-test large_roxmltree     ... bench:   1,568,688 ns/iter (+/- 9,956)
-test large_libxml        ... bench:   3,199,587 ns/iter (+/- 139,486)
-test large_sdx_document  ... bench:   3,731,708 ns/iter (+/- 92,787)
-test large_xmltree       ... bench:  15,605,566 ns/iter (+/- 331,504)
+test large_roxmltree     ... bench:   1,594,201 ns/iter (+/- 27,425)
+test large_libxml        ... bench:   3,250,606 ns/iter (+/- 140,201)
+test large_sdx_document  ... bench:   4,242,162 ns/iter (+/- 99,740)
+test large_xmltree       ... bench:  13,980,228 ns/iter (+/- 229,363)
 
-test medium_roxmltree    ... bench:     430,778 ns/iter (+/- 18,070)
-test medium_libxml       ... bench:     932,408 ns/iter (+/- 8,763)
-test medium_sdx_document ... bench:   1,452,152 ns/iter (+/- 54,983)
-test medium_xmltree      ... bench:   4,903,558 ns/iter (+/- 116,875)
+test medium_roxmltree    ... bench:     418,929 ns/iter (+/- 4,843)
+test medium_libxml       ... bench:     950,984 ns/iter (+/- 34,099)
+test medium_sdx_document ... bench:   1,618,270 ns/iter (+/- 23,466)
+test medium_xmltree      ... bench:   4,315,974 ns/iter (+/- 31,849)
 
-test tiny_roxmltree      ... bench:       2,630 ns/iter (+/- 41)
-test tiny_libxml         ... bench:       9,113 ns/iter (+/- 183)
-test tiny_sdx_document   ... bench:      10,388 ns/iter (+/- 116)
-test tiny_xmltree        ... bench:      22,067 ns/iter (+/- 228)
+test tiny_roxmltree      ... bench:       2,654 ns/iter (+/- 103)
+test tiny_libxml         ... bench:       8,931 ns/iter (+/- 235)
+test tiny_sdx_document   ... bench:      11,658 ns/iter (+/- 82)
+test tiny_xmltree        ... bench:      20,215 ns/iter (+/- 303)
 ```
 
 *roxmltree* uses [xmlparser] internally,
@@ -114,34 +114,33 @@ while *sdx-document* uses its own implementation,
 Here is a comparison between *xmlparser*, *xml-rs* and *quick-xml*:
 
 ```text
-test huge_xmlparser      ... bench:   1,744,585 ns/iter (+/- 28,509)
-test huge_quick_xml      ... bench:   2,818,954 ns/iter (+/- 66,923)
-test huge_xmlrs          ... bench:  41,072,412 ns/iter (+/- 519,803)
+test huge_xmlparser      ... bench:   1,672,879 ns/iter (+/- 20,140)
+test huge_quick_xml      ... bench:   2,396,037 ns/iter (+/- 39,752)
+test huge_xmlrs          ... bench:  36,258,312 ns/iter (+/- 180,438)
 
-test large_xmlparser     ... bench:     756,125 ns/iter (+/- 13,995)
-test large_quick_xml     ... bench:   1,401,189 ns/iter (+/- 28,295)
-test large_xmlrs         ... bench:  12,920,333 ns/iter (+/- 143,508)
+test large_xmlparser     ... bench:     730,787 ns/iter (+/- 22,924)
+test large_quick_xml     ... bench:   1,250,053 ns/iter (+/- 21,943)
+test large_xmlrs         ... bench:  11,239,516 ns/iter (+/- 76,937)
 
-test medium_quick_xml    ... bench:     216,080 ns/iter (+/- 5,479)
-test medium_xmlparser    ... bench:     258,587 ns/iter (+/- 3,684)
-test medium_xmlrs        ... bench:   4,629,016 ns/iter (+/- 109,023)
+test medium_quick_xml    ... bench:     206,232 ns/iter (+/- 2,157)
+test medium_xmlparser    ... bench:     240,737 ns/iter (+/- 4,531)
+test medium_xmlrs        ... bench:   3,975,916 ns/iter (+/- 44,967)
 
-test tiny_xmlparser      ... bench:       1,087 ns/iter (+/- 16)
-test tiny_quick_xml      ... bench:       2,420 ns/iter (+/- 51)
-test tiny_xmlrs          ... bench:      18,974 ns/iter (+/- 162)
+test tiny_xmlparser      ... bench:       1,078 ns/iter (+/- 17)
+test tiny_quick_xml      ... bench:       2,233 ns/iter (+/- 70)
+test tiny_xmlrs          ... bench:      17,155 ns/iter (+/- 429)
 ```
 
 ### Iteration
 
 ```text
+test roxmltree_iter_descendants_expensive   ... bench:     255,882 ns/iter (+/- 1,427)
+test xmltree_iter_descendants_expensive     ... bench:     372,464 ns/iter (+/- 52,938)
 
-test roxmltree_iter_descendants_expensive   ... bench:     255,261 ns/iter (+/- 1,424)
-test xmltree_iter_descendants_expensive     ... bench:     354,316 ns/iter (+/- 3,383)
+test roxmltree_iter_descendants_inexpensive ... bench:      20,800 ns/iter (+/- 642)
+test xmltree_iter_descendants_inexpensive   ... bench:     133,030 ns/iter (+/- 10,546)
 
-test roxmltree_iter_descendants_inexpensive ... bench:      20,736 ns/iter (+/- 218)
-test xmltree_iter_descendants_inexpensive   ... bench:     125,849 ns/iter (+/- 1,200)
-
-test roxmltree_iter_children                ... bench:       1,409 ns/iter (+/- 54)
+test roxmltree_iter_children                ... bench:       2,168 ns/iter (+/- 12)
 ```
 
 Where expensive refers to the matching done on each element. In these

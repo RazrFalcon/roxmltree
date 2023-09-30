@@ -6,7 +6,7 @@ workspace = ".."
 
 [dependencies]
 bencher = "0.1"
-quick-xml = "0.27"
+quick-xml = "0.30"
 roxmltree = { path = "../" }
 sxd-document = "0.3"
 xml-rs = "0.8"
