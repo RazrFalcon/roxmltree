@@ -1,6 +1,6 @@
 [package]
 name = "roxmltree"
-version = "0.18.0"
+version = "0.18.1"
 authors = ["Yevhenii Reizner <razrfalcon@gmail.com>"]
 keywords = ["xml", "parser", "tree", "dom"]
 categories = ["parser-implementations"]
@@ -16,7 +16,7 @@ members = ["benches"]
 exclude = ["test-apps", "testing-tools"]
 
 [dependencies]
-xmlparser = { version = "0.13.5", default-features = false }
+xmlparser = { version = "0.13.6", default-features = false }
 
 [features]
 default = ["std", "positions"]

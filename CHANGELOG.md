@@ -5,8 +5,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.18.1] - 2023-09-30
+### Added
+- `ExpandedName::from_static`.
+  Thanks to [@WhyNotHugo](https://github.com/WhyNotHugo)
+
 ### Fixed
 - Replace `\r` in CDATA as well.
+- `no_std` build.
+  Thanks to [@wenyuzhao](https://github.com/wenyuzhao)
 
 ## [0.18.0] - 2023-02-04
 ### Added
@@ -241,7 +249,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 [@tomjw64]: https://github.com/tomjw64
 
-[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.18.0..HEAD
+[Unreleased]: https://github.com/RazrFalcon/roxmltree/compare/v0.18.1..HEAD
+[0.18.1]: https://github.com/RazrFalcon/roxmltree/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/RazrFalcon/roxmltree/compare/v0.15.1...v0.16.0
