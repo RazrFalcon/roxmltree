@@ -1,5 +1,6 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::ops::Range;
 
 use xmlparser::{self, Reference, StrSpan, Stream, TextPos};
 
@@ -307,7 +308,7 @@ impl<'input> Document<'input> {
     fn append(
         &mut self,
         kind: NodeKind<'input>,
-        range: core::ops::Range<usize>,
+        range: Range<usize>,
         state: &mut ParserState<'input>,
     ) -> Result<NodeId, Error> {
         if self.nodes.len() >= state.opt.nodes_limit as usize {
@@ -360,8 +361,8 @@ struct Entity<'input> {
 
 struct ParserState<'input> {
     opt: ParsingOptions,
-    ns_start_idx: usize,
-    tmp_attrs: Vec<TempAttributeData<'input>>,
+    namespace_start_idx: usize,
+    current_attributes: Vec<TempAttributeData<'input>>,
     awaiting_subtree: Vec<NodeId>,
     parent_prefixes: Vec<&'input str>,
     entities: Vec<Entity<'input>>,
@@ -431,12 +432,12 @@ struct LoopDetector {
 
 impl LoopDetector {
     #[inline]
-    fn inc_depth(&mut self, s: &Stream) -> Result<(), Error> {
+    fn inc_depth(&mut self, stream: &Stream) -> Result<(), Error> {
         if self.depth < 10 {
             self.depth += 1;
             Ok(())
         } else {
-            Err(Error::EntityReferenceLoop(s.gen_text_pos()))
+            Err(Error::EntityReferenceLoop(stream.gen_text_pos()))
         }
     }
 
@@ -453,13 +454,13 @@ impl LoopDetector {
     }
 
     #[inline]
-    fn inc_references(&mut self, s: &Stream) -> Result<(), Error> {
+    fn inc_references(&mut self, stream: &Stream) -> Result<(), Error> {
         if self.depth == 0 {
             // Allow infinite amount of references at zero depth.
             Ok(())
         } else {
             if self.references == core::u8::MAX {
-                return Err(Error::EntityReferenceLoop(s.gen_text_pos()));
+                return Err(Error::EntityReferenceLoop(stream.gen_text_pos()));
             }
 
             self.references += 1;
@@ -471,8 +472,8 @@ impl LoopDetector {
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     let mut state = ParserState {
         opt,
-        ns_start_idx: 1,
-        tmp_attrs: Vec::with_capacity(16),
+        namespace_start_idx: 1,
+        current_attributes: Vec::with_capacity(16),
         entities: Vec::new(),
         awaiting_subtree: Vec::new(),
         parent_prefixes: Vec::new(),
@@ -489,7 +490,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     let mut doc = Document {
         text,
         nodes: Vec::with_capacity(nodes_capacity),
-        attrs: Vec::with_capacity(attributes_capacity),
+        attributes: Vec::with_capacity(attributes_capacity),
         namespaces: Namespaces::default(),
     };
 
@@ -528,7 +529,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     }
 
     doc.nodes.shrink_to_fit();
-    doc.attrs.shrink_to_fit();
+    doc.attributes.shrink_to_fit();
     doc.namespaces.shrink_to_fit();
 
     Ok(doc)
@@ -634,6 +635,7 @@ fn process_tokens<'input>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_attribute<'input>(
     prefix: StrSpan<'input>,
     local: StrSpan<'input>,
@@ -679,7 +681,7 @@ fn process_attribute<'input>(
         // Check for duplicated namespaces.
         if doc
             .namespaces
-            .exists(state.ns_start_idx, Some(local.as_str()))
+            .exists(state.namespace_start_idx, Some(local.as_str()))
         {
             let pos = err_pos_from_qname(doc.text, prefix, local);
             return Err(Error::DuplicatedNamespace(local.as_str().to_string(), pos));
@@ -705,7 +707,7 @@ fn process_attribute<'input>(
         doc.namespaces.push_ns(None, value)?;
     } else {
         let value = value.to_storage();
-        state.tmp_attrs.push(TempAttributeData {
+        state.current_attributes.push(TempAttributeData {
             prefix,
             local,
             value,
@@ -738,8 +740,8 @@ fn process_element<'input>(
         }
     }
 
-    let namespaces = resolve_namespaces(state.ns_start_idx, state.parent_id, doc);
-    state.ns_start_idx = doc.namespaces.tree_order.len();
+    let namespaces = resolve_namespaces(state.namespace_start_idx, state.parent_id, doc);
+    state.namespace_start_idx = doc.namespaces.tree_order.len();
 
     let attributes = resolve_attributes(state, namespaces, doc)?;
 
@@ -839,17 +841,17 @@ fn resolve_attributes<'input>(
     namespaces: ShortRange,
     doc: &mut Document<'input>,
 ) -> Result<ShortRange, Error> {
-    if state.tmp_attrs.is_empty() {
+    if state.current_attributes.is_empty() {
         return Ok(ShortRange::new(0, 0));
     }
 
-    if doc.attrs.len() + state.tmp_attrs.len() >= core::u32::MAX as usize {
+    if doc.attributes.len() + state.current_attributes.len() >= core::u32::MAX as usize {
         return Err(Error::AttributesLimitReached);
     }
 
-    let start_idx = doc.attrs.len();
+    let start_idx = doc.attributes.len();
 
-    for attr in state.tmp_attrs.drain(..) {
+    for attr in state.current_attributes.drain(..) {
         let namespace_idx = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace. This namespace is added
@@ -869,7 +871,7 @@ fn resolve_attributes<'input>(
         };
 
         // Check for duplicated attributes.
-        if doc.attrs[start_idx..]
+        if doc.attributes[start_idx..]
             .iter()
             .any(|attr| attr.name.as_expanded_name(doc) == attr_name.as_expanded_name(doc))
         {
@@ -877,7 +879,7 @@ fn resolve_attributes<'input>(
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
-        doc.attrs.push(AttributeData {
+        doc.attributes.push(AttributeData {
             name: attr_name,
             value: attr.value,
             #[cfg(feature = "positions")]
@@ -885,7 +887,7 @@ fn resolve_attributes<'input>(
         });
     }
 
-    Ok((start_idx..doc.attrs.len()).into())
+    Ok((start_idx..doc.attributes.len()).into())
 }
 
 fn process_text<'input>(
@@ -905,21 +907,21 @@ fn process_text<'input>(
     text_buffer.clear();
 
     let mut is_as_is = false; // TODO: explain
-    let mut s = Stream::from_substr(doc.text, text.range());
-    while !s.at_end() {
-        match parse_next_chunk(&mut s, &state.entities)? {
+    let mut stream = Stream::from_substr(doc.text, text.range());
+    while !stream.at_end() {
+        match parse_next_chunk(&mut stream, &state.entities)? {
             NextChunk::Byte(c) => {
                 if is_as_is {
                     text_buffer.push_raw(c);
                     is_as_is = false;
                 } else {
-                    text_buffer.push_from_text(c, s.at_end());
+                    text_buffer.push_from_text(c, stream.at_end());
                 }
             }
             NextChunk::Char(c) => {
                 for b in CharToBytes::new(c) {
                     if loop_detector.depth > 0 {
-                        text_buffer.push_from_text(b, s.at_end());
+                        text_buffer.push_from_text(b, stream.at_end());
                     } else {
                         // Characters not from entity should be added as is.
                         // Not sure why... At least `lxml` produces the same result.
@@ -942,8 +944,8 @@ fn process_text<'input>(
                     text_buffer.clear();
                 }
 
-                loop_detector.inc_references(&s)?;
-                loop_detector.inc_depth(&s)?;
+                loop_detector.inc_references(&stream)?;
+                loop_detector.inc_depth(&stream)?;
 
                 let parser = xmlparser::Tokenizer::from_fragment(doc.text, fragment.range());
                 let mut tag_name = TagNameSpan::new_null();
@@ -1038,7 +1040,7 @@ fn process_cdata<'input>(
 
 fn append_text<'input>(
     text: BorrowedText<'input, '_>,
-    range: core::ops::Range<usize>,
+    range: Range<usize>,
     doc: &mut Document<'input>,
     state: &mut ParserState<'input>,
 ) -> Result<(), Error> {
@@ -1070,34 +1072,35 @@ enum NextChunk<'a> {
 }
 
 fn parse_next_chunk<'a>(
-    s: &mut Stream<'a>,
+    stream: &mut Stream<'a>,
     entities: &[Entity<'a>],
 ) -> Result<NextChunk<'a>, Error> {
-    debug_assert!(!s.at_end());
+    debug_assert!(!stream.at_end());
 
     // Safe, because we already checked that stream is not at the end.
     // But we have an additional `debug_assert` above just in case.
-    let c = s.curr_byte_unchecked();
+    let c = stream.curr_byte_unchecked();
 
     // Check for character/entity references.
     if c == b'&' {
-        let start = s.pos();
-        match s.try_consume_reference() {
+        let start = stream.pos();
+        match stream.try_consume_reference() {
             Some(Reference::Char(ch)) => Ok(NextChunk::Char(ch)),
-            Some(Reference::Entity(name)) => match entities.iter().find(|e| e.name == name) {
-                Some(entity) => Ok(NextChunk::Text(entity.value)),
-                None => {
-                    let pos = s.gen_text_pos_from(start);
-                    Err(Error::UnknownEntityReference(name.into(), pos))
-                }
-            },
+            Some(Reference::Entity(name)) => entities
+                .iter()
+                .find(|e| e.name == name)
+                .map(|e| NextChunk::Text(e.value))
+                .ok_or_else(|| {
+                    let pos = stream.gen_text_pos_from(start);
+                    Error::UnknownEntityReference(name.into(), pos)
+                }),
             None => {
-                let pos = s.gen_text_pos_from(start);
+                let pos = stream.gen_text_pos_from(start);
                 Err(Error::MalformedEntityReference(pos))
             }
         }
     } else {
-        s.advance(1);
+        stream.advance(1);
         Ok(NextChunk::Byte(c))
     }
 }
@@ -1141,27 +1144,29 @@ fn _normalize_attribute(
     loop_detector: &mut LoopDetector,
     buffer: &mut TextBuffer,
 ) -> Result<(), Error> {
-    let mut s = Stream::from_substr(input, text.range());
-    while !s.at_end() {
+    let mut stream = Stream::from_substr(input, text.range());
+    while !stream.at_end() {
         // Safe, because we already checked that the stream is not at the end.
-        let c = s.curr_byte_unchecked();
+        let c = stream.curr_byte_unchecked();
 
         if c != b'&' {
-            s.advance(1);
-            buffer.push_from_attr(c, s.curr_byte().ok());
+            stream.advance(1);
+            buffer.push_from_attr(c, stream.curr_byte().ok());
             continue;
         }
 
         // Check for character/entity references.
-        let start = s.pos();
-        match s.try_consume_reference() {
+        let start = stream.pos();
+        match stream.try_consume_reference() {
             Some(Reference::Char(ch)) => {
                 for b in CharToBytes::new(ch) {
                     if loop_detector.depth > 0 {
                         // Escaped `<` inside an ENTITY is an error.
                         // Escaped `<` outside an ENTITY is ok.
                         if b == b'<' {
-                            return Err(Error::InvalidAttributeValue(s.gen_text_pos_from(start)));
+                            return Err(Error::InvalidAttributeValue(
+                                stream.gen_text_pos_from(start),
+                            ));
                         }
 
                         buffer.push_from_attr(b, None);
@@ -1174,18 +1179,18 @@ fn _normalize_attribute(
             }
             Some(Reference::Entity(name)) => match entities.iter().find(|e| e.name == name) {
                 Some(entity) => {
-                    loop_detector.inc_references(&s)?;
-                    loop_detector.inc_depth(&s)?;
+                    loop_detector.inc_references(&stream)?;
+                    loop_detector.inc_depth(&stream)?;
                     _normalize_attribute(input, entity.value, entities, loop_detector, buffer)?;
                     loop_detector.dec_depth();
                 }
                 None => {
-                    let pos = s.gen_text_pos_from(start);
+                    let pos = stream.gen_text_pos_from(start);
                     return Err(Error::UnknownEntityReference(name.into(), pos));
                 }
             },
             None => {
-                let pos = s.gen_text_pos_from(start);
+                let pos = stream.gen_text_pos_from(start);
                 return Err(Error::MalformedEntityReference(pos));
             }
         }
@@ -1293,71 +1298,71 @@ mod internals {
     }
 
     pub struct TextBuffer {
-        buf: Vec<u8>,
+        buffer: Vec<u8>,
     }
 
     impl TextBuffer {
         #[inline]
         pub fn new() -> Self {
             TextBuffer {
-                buf: Vec::with_capacity(32),
+                buffer: Vec::with_capacity(32),
             }
         }
 
         #[inline]
         pub fn push_raw(&mut self, c: u8) {
-            self.buf.push(c);
+            self.buffer.push(c);
         }
 
-        pub fn push_from_attr(&mut self, mut c: u8, c2: Option<u8>) {
+        pub fn push_from_attr(&mut self, mut current: u8, next: Option<u8>) {
             // \r in \r\n should be ignored.
-            if c == b'\r' && c2 == Some(b'\n') {
+            if current == b'\r' && next == Some(b'\n') {
                 return;
             }
 
             // \n, \r and \t should be converted into spaces.
-            c = match c {
+            current = match current {
                 b'\n' | b'\r' | b'\t' => b' ',
-                _ => c,
+                _ => current,
             };
 
-            self.buf.push(c);
+            self.buffer.push(current);
         }
 
         // Translate \r\n and any \r that is not followed by \n into a single \n character.
         //
         // https://www.w3.org/TR/xml/#sec-line-ends
         pub fn push_from_text(&mut self, c: u8, at_end: bool) {
-            if self.buf.last() == Some(&b'\r') {
-                let idx = self.buf.len() - 1;
-                self.buf[idx] = b'\n';
+            if self.buffer.last() == Some(&b'\r') {
+                let idx = self.buffer.len() - 1;
+                self.buffer[idx] = b'\n';
 
                 if at_end && c == b'\r' {
-                    self.buf.push(b'\n');
+                    self.buffer.push(b'\n');
                 } else if c != b'\n' {
-                    self.buf.push(c);
+                    self.buffer.push(c);
                 }
             } else if at_end && c == b'\r' {
-                self.buf.push(b'\n');
+                self.buffer.push(b'\n');
             } else {
-                self.buf.push(c);
+                self.buffer.push(c);
             }
         }
 
         #[inline]
         pub fn clear(&mut self) {
-            self.buf.clear();
+            self.buffer.clear();
         }
 
         #[inline]
         pub fn is_empty(&self) -> bool {
-            self.buf.is_empty()
+            self.buffer.is_empty()
         }
 
         #[inline]
         pub fn to_str(&self) -> &str {
             // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
-            core::str::from_utf8(&self.buf).unwrap()
+            core::str::from_utf8(&self.buffer).unwrap()
         }
     }
 }

@@ -30,6 +30,7 @@ use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::num::NonZeroU32;
+use core::ops::Range;
 
 use alloc::vec::Vec;
 
@@ -47,8 +48,6 @@ const NS_XML_PREFIX: &str = "xml";
 pub const NS_XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
 /// The string 'xmlns', which is used to declare new namespaces
 const XMLNS: &str = "xmlns";
-
-type Range = core::ops::Range<usize>;
 
 /// An XML tree container.
 ///
@@ -78,7 +77,7 @@ pub struct Document<'input> {
     /// Required for `text_pos_at` methods.
     text: &'input str,
     nodes: Vec<NodeData<'input>>,
-    attrs: Vec<AttributeData<'input>>,
+    attributes: Vec<AttributeData<'input>>,
     namespaces: Namespaces<'input>,
 }
 
@@ -306,9 +305,9 @@ struct ShortRange {
     end: u32,
 }
 
-impl From<Range> for ShortRange {
+impl From<Range<usize>> for ShortRange {
     #[inline]
-    fn from(range: Range) -> Self {
+    fn from(range: Range<usize>) -> Self {
         debug_assert!(range.start <= core::u32::MAX as usize);
         debug_assert!(range.end <= core::u32::MAX as usize);
         ShortRange::new(range.start as u32, range.end as u32)
@@ -322,7 +321,7 @@ impl ShortRange {
     }
 
     #[inline]
-    fn to_urange(self) -> Range {
+    fn to_urange(self) -> Range<usize> {
         self.start as usize..self.end as usize
     }
 }
@@ -398,7 +397,7 @@ struct NodeData<'input> {
     last_child: Option<NodeId>,
     kind: NodeKind<'input>,
     #[cfg(feature = "positions")]
-    range: core::ops::Range<usize>,
+    range: Range<usize>,
 }
 
 /// A string storage.
@@ -1369,7 +1368,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     /// Returns node's range in bytes in the original document.
     #[cfg(feature = "positions")]
     #[inline]
-    pub fn range(&self) -> core::ops::Range<usize> {
+    pub fn range(&self) -> Range<usize> {
         self.d.range.clone()
     }
 
@@ -1413,7 +1412,9 @@ impl<'a, 'input> Attributes<'a, 'input> {
     #[inline]
     fn new(node: &Node<'a, 'input>) -> Attributes<'a, 'input> {
         let attrs = match node.d.kind {
-            NodeKind::Element { ref attributes, .. } => &node.doc.attrs[attributes.to_urange()],
+            NodeKind::Element { ref attributes, .. } => {
+                &node.doc.attributes[attributes.to_urange()]
+            }
             _ => &[],
         };
         Attributes {
