@@ -14,6 +14,7 @@
 - cdata_004 - simple case
 - cdata_005 - mixed text and cdata
 - cdata_006 - simple case
+- cdata_007 - with \r
 - comments_001 - comment before and after the root element
 - elems_err_001 - invalid tree structure
 - elems_err_002 - invalid tree structure with namespace

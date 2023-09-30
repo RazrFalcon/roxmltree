@@ -217,6 +217,7 @@ test!(cdata_003);
 test!(cdata_004);
 test!(cdata_005);
 test!(cdata_006);
+test!(cdata_007);
 test!(comments_001);
 test!(elems_err_001);
 test!(elems_err_002);

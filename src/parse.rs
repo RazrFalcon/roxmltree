@@ -579,16 +579,7 @@ fn process_tokens<'input>(
                 process_text(text, parent_id, loop_detector, pd, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
-                append_text(
-                    BorrowedText::Input(text.as_str()),
-                    parent_id,
-                    span.range(),
-                    pd.opt.nodes_limit,
-                    pd.after_text,
-                    doc,
-                    &mut pd.awaiting_subtree,
-                )?;
-                pd.after_text = true;
+                process_cdata(text, span, parent_id, pd, doc)?;
             }
             xmlparser::Token::ElementStart {
                 prefix,
@@ -1014,6 +1005,56 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
             BorrowedText::Temp(text) => StringStorage::new_owned(*text),
         }
     }
+}
+
+// While the whole purpose of CDATA is to indicate to an XML library that this text
+// has to be stored as is, carriage return (`\r`) is still has to be replaced with `\n`.
+fn process_cdata<'input>(
+    text: StrSpan<'input>,
+    span: StrSpan<'input>,
+    parent_id: NodeId,
+    pd: &mut ParserData<'input>,
+    doc: &mut Document<'input>,
+) -> Result<(), Error> {
+    // Add text as is if it has only valid characters.
+    if !text.as_str().as_bytes().contains(&b'\r') {
+        append_text(
+            BorrowedText::Input(text.as_str()),
+            parent_id,
+            span.range(),
+            pd.opt.nodes_limit,
+            pd.after_text,
+            doc,
+            &mut pd.awaiting_subtree,
+        )?;
+        pd.after_text = true;
+        return Ok(());
+    }
+
+    pd.buffer.clear();
+
+    let count = text.as_str().chars().count();
+    for (i, c) in text.as_str().chars().enumerate() {
+        for b in CharToBytes::new(c) {
+            pd.buffer.push_from_text(b, i + 1 == count);
+        }
+    }
+
+    if !pd.buffer.is_empty() {
+        append_text(
+            BorrowedText::Temp(pd.buffer.to_str()),
+            parent_id,
+            text.range(),
+            pd.opt.nodes_limit,
+            pd.after_text,
+            doc,
+            &mut pd.awaiting_subtree,
+        )?;
+        pd.after_text = true;
+        pd.buffer.clear();
+    }
+
+    Ok(())
 }
 
 #[allow(clippy::needless_lifetimes)]

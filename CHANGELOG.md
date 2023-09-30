@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Fixed
+- Replace `\r` in CDATA as well.
 
 ## [0.18.0] - 2023-02-04
 ### Added
