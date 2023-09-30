@@ -102,7 +102,6 @@ pub enum Error {
 
 impl Error {
     /// Returns the error position.
-    #[inline]
     pub fn pos(&self) -> TextPos {
         match *self {
             Error::InvalidXmlPrefixUri(pos) => pos,
@@ -125,7 +124,6 @@ impl Error {
 }
 
 impl From<xmlparser::Error> for Error {
-    #[inline]
     fn from(e: xmlparser::Error) -> Self {
         Error::ParserError(e)
     }
@@ -220,7 +218,6 @@ impl core::fmt::Display for Error {
 
 #[cfg(feature = "std")]
 impl std::error::Error for Error {
-    #[inline]
     fn description(&self) -> &str {
         "an XML parsing error"
     }
@@ -1239,7 +1236,6 @@ fn get_ns_idx_by_prefix(
     }
 }
 
-#[inline]
 fn gen_qname_string(prefix: &str, local: &str) -> String {
     if prefix.is_empty() {
         local.to_string()
@@ -1248,12 +1244,10 @@ fn gen_qname_string(prefix: &str, local: &str) -> String {
     }
 }
 
-#[inline]
 fn err_pos_from_span(input: &str, text: StrSpan) -> TextPos {
     Stream::from_substr(input, text.range()).gen_text_pos()
 }
 
-#[inline]
 fn err_pos_from_qname(input: &str, prefix: StrSpan, local: StrSpan) -> TextPos {
     let err_span = if prefix.is_empty() { local } else { prefix };
     err_pos_from_span(input, err_span)
