@@ -311,9 +311,9 @@ impl<'input> Document<'input> {
         &mut self,
         kind: NodeKind<'input>,
         range: core::ops::Range<usize>,
-        pd: &mut ParserData<'input>,
+        state: &mut ParserState<'input>,
     ) -> Result<NodeId, Error> {
-        if self.nodes.len() >= pd.opt.nodes_limit as usize {
+        if self.nodes.len() >= state.opt.nodes_limit as usize {
             return Err(Error::NodesLimitReached);
         }
 
@@ -328,7 +328,7 @@ impl<'input> Document<'input> {
         };
 
         self.nodes.push(NodeData {
-            parent: Some(pd.parent_id),
+            parent: Some(state.parent_id),
             prev_sibling: None,
             next_subtree: None,
             last_child: None,
@@ -337,17 +337,19 @@ impl<'input> Document<'input> {
             range,
         });
 
-        let last_child_id = self.nodes[pd.parent_id.get_usize()].last_child;
+        let last_child_id = self.nodes[state.parent_id.get_usize()].last_child;
         self.nodes[new_child_id.get_usize()].prev_sibling = last_child_id;
-        self.nodes[pd.parent_id.get_usize()].last_child = Some(new_child_id);
+        self.nodes[state.parent_id.get_usize()].last_child = Some(new_child_id);
 
-        pd.awaiting_subtree.iter().for_each(|id| {
+        state.awaiting_subtree.iter().for_each(|id| {
             self.nodes[id.get_usize()].next_subtree = Some(new_child_id);
         });
-        pd.awaiting_subtree.clear();
+        state.awaiting_subtree.clear();
 
         if !appending_element {
-            pd.awaiting_subtree.push(NodeId::from(self.nodes.len() - 1));
+            state
+                .awaiting_subtree
+                .push(NodeId::from(self.nodes.len() - 1));
         }
 
         Ok(new_child_id)
@@ -359,7 +361,7 @@ struct Entity<'input> {
     value: StrSpan<'input>,
 }
 
-struct ParserData<'input> {
+struct ParserState<'input> {
     opt: ParsingOptions,
     ns_start_idx: usize,
     tmp_attrs: Vec<TempAttributeData<'input>>,
@@ -470,7 +472,7 @@ impl LoopDetector {
 }
 
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
-    let mut pd = ParserData {
+    let mut state = ParserState {
         opt,
         ns_start_idx: 1,
         tmp_attrs: Vec::with_capacity(16),
@@ -509,14 +511,14 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         .push_ns(Some(NS_XML_PREFIX), BorrowedText::Input(NS_XML_URI))?;
 
     let parser = xmlparser::Tokenizer::from(text);
-    pd.parent_prefixes.push("");
+    state.parent_prefixes.push("");
     let mut tag_name = TagNameSpan::new_null();
     process_tokens(
         parser,
         &mut LoopDetector::default(),
         &mut tag_name,
         &mut text_buffer,
-        &mut pd,
+        &mut state,
         &mut doc,
     )?;
 
@@ -524,7 +526,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         return Err(Error::NoRootNode);
     }
 
-    if pd.parent_prefixes.len() > 1 {
+    if state.parent_prefixes.len() > 1 {
         return Err(Error::UnclosedRootNode);
     }
 
@@ -541,7 +543,7 @@ fn process_tokens<'input>(
     loop_detector: &mut LoopDetector,
     tag_name: &mut TagNameSpan<'input>,
     text_buffer: &mut TextBuffer,
-    pd: &mut ParserData<'input>,
+    state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     for token in parser {
@@ -556,20 +558,20 @@ fn process_tokens<'input>(
                     target: target.as_str(),
                     value: content.map(|v| v.as_str()),
                 });
-                doc.append(pi, span.range(), pd)?;
+                doc.append(pi, span.range(), state)?;
             }
             xmlparser::Token::Comment { text, span } => {
                 doc.append(
                     NodeKind::Comment(StringStorage::Borrowed(text.as_str())),
                     span.range(),
-                    pd,
+                    state,
                 )?;
             }
             xmlparser::Token::Text { text } => {
-                process_text(text, loop_detector, text_buffer, pd, doc)?;
+                process_text(text, loop_detector, text_buffer, state, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
-                process_cdata(text, span, text_buffer, pd, doc)?;
+                process_cdata(text, span, text_buffer, state, doc)?;
             }
             xmlparser::Token::ElementStart {
                 prefix,
@@ -596,15 +598,15 @@ fn process_tokens<'input>(
                     span,
                     loop_detector,
                     text_buffer,
-                    pd,
+                    state,
                     doc,
                 )?;
             }
             xmlparser::Token::ElementEnd { end, span } => {
-                process_element(*tag_name, end, span, pd, doc)?;
+                process_element(*tag_name, end, span, state, doc)?;
             }
             xmlparser::Token::DtdStart { .. } => {
-                if !pd.opt.allow_dtd {
+                if !state.opt.allow_dtd {
                     return Err(Error::DtdDetected);
                 }
             }
@@ -612,7 +614,7 @@ fn process_tokens<'input>(
                 name, definition, ..
             } => {
                 if let xmlparser::EntityDefinition::EntityValue(value) = definition {
-                    pd.entities.push(Entity {
+                    state.entities.push(Entity {
                         name: name.as_str(),
                         value,
                     });
@@ -626,7 +628,7 @@ fn process_tokens<'input>(
             | xmlparser::Token::Comment { .. }
             | xmlparser::Token::ElementStart { .. }
             | xmlparser::Token::ElementEnd { .. } => {
-                pd.after_text = false;
+                state.after_text = false;
             }
             _ => {}
         }
@@ -642,7 +644,7 @@ fn process_attribute<'input>(
     token_span: StrSpan<'input>,
     loop_detector: &mut LoopDetector,
     text_buffer: &mut TextBuffer,
-    pd: &mut ParserData<'input>,
+    state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     #[cfg(not(feature = "positions"))]
@@ -650,7 +652,7 @@ fn process_attribute<'input>(
     #[cfg(feature = "positions")]
     let pos = token_span.start();
 
-    let value = normalize_attribute(doc.text, value, &pd.entities, loop_detector, text_buffer)?;
+    let value = normalize_attribute(doc.text, value, &state.entities, loop_detector, text_buffer)?;
 
     if prefix.as_str() == XMLNS {
         // The xmlns namespace MUST NOT be declared as the default namespace.
@@ -678,7 +680,10 @@ fn process_attribute<'input>(
         }
 
         // Check for duplicated namespaces.
-        if doc.namespaces.exists(pd.ns_start_idx, Some(local.as_str())) {
+        if doc
+            .namespaces
+            .exists(state.ns_start_idx, Some(local.as_str()))
+        {
             let pos = err_pos_from_qname(doc.text, prefix, local);
             return Err(Error::DuplicatedNamespace(local.as_str().to_string(), pos));
         }
@@ -703,7 +708,7 @@ fn process_attribute<'input>(
         doc.namespaces.push_ns(None, value)?;
     } else {
         let value = value.to_storage();
-        pd.tmp_attrs.push(TempAttributeData {
+        state.tmp_attrs.push(TempAttributeData {
             prefix,
             local,
             value,
@@ -719,7 +724,7 @@ fn process_element<'input>(
     tag_name: TagNameSpan<'input>,
     end_token: xmlparser::ElementEnd<'input>,
     token_span: StrSpan<'input>,
-    pd: &mut ParserData<'input>,
+    state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     if tag_name.name.is_empty() {
@@ -736,10 +741,10 @@ fn process_element<'input>(
         }
     }
 
-    let namespaces = resolve_namespaces(pd.ns_start_idx, pd.parent_id, doc);
-    pd.ns_start_idx = doc.namespaces.tree_order.len();
+    let namespaces = resolve_namespaces(state.ns_start_idx, state.parent_id, doc);
+    state.ns_start_idx = doc.namespaces.tree_order.len();
 
-    let attributes = resolve_attributes(pd, namespaces, doc)?;
+    let attributes = resolve_attributes(state, namespaces, doc)?;
 
     match end_token {
         xmlparser::ElementEnd::Empty => {
@@ -754,18 +759,18 @@ fn process_element<'input>(
                     namespaces,
                 },
                 tag_name.span.start()..token_span.end(),
-                pd,
+                state,
             )?;
-            pd.awaiting_subtree.push(new_element_id);
+            state.awaiting_subtree.push(new_element_id);
         }
         xmlparser::ElementEnd::Close(prefix, local) => {
             let prefix = prefix.as_str();
             let local = local.as_str();
 
-            let parent_node = &mut doc.nodes[pd.parent_id.get_usize()];
+            let parent_node = &mut doc.nodes[state.parent_id.get_usize()];
             // should never panic as we start with the single prefix of the
             // root node and always push another one when changing the parent
-            let parent_prefix = *pd.parent_prefixes.last().unwrap();
+            let parent_prefix = *state.parent_prefixes.last().unwrap();
 
             #[cfg(feature = "positions")]
             {
@@ -781,19 +786,19 @@ fn process_element<'input>(
                     });
                 }
             }
-            pd.awaiting_subtree.push(pd.parent_id);
+            state.awaiting_subtree.push(state.parent_id);
 
             if let Some(id) = parent_node.parent {
-                pd.parent_id = id;
-                pd.parent_prefixes.pop();
-                debug_assert!(!pd.parent_prefixes.is_empty());
+                state.parent_id = id;
+                state.parent_prefixes.pop();
+                debug_assert!(!state.parent_prefixes.is_empty());
             } else {
                 unreachable!("should be already checked by the xmlparser");
             }
         }
         xmlparser::ElementEnd::Open => {
             let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
-            pd.parent_id = doc.append(
+            state.parent_id = doc.append(
                 NodeKind::Element {
                     tag_name: ExpandedNameIndexed {
                         namespace_idx: tag_ns_idx,
@@ -803,9 +808,9 @@ fn process_element<'input>(
                     namespaces,
                 },
                 tag_name.span.start()..token_span.end(),
-                pd,
+                state,
             )?;
-            pd.parent_prefixes.push(tag_name.prefix.as_str());
+            state.parent_prefixes.push(tag_name.prefix.as_str());
         }
     }
 
@@ -833,21 +838,21 @@ fn resolve_namespaces(start_idx: usize, parent_id: NodeId, doc: &mut Document) -
 }
 
 fn resolve_attributes<'input>(
-    pd: &mut ParserData<'input>,
+    state: &mut ParserState<'input>,
     namespaces: ShortRange,
     doc: &mut Document<'input>,
 ) -> Result<ShortRange, Error> {
-    if pd.tmp_attrs.is_empty() {
+    if state.tmp_attrs.is_empty() {
         return Ok(ShortRange::new(0, 0));
     }
 
-    if doc.attrs.len() + pd.tmp_attrs.len() >= core::u32::MAX as usize {
+    if doc.attrs.len() + state.tmp_attrs.len() >= core::u32::MAX as usize {
         return Err(Error::AttributesLimitReached);
     }
 
     let start_idx = doc.attrs.len();
 
-    for attr in pd.tmp_attrs.drain(..) {
+    for attr in state.tmp_attrs.drain(..) {
         let namespace_idx = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace. This namespace is added
@@ -890,13 +895,13 @@ fn process_text<'input>(
     text: StrSpan<'input>,
     loop_detector: &mut LoopDetector,
     text_buffer: &mut TextBuffer,
-    pd: &mut ParserData<'input>,
+    state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
-        append_text(BorrowedText::Input(text.as_str()), text.range(), doc, pd)?;
-        pd.after_text = true;
+        append_text(BorrowedText::Input(text.as_str()), text.range(), doc, state)?;
+        state.after_text = true;
         return Ok(());
     }
 
@@ -905,7 +910,7 @@ fn process_text<'input>(
     let mut is_as_is = false; // TODO: explain
     let mut s = Stream::from_substr(doc.text, text.range());
     while !s.at_end() {
-        match parse_next_chunk(&mut s, &pd.entities)? {
+        match parse_next_chunk(&mut s, &state.entities)? {
             NextChunk::Byte(c) => {
                 if is_as_is {
                     text_buffer.push_raw(c);
@@ -934,9 +939,9 @@ fn process_text<'input>(
                         BorrowedText::Temp(text_buffer.to_str()),
                         text.range(),
                         doc,
-                        pd,
+                        state,
                     )?;
-                    pd.after_text = true;
+                    state.after_text = true;
                     text_buffer.clear();
                 }
 
@@ -945,7 +950,14 @@ fn process_text<'input>(
 
                 let parser = xmlparser::Tokenizer::from_fragment(doc.text, fragment.range());
                 let mut tag_name = TagNameSpan::new_null();
-                process_tokens(parser, loop_detector, &mut tag_name, text_buffer, pd, doc)?;
+                process_tokens(
+                    parser,
+                    loop_detector,
+                    &mut tag_name,
+                    text_buffer,
+                    state,
+                    doc,
+                )?;
                 text_buffer.clear();
 
                 loop_detector.dec_depth();
@@ -958,9 +970,9 @@ fn process_text<'input>(
             BorrowedText::Temp(text_buffer.to_str()),
             text.range(),
             doc,
-            pd,
+            state,
         )?;
-        pd.after_text = true;
+        state.after_text = true;
         text_buffer.clear();
     }
 
@@ -994,13 +1006,13 @@ fn process_cdata<'input>(
     text: StrSpan<'input>,
     span: StrSpan<'input>,
     text_buffer: &mut TextBuffer,
-    pd: &mut ParserData<'input>,
+    state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().as_bytes().contains(&b'\r') {
-        append_text(BorrowedText::Input(text.as_str()), span.range(), doc, pd)?;
-        pd.after_text = true;
+        append_text(BorrowedText::Input(text.as_str()), span.range(), doc, state)?;
+        state.after_text = true;
         return Ok(());
     }
 
@@ -1018,9 +1030,9 @@ fn process_cdata<'input>(
             BorrowedText::Temp(text_buffer.to_str()),
             text.range(),
             doc,
-            pd,
+            state,
         )?;
-        pd.after_text = true;
+        state.after_text = true;
         text_buffer.clear();
     }
 
@@ -1031,9 +1043,9 @@ fn append_text<'input>(
     text: BorrowedText<'input, '_>,
     range: core::ops::Range<usize>,
     doc: &mut Document<'input>,
-    pd: &mut ParserData<'input>,
+    state: &mut ParserState<'input>,
 ) -> Result<(), Error> {
-    if pd.after_text {
+    if state.after_text {
         // Prepend to a previous text node.
         if let Some(node) = doc.nodes.last_mut() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
@@ -1048,7 +1060,7 @@ fn append_text<'input>(
         }
     } else {
         let text = text.to_storage();
-        doc.append(NodeKind::Text(text), range, pd)?;
+        doc.append(NodeKind::Text(text), range, state)?;
     }
 
     Ok(())
