@@ -404,10 +404,11 @@ struct NodeData<'input> {
 ///
 /// Used by text nodes and attributes values.
 ///
-/// We try our best to keep parsed strings as `&str`, but in some cases post-processing
-/// is necessary and we have to allocates them.
+/// We try our best not to allocate strings, referencing the input string as much as possible.
+/// But in some cases post-processing is necessary and we have to allocate them.
 ///
 /// All owned, allocated strings are stored as `Arc<str>`.
+/// And unlike `Cow<&str>`, `StringStorage` is immutable and can be cheaply cloned.
 #[derive(Clone, Eq, Debug)]
 pub enum StringStorage<'input> {
     /// A raw slice of the input string.
@@ -625,10 +626,10 @@ struct Namespaces<'input> {
 }
 
 impl<'input> Namespaces<'input> {
-    fn push_ns<'temp>(
+    fn push_ns(
         &mut self,
         name: Option<&'input str>,
-        uri: BorrowedText<'input, 'temp>,
+        uri: StringStorage<'input>,
     ) -> Result<(), Error> {
         debug_assert_ne!(name, Some(""));
 
@@ -643,10 +644,7 @@ impl<'input> Namespaces<'input> {
                     return Err(Error::NamespacesLimitReached);
                 }
                 let idx = NamespaceIdx(self.values.len() as u16);
-                self.values.push(Namespace {
-                    name,
-                    uri: uri.to_storage(),
-                });
+                self.values.push(Namespace { name, uri });
                 self.sorted_order.insert(sorted_idx, idx);
                 idx
             }

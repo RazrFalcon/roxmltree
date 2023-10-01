@@ -173,7 +173,7 @@ fn huge_sdx_document(bencher: &mut Bencher) {
 }
 
 #[cfg(feature = "libxml")]
-fn tiny_libxml(bencher: &mut Bencher) {
+fn tiny_libxml2(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| {
         libxml::parser::Parser::default()
@@ -183,7 +183,7 @@ fn tiny_libxml(bencher: &mut Bencher) {
 }
 
 #[cfg(feature = "libxml")]
-fn medium_libxml(bencher: &mut Bencher) {
+fn medium_libxml2(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("medium.svg").unwrap();
     bencher.iter(|| {
         libxml::parser::Parser::default()
@@ -193,7 +193,7 @@ fn medium_libxml(bencher: &mut Bencher) {
 }
 
 #[cfg(feature = "libxml")]
-fn large_libxml(bencher: &mut Bencher) {
+fn large_libxml2(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("large.plist").unwrap();
     bencher.iter(|| {
         libxml::parser::Parser::default()
@@ -203,7 +203,7 @@ fn large_libxml(bencher: &mut Bencher) {
 }
 
 #[cfg(feature = "libxml")]
-fn huge_libxml(bencher: &mut Bencher) {
+fn huge_libxml2(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("huge.xml").unwrap();
     bencher.iter(|| {
         libxml::parser::Parser::default()
@@ -360,11 +360,11 @@ benchmark_group!(
 );
 #[cfg(feature = "libxml")]
 benchmark_group!(
-    libxml,
-    tiny_libxml,
-    medium_libxml,
-    large_libxml,
-    huge_libxml
+    libxml2,
+    tiny_libxml2,
+    medium_libxml2,
+    large_libxml2,
+    huge_libxml2
 );
 
 #[cfg(not(feature = "libxml"))]
@@ -387,7 +387,7 @@ benchmark_main!(
     xmlparser,
     xmlrs,
     quick_xml,
-    libxml,
+    libxml2,
     roxmltree_iter,
     xmltree_iter
 );

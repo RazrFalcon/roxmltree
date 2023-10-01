@@ -88,22 +88,22 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 
 ```text
 test huge_roxmltree      ... bench:   3,147,424 ns/iter (+/- 49,153)
-test huge_libxml         ... bench:   6,850,666 ns/iter (+/- 306,180)
+test huge_libxml2        ... bench:   6,850,666 ns/iter (+/- 306,180)
 test huge_sdx_document   ... bench:   9,440,412 ns/iter (+/- 117,106)
 test huge_xmltree        ... bench:  41,662,316 ns/iter (+/- 850,360)
 
 test large_roxmltree     ... bench:   1,594,201 ns/iter (+/- 27,425)
-test large_libxml        ... bench:   3,250,606 ns/iter (+/- 140,201)
+test large_libxml2       ... bench:   3,250,606 ns/iter (+/- 140,201)
 test large_sdx_document  ... bench:   4,242,162 ns/iter (+/- 99,740)
 test large_xmltree       ... bench:  13,980,228 ns/iter (+/- 229,363)
 
 test medium_roxmltree    ... bench:     418,929 ns/iter (+/- 4,843)
-test medium_libxml       ... bench:     950,984 ns/iter (+/- 34,099)
+test medium_libxml2      ... bench:     950,984 ns/iter (+/- 34,099)
 test medium_sdx_document ... bench:   1,618,270 ns/iter (+/- 23,466)
 test medium_xmltree      ... bench:   4,315,974 ns/iter (+/- 31,849)
 
 test tiny_roxmltree      ... bench:       2,654 ns/iter (+/- 103)
-test tiny_libxml         ... bench:       8,931 ns/iter (+/- 235)
+test tiny_libxml2        ... bench:       8,931 ns/iter (+/- 235)
 test tiny_sdx_document   ... bench:      11,658 ns/iter (+/- 82)
 test tiny_xmltree        ... bench:      20,215 ns/iter (+/- 303)
 ```

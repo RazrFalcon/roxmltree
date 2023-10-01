@@ -480,7 +480,6 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         after_text: false,
         parent_id: NodeId::new(0),
     };
-    let mut text_buffer = TextBuffer::new();
 
     // Trying to guess rough nodes and attributes amount.
     let nodes_capacity = text.bytes().filter(|c| *c == b'<').count();
@@ -506,7 +505,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     });
 
     doc.namespaces
-        .push_ns(Some(NS_XML_PREFIX), BorrowedText::Input(NS_XML_URI))?;
+        .push_ns(Some(NS_XML_PREFIX), StringStorage::Borrowed(NS_XML_URI))?;
 
     let parser = xmlparser::Tokenizer::from(text);
     state.parent_prefixes.push("");
@@ -515,7 +514,6 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
         parser,
         &mut LoopDetector::default(),
         &mut tag_name,
-        &mut text_buffer,
         &mut state,
         &mut doc,
     )?;
@@ -540,7 +538,6 @@ fn process_tokens<'input>(
     parser: xmlparser::Tokenizer<'input>,
     loop_detector: &mut LoopDetector,
     tag_name: &mut TagNameSpan<'input>,
-    text_buffer: &mut TextBuffer,
     state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
@@ -566,10 +563,10 @@ fn process_tokens<'input>(
                 )?;
             }
             xmlparser::Token::Text { text } => {
-                process_text(text, loop_detector, text_buffer, state, doc)?;
+                process_text(text, loop_detector, state, doc)?;
             }
             xmlparser::Token::Cdata { text, span } => {
-                process_cdata(text, span, text_buffer, state, doc)?;
+                process_cdata(text, span, state, doc)?;
             }
             xmlparser::Token::ElementStart {
                 prefix,
@@ -589,16 +586,7 @@ fn process_tokens<'input>(
                 value,
                 span,
             } => {
-                process_attribute(
-                    prefix,
-                    local,
-                    value,
-                    span,
-                    loop_detector,
-                    text_buffer,
-                    state,
-                    doc,
-                )?;
+                process_attribute(prefix, local, value, span, loop_detector, state, doc)?;
             }
             xmlparser::Token::ElementEnd { end, span } => {
                 process_element(*tag_name, end, span, state, doc)?;
@@ -642,7 +630,6 @@ fn process_attribute<'input>(
     value: StrSpan<'input>,
     token_span: StrSpan<'input>,
     loop_detector: &mut LoopDetector,
-    text_buffer: &mut TextBuffer,
     state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
@@ -651,7 +638,7 @@ fn process_attribute<'input>(
     #[cfg(feature = "positions")]
     let pos = token_span.start();
 
-    let value = normalize_attribute(doc.text, value, &state.entities, loop_detector, text_buffer)?;
+    let value = normalize_attribute(doc.text, value, &state.entities, loop_detector)?;
 
     if prefix.as_str() == XMLNS {
         // The xmlns namespace MUST NOT be declared as the default namespace.
@@ -706,7 +693,6 @@ fn process_attribute<'input>(
 
         doc.namespaces.push_ns(None, value)?;
     } else {
-        let value = value.to_storage();
         state.current_attributes.push(TempAttributeData {
             prefix,
             local,
@@ -893,19 +879,22 @@ fn resolve_attributes<'input>(
 fn process_text<'input>(
     text: StrSpan<'input>,
     loop_detector: &mut LoopDetector,
-    text_buffer: &mut TextBuffer,
     state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
-        append_text(BorrowedText::Input(text.as_str()), text.range(), doc, state)?;
+        append_text(
+            StringStorage::Borrowed(text.as_str()),
+            text.range(),
+            doc,
+            state,
+        )?;
         state.after_text = true;
         return Ok(());
     }
 
-    text_buffer.clear();
-
+    let mut text_buffer = String::with_capacity(32);
     let mut is_as_is = false; // TODO: explain
     let mut stream = Stream::from_substr(doc.text, text.range());
     while !stream.at_end() {
@@ -934,14 +923,10 @@ fn process_text<'input>(
                 is_as_is = false;
 
                 if !text_buffer.is_empty() {
-                    append_text(
-                        BorrowedText::Temp(text_buffer.to_str()),
-                        text.range(),
-                        doc,
-                        state,
-                    )?;
-                    state.after_text = true;
+                    let storage = StringStorage::new_owned(text_buffer.as_str());
+                    append_text(storage, text.range(), doc, state)?;
                     text_buffer.clear();
+                    state.after_text = true;
                 }
 
                 loop_detector.inc_references(&stream)?;
@@ -949,14 +934,7 @@ fn process_text<'input>(
 
                 let parser = xmlparser::Tokenizer::from_fragment(doc.text, fragment.range());
                 let mut tag_name = TagNameSpan::new_null();
-                process_tokens(
-                    parser,
-                    loop_detector,
-                    &mut tag_name,
-                    text_buffer,
-                    state,
-                    doc,
-                )?;
+                process_tokens(parser, loop_detector, &mut tag_name, state, doc)?;
                 text_buffer.clear();
 
                 loop_detector.dec_depth();
@@ -966,37 +944,15 @@ fn process_text<'input>(
 
     if !text_buffer.is_empty() {
         append_text(
-            BorrowedText::Temp(text_buffer.to_str()),
+            StringStorage::new_owned(text_buffer),
             text.range(),
             doc,
             state,
         )?;
         state.after_text = true;
-        text_buffer.clear();
     }
 
     Ok(())
-}
-
-pub(crate) enum BorrowedText<'input, 'temp> {
-    Input(&'input str),
-    Temp(&'temp str),
-}
-
-impl<'input, 'temp> BorrowedText<'input, 'temp> {
-    pub(crate) fn as_str(&self) -> &str {
-        match self {
-            BorrowedText::Input(text) => text,
-            BorrowedText::Temp(text) => text,
-        }
-    }
-
-    pub(crate) fn to_storage(&self) -> StringStorage<'input> {
-        match self {
-            BorrowedText::Input(text) => StringStorage::Borrowed(text),
-            BorrowedText::Temp(text) => StringStorage::new_owned(*text),
-        }
-    }
 }
 
 // While the whole purpose of CDATA is to indicate to an XML library that this text
@@ -1004,19 +960,22 @@ impl<'input, 'temp> BorrowedText<'input, 'temp> {
 fn process_cdata<'input>(
     text: StrSpan<'input>,
     span: StrSpan<'input>,
-    text_buffer: &mut TextBuffer,
     state: &mut ParserState<'input>,
     doc: &mut Document<'input>,
 ) -> Result<(), Error> {
     // Add text as is if it has only valid characters.
     if !text.as_str().as_bytes().contains(&b'\r') {
-        append_text(BorrowedText::Input(text.as_str()), span.range(), doc, state)?;
+        append_text(
+            StringStorage::Borrowed(text.as_str()),
+            span.range(),
+            doc,
+            state,
+        )?;
         state.after_text = true;
         return Ok(());
     }
 
-    text_buffer.clear();
-
+    let mut text_buffer = String::with_capacity(32);
     let count = text.as_str().chars().count();
     for (i, c) in text.as_str().chars().enumerate() {
         for b in CharToBytes::new(c) {
@@ -1026,20 +985,19 @@ fn process_cdata<'input>(
 
     if !text_buffer.is_empty() {
         append_text(
-            BorrowedText::Temp(text_buffer.to_str()),
+            StringStorage::new_owned(text_buffer),
             text.range(),
             doc,
             state,
         )?;
         state.after_text = true;
-        text_buffer.clear();
     }
 
     Ok(())
 }
 
 fn append_text<'input>(
-    text: BorrowedText<'input, '_>,
+    text: StringStorage<'input>,
     range: Range<usize>,
     doc: &mut Document<'input>,
     state: &mut ParserState<'input>,
@@ -1058,7 +1016,6 @@ fn append_text<'input>(
             }
         }
     } else {
-        let text = text.to_storage();
         doc.append(NodeKind::Text(text), range, state)?;
     }
 
@@ -1106,19 +1063,18 @@ fn parse_next_chunk<'a>(
 }
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
-fn normalize_attribute<'input, 'temp>(
+fn normalize_attribute<'input>(
     input: &'input str,
     text: StrSpan<'input>,
     entities: &[Entity],
     loop_detector: &mut LoopDetector,
-    buffer: &'temp mut TextBuffer,
-) -> Result<BorrowedText<'input, 'temp>, Error> {
+) -> Result<StringStorage<'input>, Error> {
     if is_normalization_required(&text) {
-        buffer.clear();
-        _normalize_attribute(input, text, entities, loop_detector, buffer)?;
-        Ok(BorrowedText::Temp(buffer.to_str()))
+        let mut text_buffer = String::with_capacity(32);
+        _normalize_attribute(input, text, entities, loop_detector, &mut text_buffer)?;
+        Ok(StringStorage::new_owned(text_buffer))
     } else {
-        Ok(BorrowedText::Input(text.as_str()))
+        Ok(StringStorage::Borrowed(text.as_str()))
     }
 }
 
@@ -1142,7 +1098,7 @@ fn _normalize_attribute(
     text: StrSpan,
     entities: &[Entity],
     loop_detector: &mut LoopDetector,
-    buffer: &mut TextBuffer,
+    buffer: &mut String,
 ) -> Result<(), Error> {
     let mut stream = Stream::from_substr(input, text.range());
     while !stream.at_end() {
@@ -1258,113 +1214,86 @@ fn err_pos_from_qname(input: &str, prefix: StrSpan, local: StrSpan) -> TextPos {
     err_pos_from_span(input, err_span)
 }
 
-mod internals {
-    use alloc::vec::Vec;
+/// Iterate over `char` by `u8`.
+struct CharToBytes {
+    buf: [u8; 4],
+    idx: u8,
+}
 
-    /// Iterate over `char` by `u8`.
-    pub struct CharToBytes {
-        buf: [u8; 4],
-        idx: u8,
-    }
+impl CharToBytes {
+    #[inline]
+    fn new(c: char) -> Self {
+        let mut buf = [0xFF; 4];
+        c.encode_utf8(&mut buf);
 
-    impl CharToBytes {
-        #[inline]
-        pub fn new(c: char) -> Self {
-            let mut buf = [0xFF; 4];
-            c.encode_utf8(&mut buf);
-
-            CharToBytes { buf, idx: 0 }
-        }
-    }
-
-    impl Iterator for CharToBytes {
-        type Item = u8;
-
-        #[inline]
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.idx < 4 {
-                let b = self.buf[self.idx as usize];
-
-                if b != 0xFF {
-                    self.idx += 1;
-                    return Some(b);
-                } else {
-                    self.idx = 4;
-                }
-            }
-
-            None
-        }
-    }
-
-    pub struct TextBuffer {
-        buffer: Vec<u8>,
-    }
-
-    impl TextBuffer {
-        #[inline]
-        pub fn new() -> Self {
-            TextBuffer {
-                buffer: Vec::with_capacity(32),
-            }
-        }
-
-        #[inline]
-        pub fn push_raw(&mut self, c: u8) {
-            self.buffer.push(c);
-        }
-
-        pub fn push_from_attr(&mut self, mut current: u8, next: Option<u8>) {
-            // \r in \r\n should be ignored.
-            if current == b'\r' && next == Some(b'\n') {
-                return;
-            }
-
-            // \n, \r and \t should be converted into spaces.
-            current = match current {
-                b'\n' | b'\r' | b'\t' => b' ',
-                _ => current,
-            };
-
-            self.buffer.push(current);
-        }
-
-        // Translate \r\n and any \r that is not followed by \n into a single \n character.
-        //
-        // https://www.w3.org/TR/xml/#sec-line-ends
-        pub fn push_from_text(&mut self, c: u8, at_end: bool) {
-            if self.buffer.last() == Some(&b'\r') {
-                let idx = self.buffer.len() - 1;
-                self.buffer[idx] = b'\n';
-
-                if at_end && c == b'\r' {
-                    self.buffer.push(b'\n');
-                } else if c != b'\n' {
-                    self.buffer.push(c);
-                }
-            } else if at_end && c == b'\r' {
-                self.buffer.push(b'\n');
-            } else {
-                self.buffer.push(c);
-            }
-        }
-
-        #[inline]
-        pub fn clear(&mut self) {
-            self.buffer.clear();
-        }
-
-        #[inline]
-        pub fn is_empty(&self) -> bool {
-            self.buffer.is_empty()
-        }
-
-        #[inline]
-        pub fn to_str(&self) -> &str {
-            // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
-            core::str::from_utf8(&self.buffer).unwrap()
-        }
+        CharToBytes { buf, idx: 0 }
     }
 }
 
-use self::internals::*;
+impl Iterator for CharToBytes {
+    type Item = u8;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx < 4 {
+            let b = self.buf[self.idx as usize];
+
+            if b != 0xFF {
+                self.idx += 1;
+                return Some(b);
+            } else {
+                self.idx = 4;
+            }
+        }
+
+        None
+    }
+}
+
+trait StringExt {
+    fn push_raw(&mut self, c: u8);
+    fn push_from_attr(&mut self, current: u8, next: Option<u8>);
+    fn push_from_text(&mut self, c: u8, at_end: bool);
+}
+
+impl StringExt for String {
+    #[inline]
+    fn push_raw(&mut self, c: u8) {
+        self.push(c as char);
+    }
+
+    fn push_from_attr(&mut self, mut current: u8, next: Option<u8>) {
+        // \r in \r\n should be ignored.
+        if current == b'\r' && next == Some(b'\n') {
+            return;
+        }
+
+        // \n, \r and \t should be converted into spaces.
+        current = match current {
+            b'\n' | b'\r' | b'\t' => b' ',
+            _ => current,
+        };
+
+        self.push(current as char);
+    }
+
+    // Translate \r\n and any \r that is not followed by \n into a single \n character.
+    //
+    // https://www.w3.org/TR/xml/#sec-line-ends
+    fn push_from_text(&mut self, c: u8, at_end: bool) {
+        if self.as_bytes().last() == Some(&b'\r') {
+            self.pop();
+            self.push('\n');
+
+            if at_end && c == b'\r' {
+                self.push('\n');
+            } else if c != b'\n' {
+                self.push(c as char);
+            }
+        } else if at_end && c == b'\r' {
+            self.push('\n');
+        } else {
+            self.push(c as char);
+        }
+    }
+}
