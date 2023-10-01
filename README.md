@@ -50,8 +50,7 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | Writing                         |                  | ✓                   | ✓                | ✓                |
 | No **unsafe**                   | ✓                |                     | ✓                |                  |
 | Language                        | Rust             | C                   | Rust             | Rust             |
-| Size overhead<sup>4</sup>       | **~55KiB**       | ~1.4MiB<sup>5</sup> | ~78KiB           | ~102KiB          |
-| Dependencies                    | **1**            | ?<sup>5</sup>       | 2                | 2                |
+| Dependencies                    | **1**            | -                   | 2                | 2                |
 | Tested version                  | 0.18.0           | Apple-provided      | 0.10.3           | 0.3.2            |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              |
 
@@ -69,8 +68,6 @@ Notes:
    so you can easily retrieve it if you need it.
    See [examples/print_pos.rs](examples/print_pos.rs) for details.
 3. In the `memchr` crate.
-4. Binary size overhead according to [cargo-bloat](https://github.com/RazrFalcon/cargo-bloat).
-5. Depends on build flags.
 
 There is also `elementtree` and `treexml` crates, but they are abandoned for a long time.
 
@@ -139,9 +136,6 @@ You can try running the benchmarks yourself by running `cargo bench` in the `ben
 - Since all libraries have a different XML support, benchmarking is a bit pointless.
 - Tree crates may use different *xml-rs* crate versions.
 - We bench *libxml2* using the *[rust-libxml]* wrapper crate
-- *quick-xml* is faster than *xmlparser* because it's more forgiving for the input,
-  while *xmlparser* is very strict and does a lot of checks, which are expensive.
-  So performance difference is mainly due to validation.
 
 [xml-rs]: https://crates.io/crates/xml-rs
 [quick-xml]: https://crates.io/crates/quick-xml
