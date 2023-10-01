@@ -131,23 +131,6 @@ test tiny_quick_xml      ... bench:       2,233 ns/iter (+/- 70)
 test tiny_xmlrs          ... bench:      17,155 ns/iter (+/- 429)
 ```
 
-### Iteration
-
-```text
-test roxmltree_iter_descendants_expensive   ... bench:     255,882 ns/iter (+/- 1,427)
-test xmltree_iter_descendants_expensive     ... bench:     372,464 ns/iter (+/- 52,938)
-
-test roxmltree_iter_descendants_inexpensive ... bench:      20,800 ns/iter (+/- 642)
-test xmltree_iter_descendants_inexpensive   ... bench:     133,030 ns/iter (+/- 10,546)
-
-test roxmltree_iter_children                ... bench:       2,168 ns/iter (+/- 12)
-```
-
-Where expensive refers to the matching done on each element. In these
-benchmarks, *expensive* means searching for any node in the document which
-contains a string. And *inexpensive* means searching for any element with a
-particular name.
-
 ### Notes
 
 The benchmarks were taken on a Apple M1 Pro.
