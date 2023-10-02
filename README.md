@@ -26,8 +26,6 @@ See the [Performance](#performance) section for details.
 
 Sadly, XML can be parsed in many different ways. *roxmltree* tries to mimic the
 behavior of Python's [lxml](https://lxml.de/).
-But unlike *lxml*, *roxmltree* does support comments outside the root element.
-
 For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/blob/master/docs/parsing.md).
 
 ## Alternatives
@@ -67,7 +65,6 @@ Notes:
 2. *roxmltree* keeps all node and attribute positions in the original document,
    so you can easily retrieve it if you need it.
    See [examples/print_pos.rs](examples/print_pos.rs) for details.
-3. In the `memchr` crate.
 
 There is also `elementtree` and `treexml` crates, but they are abandoned for a long time.
 
@@ -134,7 +131,6 @@ The benchmarks were taken on a Apple M1 Pro.
 You can try running the benchmarks yourself by running `cargo bench` in the `benches` dir.
 
 - Since all libraries have a different XML support, benchmarking is a bit pointless.
-- Tree crates may use different *xml-rs* crate versions.
 - We bench *libxml2* using the *[rust-libxml]* wrapper crate
 
 [xml-rs]: https://crates.io/crates/xml-rs
@@ -142,12 +138,12 @@ You can try running the benchmarks yourself by running `cargo bench` in the `ben
 [xmlparser]: https://crates.io/crates/xmlparser
 [rust-libxml]: https://github.com/KWARC/rust-libxml
 
-## Memory Overhead
+## Memory overhead
 
 `roxmltree` tries to use as little memory as possible to allow parsing
 very large (multi-GB) XML files.
 
-The peak memory usage doesn't directly correlates with the file size
+The peak memory usage doesn't directly correlate with the file size
 but rather with the amount of nodes and attributes a file has.
 How many attributes had to be normalized (i.e. allocated).
 And how many text nodes had to be preprocessed (i.e. allocated).
@@ -155,7 +151,7 @@ And how many text nodes had to be preprocessed (i.e. allocated).
 `roxmltree` never allocates element and attribute names, processing instructions
 and comments.
 
-By disabling the `positions` feature, you can shave by 8 bytes from each node and attribute.
+By disabling the `positions` feature, you can shave 8 bytes from each node and attribute.
 
 On average, the overhead is around 6-8x the file size.
 For example, our 1.1GB sample XML will peak at 7.6GB RAM with default features enabled
@@ -168,15 +164,15 @@ and at 6.8GB RAM when `positions` is disabled.
 
 ## Non-goals
 
-- Complete XML support.
-- Tree modification and writing.
-- XPath/XQuery.
+- Complete XML support
+- Tree modification and writing
+- XPath/XQuery
 
 ## API
 
 This library uses Rust's idiomatic API based on iterators.
 In case you are more familiar with browser/JS DOM APIs - you can check out
-[tests/dom-api.rs](tests/dom-api.rs) to see how it can be converted into a Rust one.
+[tests/dom-api.rs](tests/dom-api.rs) to see how it can be mapped onto the Rust one.
 
 ## License
 
