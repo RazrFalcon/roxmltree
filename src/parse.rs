@@ -904,19 +904,17 @@ fn process_text<'input>(
                     text_buffer.push_raw(c);
                     is_as_is = false;
                 } else {
-                    text_buffer.push_from_text(c, stream.at_end());
+                    text_buffer.push_from_text(c as char, stream.at_end());
                 }
             }
             NextChunk::Char(c) => {
-                for b in CharToBytes::new(c) {
-                    if loop_detector.depth > 0 {
-                        text_buffer.push_from_text(b, stream.at_end());
-                    } else {
-                        // Characters not from entity should be added as is.
-                        // Not sure why... At least `lxml` produces the same result.
-                        text_buffer.push_raw(b);
-                        is_as_is = true;
-                    }
+                if loop_detector.depth > 0 {
+                    text_buffer.push_from_text(c, stream.at_end());
+                } else {
+                    // Characters not from entity should be added as is.
+                    // Not sure why... At least `lxml` produces the same result.
+                    text_buffer.push(c);
+                    is_as_is = true;
                 }
             }
             NextChunk::Text(fragment) => {
@@ -978,9 +976,7 @@ fn process_cdata<'input>(
     let mut text_buffer = String::with_capacity(32);
     let count = text.as_str().chars().count();
     for (i, c) in text.as_str().chars().enumerate() {
-        for b in CharToBytes::new(c) {
-            text_buffer.push_from_text(b, i + 1 == count);
-        }
+        text_buffer.push_from_text(c, i + 1 == count);
     }
 
     if !text_buffer.is_empty() {
@@ -1253,7 +1249,7 @@ impl Iterator for CharToBytes {
 trait StringExt {
     fn push_raw(&mut self, c: u8);
     fn push_from_attr(&mut self, current: u8, next: Option<u8>);
-    fn push_from_text(&mut self, c: u8, at_end: bool);
+    fn push_from_text(&mut self, c: char, at_end: bool);
 }
 
 impl StringExt for String {
@@ -1280,17 +1276,17 @@ impl StringExt for String {
     // Translate \r\n and any \r that is not followed by \n into a single \n character.
     //
     // https://www.w3.org/TR/xml/#sec-line-ends
-    fn push_from_text(&mut self, c: u8, at_end: bool) {
+    fn push_from_text(&mut self, c: char, at_end: bool) {
         if self.as_bytes().last() == Some(&b'\r') {
             self.pop();
             self.push('\n');
 
-            if at_end && c == b'\r' {
+            if at_end && c == '\r' {
                 self.push('\n');
-            } else if c != b'\n' {
+            } else if c != '\n' {
                 self.push(c as char);
             }
-        } else if at_end && c == b'\r' {
+        } else if at_end && c == '\r' {
             self.push('\n');
         } else {
             self.push(c as char);
