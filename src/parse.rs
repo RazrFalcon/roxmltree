@@ -1277,19 +1277,19 @@ impl StringExt for String {
     //
     // https://www.w3.org/TR/xml/#sec-line-ends
     fn push_from_text(&mut self, c: char, at_end: bool) {
-        if self.as_bytes().last() == Some(&b'\r') {
+        if self.chars().last() == Some('\r') {
             self.pop();
             self.push('\n');
 
             if at_end && c == '\r' {
                 self.push('\n');
             } else if c != '\n' {
-                self.push(c as char);
+                self.push(c);
             }
         } else if at_end && c == '\r' {
             self.push('\n');
         } else {
-            self.push(c as char);
+            self.push(c);
         }
     }
 }
