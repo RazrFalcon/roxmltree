@@ -400,6 +400,12 @@ struct NodeData<'input> {
     range: Range<usize>,
 }
 
+#[cfg(target_has_atomic = "ptr")]
+type OwnedSharedString = alloc::sync::Arc<str>;
+
+#[cfg(not(target_has_atomic = "ptr"))]
+type OwnedSharedString = alloc::rc::Rc<str>;
+
 /// A string storage.
 ///
 /// Used by text nodes and attributes values.
@@ -407,7 +413,8 @@ struct NodeData<'input> {
 /// We try our best not to allocate strings, referencing the input string as much as possible.
 /// But in some cases post-processing is necessary and we have to allocate them.
 ///
-/// All owned, allocated strings are stored as `Arc<str>`.
+/// All owned, allocated strings are stored as `Arc<str>` or as `Rc<str>` on targets
+/// were `Arc` isn't available.
 /// And unlike `Cow<&str>`, `StringStorage` is immutable and can be cheaply cloned.
 #[derive(Clone, Eq, Debug)]
 pub enum StringStorage<'input> {
@@ -415,12 +422,12 @@ pub enum StringStorage<'input> {
     Borrowed(&'input str),
 
     /// A reference-counted string.
-    Owned(alloc::sync::Arc<str>),
+    Owned(OwnedSharedString),
 }
 
 impl StringStorage<'_> {
     /// Creates a new owned string from `&str` or `String`.
-    pub fn new_owned<T: Into<alloc::sync::Arc<str>>>(s: T) -> Self {
+    pub fn new_owned<T: Into<OwnedSharedString>>(s: T) -> Self {
         StringStorage::Owned(s.into())
     }
 

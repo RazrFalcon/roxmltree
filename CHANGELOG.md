@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+Fallback to `Rc` when `Arc` isn't available.
 
 ## [0.18.1] - 2023-09-30
 ### Added
