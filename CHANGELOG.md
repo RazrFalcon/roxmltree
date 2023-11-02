@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Changed
-Fallback to `Rc` when `Arc` isn't available.
+- Fallback to `Rc` when `Arc` isn't available.
+- Bump MSRV to 1.60
 
 ## [0.18.1] - 2023-09-30
 ### Added

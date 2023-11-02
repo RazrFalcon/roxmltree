@@ -10,6 +10,7 @@ repository = "https://github.com/RazrFalcon/roxmltree"
 documentation = "https://docs.rs/roxmltree/"
 readme = "README.md"
 edition = "2018"
+rust-version = "1.60"
 
 [workspace]
 members = ["benches"]

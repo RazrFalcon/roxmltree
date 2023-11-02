@@ -320,11 +320,7 @@ impl<'input> Document<'input> {
 
         let new_child_id = NodeId::from(self.nodes.len());
 
-        let appending_element = match kind {
-            NodeKind::Element { .. } => true,
-            _ => false,
-        };
-
+        let appending_element = matches!(kind, NodeKind::Element { .. });
         self.nodes.push(NodeData {
             parent: Some(state.parent_id),
             prev_sibling: None,
@@ -1084,10 +1080,7 @@ fn is_normalization_required(text: &StrSpan) -> bool {
     // But in rare cases it can be just an another character.
 
     fn check(c: u8) -> bool {
-        match c {
-            b'&' | b'\t' | b'\n' | b'\r' => true,
-            _ => false,
-        }
+        matches!(c, b'&' | b'\t' | b'\n' | b'\r')
     }
 
     text.as_str().bytes().any(check)

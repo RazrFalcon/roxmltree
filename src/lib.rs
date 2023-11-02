@@ -18,8 +18,6 @@ License: ISC.
 #![warn(missing_docs)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
-// `matches!` available since 1.42, but we target 1.36 for now.
-#![allow(clippy::match_like_matches_macro)]
 
 extern crate alloc;
 
