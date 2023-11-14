@@ -9,6 +9,8 @@ use crate::{
     NodeKind, ShortRange, StringStorage, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI, XMLNS,
 };
 
+type Result<T> = core::result::Result<T, Error>;
+
 /// A list of all possible errors.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Error {
@@ -284,7 +286,7 @@ impl<'input> Document<'input> {
     /// assert_eq!(doc.descendants().count(), 2); // root node + `e` element node
     /// ```
     #[inline]
-    pub fn parse(text: &str) -> Result<Document, Error> {
+    pub fn parse(text: &str) -> Result<Document> {
         Self::parse_with_options(text, ParsingOptions::default())
     }
 
@@ -301,69 +303,14 @@ impl<'input> Document<'input> {
     /// assert_eq!(doc.descendants().count(), 2); // root node + `e` element node
     /// ```
     #[inline]
-    pub fn parse_with_options(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
+    pub fn parse_with_options(text: &str, opt: ParsingOptions) -> Result<Document> {
         parse(text, opt)
-    }
-
-    fn append(
-        &mut self,
-        kind: NodeKind<'input>,
-        range: Range<usize>,
-        state: &mut ParserState<'input>,
-    ) -> Result<NodeId, Error> {
-        if self.nodes.len() >= state.opt.nodes_limit as usize {
-            return Err(Error::NodesLimitReached);
-        }
-
-        #[cfg(not(feature = "positions"))]
-        let _ = range;
-
-        let new_child_id = NodeId::from(self.nodes.len());
-
-        let appending_element = matches!(kind, NodeKind::Element { .. });
-        self.nodes.push(NodeData {
-            parent: Some(state.parent_id),
-            prev_sibling: None,
-            next_subtree: None,
-            last_child: None,
-            kind,
-            #[cfg(feature = "positions")]
-            range,
-        });
-
-        let last_child_id = self.nodes[state.parent_id.get_usize()].last_child;
-        self.nodes[new_child_id.get_usize()].prev_sibling = last_child_id;
-        self.nodes[state.parent_id.get_usize()].last_child = Some(new_child_id);
-
-        state.awaiting_subtree.iter().for_each(|id| {
-            self.nodes[id.get_usize()].next_subtree = Some(new_child_id);
-        });
-        state.awaiting_subtree.clear();
-
-        if !appending_element {
-            state
-                .awaiting_subtree
-                .push(NodeId::from(self.nodes.len() - 1));
-        }
-
-        Ok(new_child_id)
     }
 }
 
 struct Entity<'input> {
     name: &'input str,
     value: StrSpan<'input>,
-}
-
-struct ParserState<'input> {
-    opt: ParsingOptions,
-    namespace_start_idx: usize,
-    current_attributes: Vec<TempAttributeData<'input>>,
-    awaiting_subtree: Vec<NodeId>,
-    parent_prefixes: Vec<&'input str>,
-    entities: Vec<Entity<'input>>,
-    after_text: bool,
-    parent_id: NodeId,
 }
 
 #[derive(Clone, Copy)]
@@ -428,7 +375,7 @@ struct LoopDetector {
 
 impl LoopDetector {
     #[inline]
-    fn inc_depth(&mut self, stream: &Stream) -> Result<(), Error> {
+    fn inc_depth(&mut self, stream: &Stream) -> Result<()> {
         if self.depth < 10 {
             self.depth += 1;
             Ok(())
@@ -450,7 +397,7 @@ impl LoopDetector {
     }
 
     #[inline]
-    fn inc_references(&mut self, stream: &Stream) -> Result<(), Error> {
+    fn inc_references(&mut self, stream: &Stream) -> Result<()> {
         if self.depth == 0 {
             // Allow infinite amount of references at zero depth.
             Ok(())
@@ -465,18 +412,70 @@ impl LoopDetector {
     }
 }
 
-fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
-    let mut state = ParserState {
-        opt,
-        namespace_start_idx: 1,
-        current_attributes: Vec::with_capacity(16),
-        entities: Vec::new(),
-        awaiting_subtree: Vec::new(),
-        parent_prefixes: Vec::new(),
-        after_text: false,
-        parent_id: NodeId::new(0),
-    };
+struct Context<'input> {
+    opt: ParsingOptions,
+    namespace_start_idx: usize,
+    current_attributes: Vec<TempAttributeData<'input>>,
+    awaiting_subtree: Vec<NodeId>,
+    parent_prefixes: Vec<&'input str>,
+    entities: Vec<Entity<'input>>,
+    after_text: bool,
+    parent_id: NodeId,
+    tag_name: TagNameSpan<'input>,
+    loop_detector: LoopDetector,
+    doc: Document<'input>,
+}
 
+impl<'input> Context<'input> {
+    fn append_node(&mut self, kind: NodeKind<'input>, range: Range<usize>) -> Result<NodeId> {
+        if self.doc.nodes.len() >= self.opt.nodes_limit as usize {
+            return Err(Error::NodesLimitReached);
+        }
+
+        #[cfg(not(feature = "positions"))]
+        let _ = range;
+
+        let new_child_id = NodeId::from(self.doc.nodes.len());
+
+        let appending_element = matches!(kind, NodeKind::Element { .. });
+        self.doc.nodes.push(NodeData {
+            parent: Some(self.parent_id),
+            prev_sibling: None,
+            next_subtree: None,
+            last_child: None,
+            kind,
+            #[cfg(feature = "positions")]
+            range,
+        });
+
+        let last_child_id = self.doc.nodes[self.parent_id.get_usize()].last_child;
+        self.doc.nodes[new_child_id.get_usize()].prev_sibling = last_child_id;
+        self.doc.nodes[self.parent_id.get_usize()].last_child = Some(new_child_id);
+
+        for id in &self.awaiting_subtree {
+            self.doc.nodes[id.get_usize()].next_subtree = Some(new_child_id);
+        }
+        self.awaiting_subtree.clear();
+
+        if !appending_element {
+            self.awaiting_subtree
+                .push(NodeId::from(self.doc.nodes.len() - 1));
+        }
+
+        Ok(new_child_id)
+    }
+
+    fn err_pos_from_span(&self, span: StrSpan) -> TextPos {
+        Stream::from_substr(self.doc.text, span.range()).gen_text_pos()
+    }
+
+    fn err_pos_from_qname(&self, prefix: StrSpan, local: StrSpan) -> TextPos {
+        let err_span = if prefix.is_empty() { local } else { prefix };
+        self.err_pos_from_span(err_span)
+    }
+}
+
+fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
     // Trying to guess rough nodes and attributes amount.
     let nodes_capacity = text.bytes().filter(|c| *c == b'<').count();
     let attributes_capacity = text.bytes().filter(|c| *c == b'=').count();
@@ -503,22 +502,30 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
     doc.namespaces
         .push_ns(Some(NS_XML_PREFIX), StringStorage::Borrowed(NS_XML_URI))?;
 
-    let parser = xmlparser::Tokenizer::from(text);
-    state.parent_prefixes.push("");
-    let mut tag_name = TagNameSpan::new_null();
-    process_tokens(
-        parser,
-        &mut LoopDetector::default(),
-        &mut tag_name,
-        &mut state,
-        &mut doc,
-    )?;
+    let mut ctx = Context {
+        opt,
+        namespace_start_idx: 1,
+        current_attributes: Vec::with_capacity(16),
+        entities: Vec::new(),
+        awaiting_subtree: Vec::new(),
+        parent_prefixes: Vec::new(),
+        after_text: false,
+        parent_id: NodeId::new(0),
+        tag_name: TagNameSpan::new_null(),
+        loop_detector: LoopDetector::default(),
+        doc,
+    };
 
+    let parser = xmlparser::Tokenizer::from(text);
+    ctx.parent_prefixes.push("");
+    process_tokens(parser, &mut ctx)?;
+
+    let mut doc = ctx.doc;
     if !doc.root().children().any(|n| n.is_element()) {
         return Err(Error::NoRootNode);
     }
 
-    if state.parent_prefixes.len() > 1 {
+    if ctx.parent_prefixes.len() > 1 {
         return Err(Error::UnclosedRootNode);
     }
 
@@ -532,11 +539,8 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document, Error> {
 #[allow(clippy::collapsible_match)]
 fn process_tokens<'input>(
     parser: xmlparser::Tokenizer<'input>,
-    loop_detector: &mut LoopDetector,
-    tag_name: &mut TagNameSpan<'input>,
-    state: &mut ParserState<'input>,
-    doc: &mut Document<'input>,
-) -> Result<(), Error> {
+    ctx: &mut Context<'input>,
+) -> Result<()> {
     for token in parser {
         let token = token?;
         match token {
@@ -549,20 +553,19 @@ fn process_tokens<'input>(
                     target: target.as_str(),
                     value: content.map(|v| v.as_str()),
                 });
-                doc.append(pi, span.range(), state)?;
+                ctx.append_node(pi, span.range())?;
             }
             xmlparser::Token::Comment { text, span } => {
-                doc.append(
+                ctx.append_node(
                     NodeKind::Comment(StringStorage::Borrowed(text.as_str())),
                     span.range(),
-                    state,
                 )?;
             }
             xmlparser::Token::Text { text } => {
-                process_text(text, loop_detector, state, doc)?;
+                process_text(text, ctx)?;
             }
             xmlparser::Token::Cdata { text, span } => {
-                process_cdata(text, span, state, doc)?;
+                process_cdata(text, span, ctx)?;
             }
             xmlparser::Token::ElementStart {
                 prefix,
@@ -570,11 +573,11 @@ fn process_tokens<'input>(
                 span,
             } => {
                 if prefix.as_str() == XMLNS {
-                    let pos = err_pos_from_span(doc.text, prefix);
+                    let pos = ctx.err_pos_from_span(prefix);
                     return Err(Error::InvalidElementNamePrefix(pos));
                 }
 
-                *tag_name = TagNameSpan::new(prefix, local, span);
+                ctx.tag_name = TagNameSpan::new(prefix, local, span);
             }
             xmlparser::Token::Attribute {
                 prefix,
@@ -582,13 +585,13 @@ fn process_tokens<'input>(
                 value,
                 span,
             } => {
-                process_attribute(prefix, local, value, span, loop_detector, state, doc)?;
+                process_attribute(prefix, local, value, span, ctx)?;
             }
             xmlparser::Token::ElementEnd { end, span } => {
-                process_element(*tag_name, end, span, state, doc)?;
+                process_element(end, span, ctx)?;
             }
             xmlparser::Token::DtdStart { .. } => {
-                if !state.opt.allow_dtd {
+                if !ctx.opt.allow_dtd {
                     return Err(Error::DtdDetected);
                 }
             }
@@ -596,7 +599,7 @@ fn process_tokens<'input>(
                 name, definition, ..
             } => {
                 if let xmlparser::EntityDefinition::EntityValue(value) = definition {
-                    state.entities.push(Entity {
+                    ctx.entities.push(Entity {
                         name: name.as_str(),
                         value,
                     });
@@ -610,7 +613,7 @@ fn process_tokens<'input>(
             | xmlparser::Token::Comment { .. }
             | xmlparser::Token::ElementStart { .. }
             | xmlparser::Token::ElementEnd { .. } => {
-                state.after_text = false;
+                ctx.after_text = false;
             }
             _ => {}
         }
@@ -625,21 +628,19 @@ fn process_attribute<'input>(
     local: StrSpan<'input>,
     value: StrSpan<'input>,
     token_span: StrSpan<'input>,
-    loop_detector: &mut LoopDetector,
-    state: &mut ParserState<'input>,
-    doc: &mut Document<'input>,
-) -> Result<(), Error> {
+    ctx: &mut Context<'input>,
+) -> Result<()> {
     #[cfg(not(feature = "positions"))]
     let _ = token_span;
     #[cfg(feature = "positions")]
     let pos = token_span.start();
 
-    let value = normalize_attribute(doc.text, value, &state.entities, loop_detector)?;
+    let value = normalize_attribute(value, ctx)?;
 
     if prefix.as_str() == XMLNS {
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XMLNS_URI {
-            let pos = err_pos_from_qname(doc.text, prefix, local);
+            let pos = ctx.err_pos_from_qname(prefix, local);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
@@ -650,46 +651,47 @@ fn process_attribute<'input>(
         // It MUST NOT be bound to any other namespace name.
         if local.as_str() == NS_XML_PREFIX {
             if !is_xml_ns_uri {
-                let pos = err_pos_from_span(doc.text, prefix);
+                let pos = ctx.err_pos_from_span(prefix);
                 return Err(Error::InvalidXmlPrefixUri(pos));
             }
         } else {
             // The xml namespace MUST NOT be bound to a non-xml prefix.
             if is_xml_ns_uri {
-                let pos = err_pos_from_span(doc.text, prefix);
+                let pos = ctx.err_pos_from_span(prefix);
                 return Err(Error::UnexpectedXmlUri(pos));
             }
         }
 
         // Check for duplicated namespaces.
-        if doc
+        if ctx
+            .doc
             .namespaces
-            .exists(state.namespace_start_idx, Some(local.as_str()))
+            .exists(ctx.namespace_start_idx, Some(local.as_str()))
         {
-            let pos = err_pos_from_qname(doc.text, prefix, local);
+            let pos = ctx.err_pos_from_qname(prefix, local);
             return Err(Error::DuplicatedNamespace(local.as_str().to_string(), pos));
         }
 
         // Xml namespace should not be added to the namespaces.
         if !is_xml_ns_uri {
-            doc.namespaces.push_ns(Some(local.as_str()), value)?;
+            ctx.doc.namespaces.push_ns(Some(local.as_str()), value)?;
         }
     } else if local.as_str() == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XML_URI {
-            let pos = err_pos_from_span(doc.text, local);
+            let pos = ctx.err_pos_from_span(local);
             return Err(Error::UnexpectedXmlUri(pos));
         }
 
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XMLNS_URI {
-            let pos = err_pos_from_span(doc.text, local);
+            let pos = ctx.err_pos_from_span(local);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        doc.namespaces.push_ns(None, value)?;
+        ctx.doc.namespaces.push_ns(None, value)?;
     } else {
-        state.current_attributes.push(TempAttributeData {
+        ctx.current_attributes.push(TempAttributeData {
             prefix,
             local,
             value,
@@ -702,56 +704,53 @@ fn process_attribute<'input>(
 }
 
 fn process_element<'input>(
-    tag_name: TagNameSpan<'input>,
     end_token: xmlparser::ElementEnd<'input>,
     token_span: StrSpan<'input>,
-    state: &mut ParserState<'input>,
-    doc: &mut Document<'input>,
-) -> Result<(), Error> {
-    if tag_name.name.is_empty() {
+    ctx: &mut Context<'input>,
+) -> Result<()> {
+    if ctx.tag_name.name.is_empty() {
         // May occur in XML like this:
         // <!DOCTYPE test [ <!ENTITY p '</p>'> ]>
         // <root>&p;</root>
 
         if let xmlparser::ElementEnd::Close(..) = end_token {
-            return Err(Error::UnexpectedEntityCloseTag(err_pos_from_span(
-                doc.text, token_span,
-            )));
+            return Err(Error::UnexpectedEntityCloseTag(
+                ctx.err_pos_from_span(token_span),
+            ));
         } else {
             unreachable!("should be already checked by the xmlparser");
         }
     }
 
-    let namespaces = resolve_namespaces(state.namespace_start_idx, state.parent_id, doc);
-    state.namespace_start_idx = doc.namespaces.tree_order.len();
+    let namespaces = ctx.resolve_namespaces();
+    ctx.namespace_start_idx = ctx.doc.namespaces.tree_order.len();
 
-    let attributes = resolve_attributes(state, namespaces, doc)?;
+    let attributes = resolve_attributes(namespaces, ctx)?;
 
     match end_token {
         xmlparser::ElementEnd::Empty => {
-            let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
-            let new_element_id = doc.append(
+            let tag_ns_idx = get_ns_idx_by_prefix(namespaces, ctx.tag_name.prefix, ctx)?;
+            let new_element_id = ctx.append_node(
                 NodeKind::Element {
                     tag_name: ExpandedNameIndexed {
                         namespace_idx: tag_ns_idx,
-                        local_name: tag_name.name.as_str(),
+                        local_name: ctx.tag_name.name.as_str(),
                     },
                     attributes,
                     namespaces,
                 },
-                tag_name.span.start()..token_span.end(),
-                state,
+                ctx.tag_name.span.start()..token_span.end(),
             )?;
-            state.awaiting_subtree.push(new_element_id);
+            ctx.awaiting_subtree.push(new_element_id);
         }
         xmlparser::ElementEnd::Close(prefix, local) => {
             let prefix = prefix.as_str();
             let local = local.as_str();
 
-            let parent_node = &mut doc.nodes[state.parent_id.get_usize()];
+            let parent_node = &mut ctx.doc.nodes[ctx.parent_id.get_usize()];
             // should never panic as we start with the single prefix of the
             // root node and always push another one when changing the parent
-            let parent_prefix = *state.parent_prefixes.last().unwrap();
+            let parent_prefix = *ctx.parent_prefixes.last().unwrap();
 
             #[cfg(feature = "positions")]
             {
@@ -763,77 +762,83 @@ fn process_element<'input>(
                     return Err(Error::UnexpectedCloseTag {
                         expected: gen_qname_string(parent_prefix, tag_name.local_name),
                         actual: gen_qname_string(prefix, local),
-                        pos: err_pos_from_span(doc.text, token_span),
+                        pos: ctx.err_pos_from_span(token_span),
                     });
                 }
             }
-            state.awaiting_subtree.push(state.parent_id);
+            ctx.awaiting_subtree.push(ctx.parent_id);
 
             if let Some(id) = parent_node.parent {
-                state.parent_id = id;
-                state.parent_prefixes.pop();
-                debug_assert!(!state.parent_prefixes.is_empty());
+                ctx.parent_id = id;
+                ctx.parent_prefixes.pop();
+                debug_assert!(!ctx.parent_prefixes.is_empty());
             } else {
                 unreachable!("should be already checked by the xmlparser");
             }
         }
         xmlparser::ElementEnd::Open => {
-            let tag_ns_idx = get_ns_idx_by_prefix(doc, namespaces, tag_name.prefix)?;
-            state.parent_id = doc.append(
+            let tag_ns_idx = get_ns_idx_by_prefix(namespaces, ctx.tag_name.prefix, ctx)?;
+            ctx.parent_id = ctx.append_node(
                 NodeKind::Element {
                     tag_name: ExpandedNameIndexed {
                         namespace_idx: tag_ns_idx,
-                        local_name: tag_name.name.as_str(),
+                        local_name: ctx.tag_name.name.as_str(),
                     },
                     attributes,
                     namespaces,
                 },
-                tag_name.span.start()..token_span.end(),
-                state,
+                ctx.tag_name.span.start()..token_span.end(),
             )?;
-            state.parent_prefixes.push(tag_name.prefix.as_str());
+            ctx.parent_prefixes.push(ctx.tag_name.prefix.as_str());
         }
     }
 
     Ok(())
 }
 
-fn resolve_namespaces(start_idx: usize, parent_id: NodeId, doc: &mut Document) -> ShortRange {
-    if let NodeKind::Element { ref namespaces, .. } = doc.nodes[parent_id.get_usize()].kind {
-        let parent_ns = *namespaces;
-        if start_idx == doc.namespaces.tree_order.len() {
-            return parent_ns;
-        }
+impl Context<'_> {
+    fn resolve_namespaces(&mut self) -> ShortRange {
+        if let NodeKind::Element { ref namespaces, .. } =
+            self.doc.nodes[self.parent_id.get_usize()].kind
+        {
+            let parent_ns = *namespaces;
+            if self.namespace_start_idx == self.doc.namespaces.tree_order.len() {
+                return parent_ns;
+            }
 
-        for i in parent_ns.to_urange() {
-            if !doc.namespaces.exists(
-                start_idx,
-                doc.namespaces.get(doc.namespaces.tree_order[i]).name,
-            ) {
-                doc.namespaces.push_ref(i);
+            for i in parent_ns.to_urange() {
+                if !self.doc.namespaces.exists(
+                    self.namespace_start_idx,
+                    self.doc
+                        .namespaces
+                        .get(self.doc.namespaces.tree_order[i])
+                        .name,
+                ) {
+                    self.doc.namespaces.push_ref(i);
+                }
             }
         }
-    }
 
-    (start_idx..doc.namespaces.tree_order.len()).into()
+        (self.namespace_start_idx..self.doc.namespaces.tree_order.len()).into()
+    }
 }
 
 fn resolve_attributes<'input>(
-    state: &mut ParserState<'input>,
     namespaces: ShortRange,
-    doc: &mut Document<'input>,
-) -> Result<ShortRange, Error> {
-    if state.current_attributes.is_empty() {
+    ctx: &mut Context<'input>,
+) -> Result<ShortRange> {
+    if ctx.current_attributes.is_empty() {
         return Ok(ShortRange::new(0, 0));
     }
 
-    if doc.attributes.len() + state.current_attributes.len() >= core::u32::MAX as usize {
+    if ctx.doc.attributes.len() + ctx.current_attributes.len() >= core::u32::MAX as usize {
         return Err(Error::AttributesLimitReached);
     }
 
-    let start_idx = doc.attributes.len();
+    let start_idx = ctx.doc.attributes.len();
 
-    for attr in state.current_attributes.drain(..) {
+    let current_attributes = core::mem::take(&mut ctx.current_attributes);
+    for attr in current_attributes {
         let namespace_idx = if attr.prefix.as_str() == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace. This namespace is added
@@ -844,7 +849,7 @@ fn resolve_attributes<'input>(
             // always has no value.'
             None
         } else {
-            get_ns_idx_by_prefix(doc, namespaces, attr.prefix)?
+            get_ns_idx_by_prefix(namespaces, attr.prefix, ctx)?
         };
 
         let attr_name = ExpandedNameIndexed {
@@ -853,15 +858,14 @@ fn resolve_attributes<'input>(
         };
 
         // Check for duplicated attributes.
-        if doc.attributes[start_idx..]
-            .iter()
-            .any(|attr| attr.name.as_expanded_name(doc) == attr_name.as_expanded_name(doc))
-        {
-            let pos = err_pos_from_qname(doc.text, attr.prefix, attr.local);
+        if ctx.doc.attributes[start_idx..].iter().any(|attr| {
+            attr.name.as_expanded_name(&ctx.doc) == attr_name.as_expanded_name(&ctx.doc)
+        }) {
+            let pos = ctx.err_pos_from_qname(attr.prefix, attr.local);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
-        doc.attributes.push(AttributeData {
+        ctx.doc.attributes.push(AttributeData {
             name: attr_name,
             value: attr.value,
             #[cfg(feature = "positions")]
@@ -869,32 +873,22 @@ fn resolve_attributes<'input>(
         });
     }
 
-    Ok((start_idx..doc.attributes.len()).into())
+    Ok((start_idx..ctx.doc.attributes.len()).into())
 }
 
-fn process_text<'input>(
-    text: StrSpan<'input>,
-    loop_detector: &mut LoopDetector,
-    state: &mut ParserState<'input>,
-    doc: &mut Document<'input>,
-) -> Result<(), Error> {
+fn process_text<'input>(text: StrSpan<'input>, ctx: &mut Context<'input>) -> Result<()> {
     // Add text as is if it has only valid characters.
     if !text.as_str().bytes().any(|b| b == b'&' || b == b'\r') {
-        append_text(
-            StringStorage::Borrowed(text.as_str()),
-            text.range(),
-            doc,
-            state,
-        )?;
-        state.after_text = true;
+        append_text(StringStorage::Borrowed(text.as_str()), text.range(), ctx)?;
+        ctx.after_text = true;
         return Ok(());
     }
 
     let mut text_buffer = String::with_capacity(32);
     let mut is_as_is = false; // TODO: explain
-    let mut stream = Stream::from_substr(doc.text, text.range());
+    let mut stream = Stream::from_substr(ctx.doc.text, text.range());
     while !stream.at_end() {
-        match parse_next_chunk(&mut stream, &state.entities)? {
+        match parse_next_chunk(&mut stream, &ctx.entities)? {
             NextChunk::Byte(c) => {
                 if is_as_is {
                     text_buffer.push_raw(c);
@@ -905,7 +899,7 @@ fn process_text<'input>(
             }
             NextChunk::Char(c) => {
                 for b in CharToBytes::new(c) {
-                    if loop_detector.depth > 0 {
+                    if ctx.loop_detector.depth > 0 {
                         text_buffer.push_from_text(b, stream.at_end());
                     } else {
                         // Characters not from entity should be added as is.
@@ -920,32 +914,29 @@ fn process_text<'input>(
 
                 if !text_buffer.is_empty() {
                     let storage = StringStorage::new_owned(text_buffer.as_str());
-                    append_text(storage, text.range(), doc, state)?;
+                    append_text(storage, text.range(), ctx)?;
                     text_buffer.clear();
-                    state.after_text = true;
+                    ctx.after_text = true;
                 }
 
-                loop_detector.inc_references(&stream)?;
-                loop_detector.inc_depth(&stream)?;
+                ctx.loop_detector.inc_references(&stream)?;
+                ctx.loop_detector.inc_depth(&stream)?;
 
-                let parser = xmlparser::Tokenizer::from_fragment(doc.text, fragment.range());
-                let mut tag_name = TagNameSpan::new_null();
-                process_tokens(parser, loop_detector, &mut tag_name, state, doc)?;
+                let parser = xmlparser::Tokenizer::from_fragment(ctx.doc.text, fragment.range());
+                let prev_tag_name = ctx.tag_name;
+                ctx.tag_name = TagNameSpan::new_null();
+                process_tokens(parser, ctx)?;
                 text_buffer.clear();
+                ctx.tag_name = prev_tag_name;
 
-                loop_detector.dec_depth();
+                ctx.loop_detector.dec_depth();
             }
         }
     }
 
     if !text_buffer.is_empty() {
-        append_text(
-            StringStorage::new_owned(text_buffer),
-            text.range(),
-            doc,
-            state,
-        )?;
-        state.after_text = true;
+        append_text(StringStorage::new_owned(text_buffer), text.range(), ctx)?;
+        ctx.after_text = true;
     }
 
     Ok(())
@@ -956,18 +947,12 @@ fn process_text<'input>(
 fn process_cdata<'input>(
     text: StrSpan<'input>,
     span: StrSpan<'input>,
-    state: &mut ParserState<'input>,
-    doc: &mut Document<'input>,
-) -> Result<(), Error> {
+    ctx: &mut Context<'input>,
+) -> Result<()> {
     // Add text as is if it has only valid characters.
     if !text.as_str().as_bytes().contains(&b'\r') {
-        append_text(
-            StringStorage::Borrowed(text.as_str()),
-            span.range(),
-            doc,
-            state,
-        )?;
-        state.after_text = true;
+        append_text(StringStorage::Borrowed(text.as_str()), span.range(), ctx)?;
+        ctx.after_text = true;
         return Ok(());
     }
 
@@ -980,13 +965,8 @@ fn process_cdata<'input>(
     }
 
     if !text_buffer.is_empty() {
-        append_text(
-            StringStorage::new_owned(text_buffer),
-            text.range(),
-            doc,
-            state,
-        )?;
-        state.after_text = true;
+        append_text(StringStorage::new_owned(text_buffer), text.range(), ctx)?;
+        ctx.after_text = true;
     }
 
     Ok(())
@@ -995,12 +975,11 @@ fn process_cdata<'input>(
 fn append_text<'input>(
     text: StringStorage<'input>,
     range: Range<usize>,
-    doc: &mut Document<'input>,
-    state: &mut ParserState<'input>,
-) -> Result<(), Error> {
-    if state.after_text {
+    ctx: &mut Context<'input>,
+) -> Result<()> {
+    if ctx.after_text {
         // Prepend to a previous text node.
-        if let Some(node) = doc.nodes.last_mut() {
+        if let Some(node) = ctx.doc.nodes.last_mut() {
             if let NodeKind::Text(ref mut prev_text) = node.kind {
                 let text_str = text.as_str();
                 let prev_text_str = prev_text.as_str();
@@ -1012,7 +991,7 @@ fn append_text<'input>(
             }
         }
     } else {
-        doc.append(NodeKind::Text(text), range, state)?;
+        ctx.append_node(NodeKind::Text(text), range)?;
     }
 
     Ok(())
@@ -1024,10 +1003,7 @@ enum NextChunk<'a> {
     Text(StrSpan<'a>),
 }
 
-fn parse_next_chunk<'a>(
-    stream: &mut Stream<'a>,
-    entities: &[Entity<'a>],
-) -> Result<NextChunk<'a>, Error> {
+fn parse_next_chunk<'a>(stream: &mut Stream<'a>, entities: &[Entity<'a>]) -> Result<NextChunk<'a>> {
     debug_assert!(!stream.at_end());
 
     // Safe, because we already checked that stream is not at the end.
@@ -1060,14 +1036,12 @@ fn parse_next_chunk<'a>(
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
 fn normalize_attribute<'input>(
-    input: &'input str,
     text: StrSpan<'input>,
-    entities: &[Entity],
-    loop_detector: &mut LoopDetector,
-) -> Result<StringStorage<'input>, Error> {
+    ctx: &mut Context<'input>,
+) -> Result<StringStorage<'input>> {
     if is_normalization_required(&text) {
         let mut text_buffer = String::with_capacity(32);
-        _normalize_attribute(input, text, entities, loop_detector, &mut text_buffer)?;
+        _normalize_attribute(text, &mut text_buffer, ctx)?;
         Ok(StringStorage::new_owned(text_buffer))
     } else {
         Ok(StringStorage::Borrowed(text.as_str()))
@@ -1086,14 +1060,8 @@ fn is_normalization_required(text: &StrSpan) -> bool {
     text.as_str().bytes().any(check)
 }
 
-fn _normalize_attribute(
-    input: &str,
-    text: StrSpan,
-    entities: &[Entity],
-    loop_detector: &mut LoopDetector,
-    buffer: &mut String,
-) -> Result<(), Error> {
-    let mut stream = Stream::from_substr(input, text.range());
+fn _normalize_attribute(text: StrSpan, buffer: &mut String, ctx: &mut Context) -> Result<()> {
+    let mut stream = Stream::from_substr(ctx.doc.text, text.range());
     while !stream.at_end() {
         // Safe, because we already checked that the stream is not at the end.
         let c = stream.curr_byte_unchecked();
@@ -1109,7 +1077,7 @@ fn _normalize_attribute(
         match stream.try_consume_reference() {
             Some(Reference::Char(ch)) => {
                 for b in CharToBytes::new(ch) {
-                    if loop_detector.depth > 0 {
+                    if ctx.loop_detector.depth > 0 {
                         // Escaped `<` inside an ENTITY is an error.
                         // Escaped `<` outside an ENTITY is ok.
                         if b == b'<' {
@@ -1126,12 +1094,12 @@ fn _normalize_attribute(
                     }
                 }
             }
-            Some(Reference::Entity(name)) => match entities.iter().find(|e| e.name == name) {
+            Some(Reference::Entity(name)) => match ctx.entities.iter().find(|e| e.name == name) {
                 Some(entity) => {
-                    loop_detector.inc_references(&stream)?;
-                    loop_detector.inc_depth(&stream)?;
-                    _normalize_attribute(input, entity.value, entities, loop_detector, buffer)?;
-                    loop_detector.dec_depth();
+                    ctx.loop_detector.inc_references(&stream)?;
+                    ctx.loop_detector.inc_depth(&stream)?;
+                    _normalize_attribute(entity.value, buffer, ctx)?;
+                    ctx.loop_detector.dec_depth();
                 }
                 None => {
                     let pos = stream.gen_text_pos_from(start);
@@ -1149,10 +1117,10 @@ fn _normalize_attribute(
 }
 
 fn get_ns_idx_by_prefix(
-    doc: &Document,
     range: ShortRange,
     prefix: StrSpan,
-) -> Result<Option<NamespaceIdx>, Error> {
+    ctx: &Context,
+) -> Result<Option<NamespaceIdx>> {
     // Prefix CAN be empty when the default namespace was defined.
     //
     // Example:
@@ -1163,9 +1131,9 @@ fn get_ns_idx_by_prefix(
         Some(prefix.as_str())
     };
 
-    let idx = doc.namespaces.tree_order[range.to_urange()]
+    let idx = ctx.doc.namespaces.tree_order[range.to_urange()]
         .iter()
-        .find(|idx| doc.namespaces.get(**idx).name == prefix_opt);
+        .find(|idx| ctx.doc.namespaces.get(**idx).name == prefix_opt);
 
     match idx {
         Some(idx) => Ok(Some(*idx)),
@@ -1176,7 +1144,7 @@ fn get_ns_idx_by_prefix(
                 //
                 // Example:
                 // <e random:a='b'/>
-                let pos = err_pos_from_span(doc.text, prefix);
+                let pos = ctx.err_pos_from_span(prefix);
                 Err(Error::UnknownNamespace(prefix.as_str().to_string(), pos))
             } else {
                 // If an URI was not found and prefix IS empty than
@@ -1196,15 +1164,6 @@ fn gen_qname_string(prefix: &str, local: &str) -> String {
     } else {
         alloc::format!("{}:{}", prefix, local)
     }
-}
-
-fn err_pos_from_span(input: &str, text: StrSpan) -> TextPos {
-    Stream::from_substr(input, text.range()).gen_text_pos()
-}
-
-fn err_pos_from_qname(input: &str, prefix: StrSpan, local: StrSpan) -> TextPos {
-    let err_span = if prefix.is_empty() { local } else { prefix };
-    err_pos_from_span(input, err_span)
 }
 
 /// Iterate over `char` by `u8`.
