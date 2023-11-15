@@ -345,7 +345,6 @@ struct TempAttributeData<'input> {
     prefix: &'input str,
     local: &'input str,
     value: StringStorage<'input>,
-    #[cfg(feature = "positions")]
     pos: usize,
 }
 
@@ -725,7 +724,6 @@ fn process_attribute<'input>(
             prefix,
             local,
             value,
-            #[cfg(feature = "positions")]
             pos: attr_pos,
         });
     }
