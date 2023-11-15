@@ -32,9 +32,12 @@ use core::ops::Range;
 
 use alloc::vec::Vec;
 
-pub use xmlparser::TextPos;
-
 mod parse;
+mod tokenizer;
+
+#[cfg(test)]
+mod tokenizer_tests;
+
 pub use crate::parse::*;
 
 /// The <http://www.w3.org/XML/1998/namespace> URI.
@@ -46,6 +49,29 @@ const NS_XML_PREFIX: &str = "xml";
 pub const NS_XMLNS_URI: &str = "http://www.w3.org/2000/xmlns/";
 /// The string 'xmlns', which is used to declare new namespaces
 const XMLNS: &str = "xmlns";
+
+/// Position in text.
+///
+/// Position indicates a row/line and a column in the original text. Starting from 1:1.
+#[allow(missing_docs)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct TextPos {
+    pub row: u32,
+    pub col: u32,
+}
+
+impl TextPos {
+    /// Constructs a new `TextPos`.
+    pub fn new(row: u32, col: u32) -> TextPos {
+        TextPos { row, col }
+    }
+}
+
+impl fmt::Display for TextPos {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:{}", self.row, self.col)
+    }
+}
 
 /// An XML tree container.
 ///
@@ -173,7 +199,7 @@ impl<'input> Document<'input> {
     /// ```
     #[inline]
     pub fn text_pos_at(&self, pos: usize) -> TextPos {
-        xmlparser::Stream::from(self.text).gen_text_pos_from(pos)
+        tokenizer::Stream::new(self.text).gen_text_pos_from(pos)
     }
 
     /// Returns the input text of the original document.

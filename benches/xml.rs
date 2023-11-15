@@ -1,42 +1,6 @@
 use bencher::Bencher;
 use bencher::{benchmark_group, benchmark_main};
 
-fn tiny_xmlparser(bencher: &mut Bencher) {
-    let text = std::fs::read_to_string("fonts.conf").unwrap();
-    bencher.iter(|| {
-        for t in xmlparser::Tokenizer::from(text.as_str()) {
-            let _ = t.unwrap();
-        }
-    })
-}
-
-fn medium_xmlparser(bencher: &mut Bencher) {
-    let text = std::fs::read_to_string("medium.svg").unwrap();
-    bencher.iter(|| {
-        for t in xmlparser::Tokenizer::from(text.as_str()) {
-            let _ = t.unwrap();
-        }
-    })
-}
-
-fn large_xmlparser(bencher: &mut Bencher) {
-    let text = std::fs::read_to_string("large.plist").unwrap();
-    bencher.iter(|| {
-        for t in xmlparser::Tokenizer::from(text.as_str()) {
-            let _ = t.unwrap();
-        }
-    })
-}
-
-fn huge_xmlparser(bencher: &mut Bencher) {
-    let text = std::fs::read_to_string("huge.xml").unwrap();
-    bencher.iter(|| {
-        for t in xmlparser::Tokenizer::from(text.as_str()) {
-            let _ = t.unwrap();
-        }
-    })
-}
-
 fn tiny_xmlrs(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| {
@@ -114,7 +78,9 @@ fn huge_quick_xml(bencher: &mut Bencher) {
 
 fn tiny_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
-    bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
+    let mut opt = roxmltree::ParsingOptions::default();
+    opt.allow_dtd = true;
+    bencher.iter(|| roxmltree::Document::parse_with_options(&text, opt).unwrap())
 }
 
 fn medium_roxmltree(bencher: &mut Bencher) {
@@ -343,13 +309,6 @@ benchmark_group!(
     large_sdx_document,
     huge_sdx_document,
 );
-benchmark_group!(
-    xmlparser,
-    tiny_xmlparser,
-    medium_xmlparser,
-    large_xmlparser,
-    huge_xmlparser
-);
 benchmark_group!(xmlrs, tiny_xmlrs, medium_xmlrs, large_xmlrs, huge_xmlrs);
 benchmark_group!(
     quick_xml,
@@ -372,7 +331,6 @@ benchmark_main!(
     roxmltree,
     xmltree,
     sdx,
-    xmlparser,
     xmlrs,
     quick_xml,
     roxmltree_iter,
@@ -384,7 +342,6 @@ benchmark_main!(
     roxmltree,
     xmltree,
     sdx,
-    xmlparser,
     xmlrs,
     quick_xml,
     libxml2,

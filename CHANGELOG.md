@@ -6,8 +6,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Changed
+- `xmlparser` is no longer a dependency and its fork is used internally.
+- ~5% faster parsing.
 - Fallback to `Rc` when `Arc` isn't available.
 - Bump MSRV to 1.60
+- `Error` variants have changed quite a lot.
+
+### Fixed
+- `ParsingOptions::allow_dtd = false` would not trigger an error when an empty DTD was present.
+
+### Removed
+- The `xmlparser` dependency.
 
 ## [0.18.1] - 2023-09-30
 ### Added

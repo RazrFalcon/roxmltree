@@ -1,8 +1,11 @@
 #![allow(clippy::bool_assert_comparison)]
 
-extern crate roxmltree;
-
 use roxmltree::*;
+
+#[test]
+fn error_size() {
+    assert!(::std::mem::size_of::<Error>() <= 64);
+}
 
 #[test]
 fn root_element_01() {

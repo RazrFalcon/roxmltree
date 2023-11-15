@@ -18,10 +18,6 @@ assert!(elem.has_tag_name("rect"));
 Because in some cases all you need is to retrieve some data from an XML document.
 And for such cases, we can make a lot of optimizations.
 
-As for *roxmltree*, it's fast not only because it's read-only, but also because
-it uses [xmlparser], which is many times faster than [xml-rs].
-See the [Performance](#performance) section for details.
-
 ## Parsing behavior
 
 Sadly, XML can be parsed in many different ways. *roxmltree* tries to mimic the
@@ -48,7 +44,7 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | Writing                         |                  | ✓                   | ✓                | ✓                |
 | No **unsafe**                   | ✓                |                     | ✓                |                  |
 | Language                        | Rust             | C                   | Rust             | Rust             |
-| Dependencies                    | **1**            | -                   | 2                | 2                |
+| Dependencies                    | **0**            | -                   | 2                | 2                |
 | Tested version                  | 0.18.0           | Apple-provided      | 0.10.3           | 0.3.2            |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              |
 
@@ -78,50 +74,50 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 
 ## Performance
 
-### Parsing
+Here are some benchmarks comparing `roxmltree` to other XML tree libraries.
 
 ```text
-test huge_roxmltree      ... bench:   3,147,424 ns/iter (+/- 49,153)
+test huge_roxmltree      ... bench:   2,922,042 ns/iter (+/- 111,661)
 test huge_libxml2        ... bench:   6,850,666 ns/iter (+/- 306,180)
 test huge_sdx_document   ... bench:   9,440,412 ns/iter (+/- 117,106)
 test huge_xmltree        ... bench:  41,662,316 ns/iter (+/- 850,360)
 
-test large_roxmltree     ... bench:   1,594,201 ns/iter (+/- 27,425)
+test large_roxmltree     ... bench:   1,449,773 ns/iter (+/- 98,596)
 test large_libxml2       ... bench:   3,250,606 ns/iter (+/- 140,201)
 test large_sdx_document  ... bench:   4,242,162 ns/iter (+/- 99,740)
 test large_xmltree       ... bench:  13,980,228 ns/iter (+/- 229,363)
 
-test medium_roxmltree    ... bench:     418,929 ns/iter (+/- 4,843)
+test medium_roxmltree    ... bench:     401,220 ns/iter (+/- 6,064)
 test medium_libxml2      ... bench:     950,984 ns/iter (+/- 34,099)
 test medium_sdx_document ... bench:   1,618,270 ns/iter (+/- 23,466)
 test medium_xmltree      ... bench:   4,315,974 ns/iter (+/- 31,849)
 
-test tiny_roxmltree      ... bench:       2,654 ns/iter (+/- 103)
+test tiny_roxmltree      ... bench:       2,482 ns/iter (+/- 128)
 test tiny_libxml2        ... bench:       8,931 ns/iter (+/- 235)
 test tiny_sdx_document   ... bench:      11,658 ns/iter (+/- 82)
 test tiny_xmltree        ... bench:      20,215 ns/iter (+/- 303)
 ```
 
-*roxmltree* uses [xmlparser] internally,
-while *sdx-document* uses its own implementation,
-*xmltree* uses the [xml-rs].
-Here is a comparison between *xmlparser*, *xml-rs* and *quick-xml*:
+When comparing to streaming XML parsers `roxmltree` is slightly slower than `quick-xml`,
+but still way faster than `xmlrs`.
+Note that streaming parsers usually do not provide a proper string unescaping,
+DTD resolving and namespaces support.
 
 ```text
-test huge_xmlparser      ... bench:   1,672,879 ns/iter (+/- 20,140)
-test huge_quick_xml      ... bench:   2,396,037 ns/iter (+/- 39,752)
+test huge_quick_xml      ... bench:   2,922,042 ns/iter (+/- 111,661)
+test huge_roxmltree      ... bench:   3,147,424 ns/iter (+/- 49,153)
 test huge_xmlrs          ... bench:  36,258,312 ns/iter (+/- 180,438)
 
-test large_xmlparser     ... bench:     730,787 ns/iter (+/- 22,924)
 test large_quick_xml     ... bench:   1,250,053 ns/iter (+/- 21,943)
+test large_roxmltree     ... bench:   1,449,773 ns/iter (+/- 98,596)
 test large_xmlrs         ... bench:  11,239,516 ns/iter (+/- 76,937)
 
 test medium_quick_xml    ... bench:     206,232 ns/iter (+/- 2,157)
-test medium_xmlparser    ... bench:     240,737 ns/iter (+/- 4,531)
+test medium_roxmltree    ... bench:     401,220 ns/iter (+/- 6,064)
 test medium_xmlrs        ... bench:   3,975,916 ns/iter (+/- 44,967)
 
-test tiny_xmlparser      ... bench:       1,078 ns/iter (+/- 17)
 test tiny_quick_xml      ... bench:       2,233 ns/iter (+/- 70)
+test tiny_roxmltree      ... bench:       2,482 ns/iter (+/- 128)
 test tiny_xmlrs          ... bench:      17,155 ns/iter (+/- 429)
 ```
 
@@ -135,7 +131,6 @@ You can try running the benchmarks yourself by running `cargo bench` in the `ben
 
 [xml-rs]: https://crates.io/crates/xml-rs
 [quick-xml]: https://crates.io/crates/quick-xml
-[xmlparser]: https://crates.io/crates/xmlparser
 [rust-libxml]: https://github.com/KWARC/rust-libxml
 
 ## Memory overhead
@@ -161,12 +156,6 @@ and at 6.8GB RAM when `positions` is disabled.
 
 - This library must not panic. Any panic should be considered a critical bug and reported.
 - This library forbids `unsafe` code.
-
-## Non-goals
-
-- Complete XML support
-- Tree modification and writing
-- XPath/XQuery
 
 ## API
 

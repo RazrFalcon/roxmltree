@@ -14,14 +14,11 @@ rust-version = "1.60"
 
 [workspace]
 members = ["benches"]
-exclude = ["test-apps", "testing-tools"]
-
-[dependencies]
-xmlparser = { version = "0.13.6", default-features = false }
+exclude = ["testing-tools"]
 
 [features]
 default = ["std", "positions"]
-std = ["xmlparser/std"]
+std = []
 # Enables Nodes and Attributes position in the original document preserving.
 # Increases memory usage by `usize` for each Node and Attribute.
 positions = []

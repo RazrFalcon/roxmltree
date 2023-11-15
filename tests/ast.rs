@@ -1,5 +1,3 @@
-extern crate roxmltree;
-
 use roxmltree::*;
 
 use std::fmt;
