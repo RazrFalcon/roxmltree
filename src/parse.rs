@@ -84,6 +84,10 @@ pub enum Error {
     /// The root node was opened but never closed.
     UnclosedRootNode,
 
+    /// An XML document can have only one XML declaration
+    /// and it must be at the start of the document.
+    UnexpectedDeclaration(TextPos),
+
     /// An XML with DTD detected.
     ///
     /// This error will be emitted only when `ParsingOptions::allow_dtd` is set to `false`.
@@ -97,12 +101,6 @@ pub enum Error {
 
     /// Indicates that too many namespaces were parsed.
     NamespacesLimitReached,
-
-    /// The steam ended earlier than we expected.
-    ///
-    /// Should only appear on invalid input data.
-    /// Errors in a valid XML should be handled by errors below.
-    UnexpectedEndOfStream,
 
     /// An invalid name.
     InvalidName(TextPos),
@@ -140,6 +138,11 @@ pub enum Error {
 
     /// An unknown token.
     UnknownToken(TextPos),
+
+    /// The steam ended earlier than we expected.
+    ///
+    /// Should only appear on invalid input data.
+    UnexpectedEndOfStream,
 }
 
 impl Error {
@@ -161,11 +164,11 @@ impl Error {
             Error::DuplicatedAttribute(_, pos) => pos,
             Error::NoRootNode => TextPos::new(1, 1),
             Error::UnclosedRootNode => TextPos::new(1, 1),
+            Error::UnexpectedDeclaration(pos) => pos,
             Error::DtdDetected => TextPos::new(1, 1),
             Error::NodesLimitReached => TextPos::new(1, 1),
             Error::AttributesLimitReached => TextPos::new(1, 1),
             Error::NamespacesLimitReached => TextPos::new(1, 1),
-            Error::UnexpectedEndOfStream => TextPos::new(1, 1),
             Error::InvalidName(pos) => pos,
             Error::NonXmlChar(_, pos) => pos,
             Error::InvalidChar(_, _, pos) => pos,
@@ -175,6 +178,7 @@ impl Error {
             Error::InvalidComment(pos) => pos,
             Error::InvalidCharacterData(pos) => pos,
             Error::UnknownToken(pos) => pos,
+            Error::UnexpectedEndOfStream => TextPos::new(1, 1),
         }
     }
 }
@@ -243,6 +247,9 @@ impl core::fmt::Display for Error {
             Error::UnclosedRootNode => {
                 write!(f, "the root node was opened but never closed")
             }
+            Error::UnexpectedDeclaration(pos) => {
+                write!(f, "unexpected XML declaration at {}", pos)
+            }
             Error::DtdDetected => {
                 write!(f, "XML with DTD detected")
             }
@@ -254,9 +261,6 @@ impl core::fmt::Display for Error {
             }
             Error::NamespacesLimitReached => {
                 write!(f, "more than 2^16 unique namespaces were parsed")
-            }
-            Error::UnexpectedEndOfStream => {
-                write!(f, "unexpected end of stream")
             }
             Error::InvalidName(pos) => {
                 write!(f, "invalid name token at {}", pos)
@@ -292,6 +296,9 @@ impl core::fmt::Display for Error {
             }
             Error::UnknownToken(pos) => {
                 write!(f, "unknown token at {}", pos)
+            }
+            Error::UnexpectedEndOfStream => {
+                write!(f, "unexpected end of stream")
             }
         }
     }

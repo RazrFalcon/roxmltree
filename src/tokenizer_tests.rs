@@ -907,7 +907,7 @@ test!(
 test!(
     declaration_err_10,
     " <?xml version='1.0'?>",
-    Token::Error("unknown token at 1:2".to_string())
+    Token::Error("unexpected XML declaration at 1:2".to_string())
 );
 
 // XML declaration allowed only at the start of the document.
@@ -915,14 +915,14 @@ test!(
     declaration_err_11,
     "<!-- comment --><?xml version='1.0'?>",
     Token::Comment(" comment ", 0..16),
-    Token::Error("unknown token at 1:17".to_string())
+    Token::Error("unexpected XML declaration at 1:17".to_string())
 );
 
 // Duplicate.
 test!(
     declaration_err_12,
     "<?xml version='1.0'?><?xml version='1.0'?>",
-    Token::Error("unknown token at 1:22".to_string())
+    Token::Error("unexpected XML declaration at 1:22".to_string())
 );
 
 test!(

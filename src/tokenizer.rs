@@ -359,8 +359,7 @@ fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'inp
 // PITarget ::= Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'))
 fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
     if s.starts_with(b"<?xml ") {
-        // TODO: better error
-        return Err(Error::UnknownToken(s.gen_text_pos()));
+        return Err(Error::UnexpectedDeclaration(s.gen_text_pos()));
     }
 
     let start = s.pos();
