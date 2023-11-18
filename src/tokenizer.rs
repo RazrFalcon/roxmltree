@@ -108,19 +108,19 @@ impl XmlByteExt for u8 {
 /// from which it was parsed.
 #[must_use]
 #[derive(Clone, Copy)]
-pub struct StrSpan<'a> {
-    text: &'a str,
+pub struct StrSpan<'input> {
+    text: &'input str,
     start: usize,
 }
 
-impl<'a> From<&'a str> for StrSpan<'a> {
+impl<'input> From<&'input str> for StrSpan<'input> {
     #[inline]
-    fn from(text: &'a str) -> Self {
+    fn from(text: &'input str) -> Self {
         StrSpan { text, start: 0 }
     }
 }
 
-impl<'a> StrSpan<'a> {
+impl<'input> StrSpan<'input> {
     #[inline]
     pub fn from_substr(text: &str, start: usize, end: usize) -> StrSpan {
         debug_assert!(start <= end);
@@ -136,60 +136,64 @@ impl<'a> StrSpan<'a> {
     }
 
     #[inline]
-    pub fn as_str(&self) -> &'a str {
+    pub fn as_str(&self) -> &'input str {
         self.text
     }
 
     #[inline]
-    fn slice_region(&self, start: usize, end: usize) -> &'a str {
+    fn slice_region(&self, start: usize, end: usize) -> &'input str {
         &self.text[start..end]
     }
 }
 
-pub enum Token<'a> {
+pub enum Token<'input> {
     // <?target content?>
-    ProcessingInstruction(&'a str, Option<&'a str>, Range<usize>),
+    ProcessingInstruction(&'input str, Option<&'input str>, Range<usize>),
 
     // <!-- text -->
-    Comment(&'a str, Range<usize>),
+    Comment(&'input str, Range<usize>),
 
     // <!ENTITY ns_extend "http://test.com">
-    EntityDeclaration(&'a str, StrSpan<'a>),
+    EntityDeclaration(&'input str, StrSpan<'input>),
 
     // <ns:elem
-    ElementStart(&'a str, &'a str, usize),
+    ElementStart(&'input str, &'input str, usize),
 
     // ns:attr="value"
-    Attribute(usize, &'a str, &'a str, StrSpan<'a>),
+    Attribute(usize, &'input str, &'input str, StrSpan<'input>),
 
-    ElementEnd(ElementEnd<'a>, Range<usize>),
+    ElementEnd(ElementEnd<'input>, Range<usize>),
 
     // Contains text between elements including whitespaces.
     // Basically everything between `>` and `<`.
     // Except `]]>`, which is not allowed and will lead to an error.
-    Text(&'a str, Range<usize>),
+    Text(&'input str, Range<usize>),
 
     // <![CDATA[text]]>
-    Cdata(&'a str, Range<usize>),
+    Cdata(&'input str, Range<usize>),
 }
 
 /// `ElementEnd` token.
 #[derive(Clone, Copy)]
-pub enum ElementEnd<'a> {
+pub enum ElementEnd<'input> {
     /// Indicates `>`
     Open,
     /// Indicates `</ns:name>`
-    Close(&'a str, &'a str),
+    Close(&'input str, &'input str),
     /// Indicates `/>`
     Empty,
 }
 
-pub trait XmlEvents<'a> {
-    fn token(&mut self, token: Token<'a>) -> Result<()>;
+pub trait XmlEvents<'input> {
+    fn token(&mut self, token: Token<'input>) -> Result<()>;
 }
 
 // document ::= prolog element Misc*
-pub fn parse<'a>(text: &'a str, allow_dtd: bool, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+pub fn parse<'input>(
+    text: &'input str,
+    allow_dtd: bool,
+    events: &mut dyn XmlEvents<'input>,
+) -> Result<()> {
     let s = &mut Stream::new(text);
 
     // Skip UTF-8 BOM.
@@ -228,7 +232,7 @@ pub fn parse<'a>(text: &'a str, allow_dtd: bool, events: &mut dyn XmlEvents<'a>)
 }
 
 // Misc ::= Comment | PI | S
-fn parse_misc<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_misc<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
     while !s.at_end() {
         s.skip_spaces();
         if s.starts_with(b"<!--") {
@@ -331,7 +335,7 @@ fn parse_standalone(s: &mut Stream) -> Result<()> {
 }
 
 // '<!--' ((Char - '-') | ('-' (Char - '-')))* '-->'
-fn parse_comment<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(4);
     let text = s.consume_chars(|s, c| !(c == '-' && s.starts_with(b"-->")))?;
@@ -353,7 +357,7 @@ fn parse_comment<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Resu
 
 // PI       ::= '<?' PITarget (S (Char* - (Char* '?>' Char*)))? '?>'
 // PITarget ::= Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'))
-fn parse_pi<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
     if s.starts_with(b"<?xml ") {
         // TODO: better error
         return Err(Error::UnknownToken(s.gen_text_pos()));
@@ -377,7 +381,7 @@ fn parse_pi<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()
     Ok(())
 }
 
-fn parse_doctype<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_doctype<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     parse_doctype_start(s)?;
     s.skip_spaces();
@@ -479,7 +483,10 @@ fn parse_external_id(s: &mut Stream) -> Result<bool> {
 // EntityDecl  ::= GEDecl | PEDecl
 // GEDecl      ::= '<!ENTITY' S Name S EntityDef S? '>'
 // PEDecl      ::= '<!ENTITY' S '%' S Name S PEDef S? '>'
-fn parse_entity_decl<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_entity_decl<'input>(
+    s: &mut Stream<'input>,
+    events: &mut dyn XmlEvents<'input>,
+) -> Result<()> {
     s.advance(8);
     s.consume_spaces()?;
 
@@ -507,7 +514,10 @@ fn parse_entity_decl<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> 
 //                             | PEReference | Reference)* "'"
 // ExternalID  ::= 'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral
 // NDataDecl   ::= S 'NDATA' S Name
-fn parse_entity_def<'a>(s: &mut Stream<'a>, is_ge: bool) -> Result<Option<StrSpan<'a>>> {
+fn parse_entity_def<'input>(
+    s: &mut Stream<'input>,
+    is_ge: bool,
+) -> Result<Option<StrSpan<'input>>> {
     let c = s.curr_byte()?;
     match c {
         b'"' | b'\'' => {
@@ -550,7 +560,7 @@ fn consume_decl(s: &mut Stream) -> Result<()> {
 
 // element ::= EmptyElemTag | STag content ETag
 // '<' Name (S Attribute)* S? '>'
-fn parse_element<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_element<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(1); // <
     let (prefix, local) = s.consume_qname()?;
@@ -605,7 +615,10 @@ fn parse_element<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Resu
 }
 
 // content ::= CharData? ((element | Reference | CDSect | PI | Comment) CharData?)*
-pub fn parse_content<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+pub fn parse_content<'input>(
+    s: &mut Stream<'input>,
+    events: &mut dyn XmlEvents<'input>,
+) -> Result<()> {
     while !s.at_end() {
         match s.curr_byte() {
             Ok(b'<') => match s.next_byte() {
@@ -638,7 +651,7 @@ pub fn parse_content<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> 
 // CDStart ::= '<![CDATA['
 // CData   ::= (Char* - (Char* ']]>' Char*))
 // CDEnd   ::= ']]>'
-fn parse_cdata<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_cdata<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(9); // <![CDATA[
     let text = s.consume_chars(|s, c| !(c == ']' && s.starts_with(b"]]>")))?;
@@ -649,7 +662,10 @@ fn parse_cdata<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result
 }
 
 // '</' Name S? '>'
-fn parse_close_element<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_close_element<'input>(
+    s: &mut Stream<'input>,
+    events: &mut dyn XmlEvents<'input>,
+) -> Result<()> {
     let start = s.pos();
     s.advance(2); // </
 
@@ -665,7 +681,7 @@ fn parse_close_element<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -
     Ok(())
 }
 
-fn parse_text<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<()> {
+fn parse_text<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     let text = s.consume_chars(|_, c| c != '<')?;
 
@@ -684,11 +700,11 @@ fn parse_text<'a>(s: &mut Stream<'a>, events: &mut dyn XmlEvents<'a>) -> Result<
 
 /// Representation of the [Reference](https://www.w3.org/TR/xml/#NT-Reference) value.
 #[derive(Clone, Copy)]
-pub enum Reference<'a> {
+pub enum Reference<'input> {
     /// An entity reference.
     ///
     /// <https://www.w3.org/TR/xml/#NT-EntityRef>
-    Entity(&'a str),
+    Entity(&'input str),
 
     /// A character reference.
     ///
@@ -697,15 +713,15 @@ pub enum Reference<'a> {
 }
 
 #[derive(Clone)]
-pub struct Stream<'a> {
+pub struct Stream<'input> {
     pos: usize,
     end: usize,
-    span: StrSpan<'a>,
+    span: StrSpan<'input>,
 }
 
-impl<'a> Stream<'a> {
+impl<'input> Stream<'input> {
     #[inline]
-    pub fn new(text: &'a str) -> Self {
+    pub fn new(text: &'input str) -> Self {
         Stream {
             pos: 0,
             end: text.len(),
@@ -714,7 +730,7 @@ impl<'a> Stream<'a> {
     }
 
     #[inline]
-    pub fn from_substr(text: &'a str, fragment: Range<usize>) -> Self {
+    pub fn from_substr(text: &'input str, fragment: Range<usize>) -> Self {
         Stream {
             pos: fragment.start,
             end: fragment.end,
@@ -802,7 +818,7 @@ impl<'a> Stream<'a> {
     }
 
     #[inline]
-    fn consume_bytes<F: Fn(u8) -> bool>(&mut self, f: F) -> &'a str {
+    fn consume_bytes<F: Fn(u8) -> bool>(&mut self, f: F) -> &'input str {
         let start = self.pos;
         self.skip_bytes(f);
         self.slice_back(start)
@@ -815,7 +831,7 @@ impl<'a> Stream<'a> {
     }
 
     #[inline]
-    fn consume_chars<F>(&mut self, f: F) -> Result<&'a str>
+    fn consume_chars<F>(&mut self, f: F) -> Result<&'input str>
     where
         F: Fn(&Stream, char) -> bool,
     {
@@ -843,17 +859,17 @@ impl<'a> Stream<'a> {
     }
 
     #[inline]
-    fn chars(&self) -> str::Chars<'a> {
+    fn chars(&self) -> str::Chars<'input> {
         self.span.as_str()[self.pos..self.end].chars()
     }
 
     #[inline]
-    fn slice_back(&self, pos: usize) -> &'a str {
+    fn slice_back(&self, pos: usize) -> &'input str {
         self.span.slice_region(pos, self.pos)
     }
 
     #[inline]
-    fn slice_back_span(&self, pos: usize) -> StrSpan<'a> {
+    fn slice_back_span(&self, pos: usize) -> StrSpan<'input> {
         StrSpan::from_substr(self.span.text, pos, self.pos)
     }
 
@@ -893,7 +909,7 @@ impl<'a> Stream<'a> {
     }
 
     /// Consumes according to: <https://www.w3.org/TR/xml/#NT-Reference>
-    pub fn try_consume_reference(&mut self) -> Option<Reference<'a>> {
+    pub fn try_consume_reference(&mut self) -> Option<Reference<'input>> {
         let start = self.pos();
 
         // Consume reference on a substream.
@@ -907,7 +923,7 @@ impl<'a> Stream<'a> {
     }
 
     #[inline(never)]
-    fn consume_reference(&mut self) -> Option<Reference<'a>> {
+    fn consume_reference(&mut self) -> Option<Reference<'input>> {
         if !self.try_consume_byte(b'&') {
             return None;
         }
@@ -948,7 +964,7 @@ impl<'a> Stream<'a> {
     }
 
     /// Consumes according to: <https://www.w3.org/TR/xml/#NT-Name>
-    fn consume_name(&mut self) -> Result<&'a str> {
+    fn consume_name(&mut self) -> Result<&'input str> {
         let start = self.pos();
         self.skip_name()?;
 
@@ -987,7 +1003,7 @@ impl<'a> Stream<'a> {
     ///
     /// Consumes according to: <https://www.w3.org/TR/xml-names/#ns-qualnames>
     #[inline(never)]
-    fn consume_qname(&mut self) -> Result<(&'a str, &'a str)> {
+    fn consume_qname(&mut self) -> Result<(&'input str, &'input str)> {
         let start = self.pos();
 
         let mut splitter = None;
