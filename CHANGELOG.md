@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Fallback to `Rc` when `Arc` isn't available.
 - Bump MSRV to 1.60
 - `Error` variants have changed quite a lot.
+- XML declaration validation was simplified. We no longer check for attributes content.
+  Meaning that `version`, `encoding` and `standalone` can contain any value now.
+  But we still do check attribute names and order.<br/>
+  And while we did validated those attributes before, they weren't really affecting
+  the parser in any way. Therefore the parsing behavior is mostly unchanged.
 
 ### Fixed
 - `ParsingOptions::allow_dtd = false` would not trigger an error when an empty DTD was present.

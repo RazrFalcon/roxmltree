@@ -77,22 +77,22 @@ There is also `elementtree` and `treexml` crates, but they are abandoned for a l
 Here are some benchmarks comparing `roxmltree` to other XML tree libraries.
 
 ```text
-test huge_roxmltree      ... bench:   2,922,042 ns/iter (+/- 111,661)
+test huge_roxmltree      ... bench:   2,997,887 ns/iter (+/- 48,976)
 test huge_libxml2        ... bench:   6,850,666 ns/iter (+/- 306,180)
 test huge_sdx_document   ... bench:   9,440,412 ns/iter (+/- 117,106)
 test huge_xmltree        ... bench:  41,662,316 ns/iter (+/- 850,360)
 
-test large_roxmltree     ... bench:   1,449,773 ns/iter (+/- 98,596)
+test large_roxmltree     ... bench:   1,494,886 ns/iter (+/- 30,384)
 test large_libxml2       ... bench:   3,250,606 ns/iter (+/- 140,201)
 test large_sdx_document  ... bench:   4,242,162 ns/iter (+/- 99,740)
 test large_xmltree       ... bench:  13,980,228 ns/iter (+/- 229,363)
 
-test medium_roxmltree    ... bench:     401,220 ns/iter (+/- 6,064)
+test medium_roxmltree    ... bench:     421,137 ns/iter (+/- 13,855)
 test medium_libxml2      ... bench:     950,984 ns/iter (+/- 34,099)
 test medium_sdx_document ... bench:   1,618,270 ns/iter (+/- 23,466)
 test medium_xmltree      ... bench:   4,315,974 ns/iter (+/- 31,849)
 
-test tiny_roxmltree      ... bench:       2,482 ns/iter (+/- 128)
+test tiny_roxmltree      ... bench:       2,522 ns/iter (+/- 31)
 test tiny_libxml2        ... bench:       8,931 ns/iter (+/- 235)
 test tiny_sdx_document   ... bench:      11,658 ns/iter (+/- 82)
 test tiny_xmltree        ... bench:      20,215 ns/iter (+/- 303)
@@ -104,20 +104,20 @@ Note that streaming parsers usually do not provide a proper string unescaping,
 DTD resolving and namespaces support.
 
 ```text
-test huge_quick_xml      ... bench:   2,922,042 ns/iter (+/- 111,661)
+test huge_quick_xml      ... bench:   2,997,887 ns/iter (+/- 48,976)
 test huge_roxmltree      ... bench:   3,147,424 ns/iter (+/- 49,153)
 test huge_xmlrs          ... bench:  36,258,312 ns/iter (+/- 180,438)
 
 test large_quick_xml     ... bench:   1,250,053 ns/iter (+/- 21,943)
-test large_roxmltree     ... bench:   1,449,773 ns/iter (+/- 98,596)
+test large_roxmltree     ... bench:   1,494,886 ns/iter (+/- 30,384)
 test large_xmlrs         ... bench:  11,239,516 ns/iter (+/- 76,937)
 
 test medium_quick_xml    ... bench:     206,232 ns/iter (+/- 2,157)
-test medium_roxmltree    ... bench:     401,220 ns/iter (+/- 6,064)
+test medium_roxmltree    ... bench:     421,137 ns/iter (+/- 13,855)
 test medium_xmlrs        ... bench:   3,975,916 ns/iter (+/- 44,967)
 
 test tiny_quick_xml      ... bench:       2,233 ns/iter (+/- 70)
-test tiny_roxmltree      ... bench:       2,482 ns/iter (+/- 128)
+test tiny_roxmltree      ... bench:       2,522 ns/iter (+/- 31)
 test tiny_xmlrs          ... bench:      17,155 ns/iter (+/- 429)
 ```
 

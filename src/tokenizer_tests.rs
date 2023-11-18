@@ -856,24 +856,6 @@ test!(
 );
 
 test!(
-    declaration_err_02,
-    "<?xml version='1.0' encoding='*invalid*'?>",
-    Token::Error("expected '\'' not '*' at 1:31".to_string())
-);
-
-test!(
-    declaration_err_03,
-    "<?xml version='2.0'?>",
-    Token::Error("expected '1.' at 1:16".to_string())
-);
-
-test!(
-    declaration_err_04,
-    "<?xml version='1.0' standalone='true'?>",
-    Token::Error("expected 'yes', 'no' at 1:33".to_string())
-);
-
-test!(
     declaration_err_05,
     "<?xml version='1.0' yes='true'?>",
     Token::Error("expected '?>' at 1:21".to_string())

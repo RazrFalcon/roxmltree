@@ -265,71 +265,28 @@ fn parse_declaration(s: &mut Stream) -> Result<()> {
         Ok(())
     }
 
-    s.advance(6);
+    s.advance(5); // <?xml
+    consume_spaces(s)?;
 
-    parse_version_info(s)?;
+    // The `version` "attribute" is mandatory.
+    if !s.starts_with(b"version") {
+        // Will trigger the InvalidString error, which is what we want.
+        return s.skip_string(b"version");
+    }
+    let _ = parse_attribute(s)?;
     consume_spaces(s)?;
 
     if s.starts_with(b"encoding") {
-        parse_encoding_decl(s)?;
+        let _ = parse_attribute(s)?;
         consume_spaces(s)?;
     }
 
     if s.starts_with(b"standalone") {
-        parse_standalone(s)?
+        let _ = parse_attribute(s)?;
     }
 
     s.skip_spaces();
     s.skip_string(b"?>")?;
-
-    Ok(())
-}
-
-// TODO: simplify
-// VersionInfo ::= S 'version' Eq ("'" VersionNum "'" | '"' VersionNum '"')
-// VersionNum  ::= '1.' [0-9]+
-fn parse_version_info(s: &mut Stream) -> Result<()> {
-    s.skip_spaces();
-    s.skip_string(b"version")?;
-    s.consume_eq()?;
-    let quote = s.consume_quote()?;
-
-    s.skip_string(b"1.")?;
-    s.skip_bytes(|c| c.is_ascii_digit());
-    s.consume_byte(quote)?;
-    Ok(())
-}
-
-// EncodingDecl ::= S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" )
-// EncName      ::= [A-Za-z] ([A-Za-z0-9._] | '-')*
-fn parse_encoding_decl(s: &mut Stream) -> Result<()> {
-    s.advance(8); // encoding
-    s.consume_eq()?;
-    let quote = s.consume_quote()?;
-    // [A-Za-z] ([A-Za-z0-9._] | '-')*
-    // TODO: check that first byte is [A-Za-z]
-    let _ = s.consume_bytes(
-        |c| matches!(c, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'-' | b'_'),
-    );
-    s.consume_byte(quote)?;
-    Ok(())
-}
-
-// SDDecl ::= S 'standalone' Eq (("'" ('yes' | 'no') "'") | ('"' ('yes' | 'no') '"'))
-fn parse_standalone(s: &mut Stream) -> Result<()> {
-    s.advance(10); // standalone
-    s.consume_eq()?;
-    let quote = s.consume_quote()?;
-
-    let start = s.pos();
-    let value = s.consume_name()?;
-
-    if !matches!(value, "yes" | "no") {
-        let pos = s.gen_text_pos_from(start);
-        return Err(Error::InvalidString("yes', 'no", pos));
-    }
-
-    s.consume_byte(quote)?;
 
     Ok(())
 }
@@ -592,6 +549,9 @@ fn parse_element<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'inp
                     s.consume_spaces()?;
                 }
 
+                // Manual inlining of `parse_attribute` for performance.
+                // We cannot mark `parse_attribute` as `#[inline(always)]`
+                // because it will blow up the binary size.
                 let (prefix, local) = s.consume_qname()?;
                 s.consume_eq()?;
                 let quote = s.consume_quote()?;
@@ -611,6 +571,22 @@ fn parse_element<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'inp
     }
 
     Ok(())
+}
+
+// Attribute ::= Name Eq AttValue
+fn parse_attribute<'input>(
+    s: &mut Stream<'input>,
+) -> Result<(&'input str, &'input str, StrSpan<'input>)> {
+    let (prefix, local) = s.consume_qname()?;
+    s.consume_eq()?;
+    let quote = s.consume_quote()?;
+    let quote_c = quote as char;
+    // The attribute value must not contain the < character.
+    let value_start = s.pos();
+    s.skip_chars(|_, c| c != quote_c && c != '<')?;
+    let value = s.slice_back_span(value_start);
+    s.consume_byte(quote)?;
+    Ok((prefix, local, value))
 }
 
 // content ::= CharData? ((element | Reference | CDSect | PI | Comment) CharData?)*
