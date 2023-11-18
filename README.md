@@ -45,7 +45,7 @@ For more details see [docs/parsing.md](https://github.com/RazrFalcon/roxmltree/b
 | No **unsafe**                   | ✓                |                     | ✓                |                  |
 | Language                        | Rust             | C                   | Rust             | Rust             |
 | Dependencies                    | **0**            | -                   | 2                | 2                |
-| Tested version                  | 0.18.0           | Apple-provided      | 0.10.3           | 0.3.2            |
+| Tested version                  | 0.19.0           | Apple-provided      | 0.10.3           | 0.3.2            |
 | License                         | MIT / Apache-2.0 | MIT                 | MIT              | MIT              |
 
 Legend:
