@@ -82,6 +82,7 @@
 - text_009 - escaped text
 - text_010 - text around elements
 - text_011 - mixed character references in text
+- text_012 - non-ASCII text
 - tree_001 - all node types
 - tree_002 - BOM
 - tree_003 - Windows-1251 encoding

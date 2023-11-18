@@ -283,6 +283,7 @@ test!(text_008);
 test!(text_009);
 test!(text_010);
 test!(text_011);
+test!(text_012);
 test!(tree_001);
 test!(tree_002);
 // test!(tree_003); // unsupported

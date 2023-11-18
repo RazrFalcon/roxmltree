@@ -920,7 +920,7 @@ fn process_text<'input>(
         return Ok(());
     }
 
-    let mut text_buffer = String::with_capacity(32);
+    let mut text_buffer = TextBuffer::new();
     let mut is_as_is = false; // TODO: explain
     let mut stream = Stream::from_substr(ctx.doc.text, range.clone());
     while !stream.at_end() {
@@ -949,7 +949,7 @@ fn process_text<'input>(
                 is_as_is = false;
 
                 if !text_buffer.is_empty() {
-                    let storage = StringStorage::new_owned(text_buffer.as_str());
+                    let storage = StringStorage::new_owned(text_buffer.to_str());
                     append_text(storage, range.clone(), ctx)?;
                     text_buffer.clear();
                     ctx.after_text = true;
@@ -971,7 +971,7 @@ fn process_text<'input>(
     }
 
     if !text_buffer.is_empty() {
-        append_text(StringStorage::new_owned(text_buffer), range, ctx)?;
+        append_text(StringStorage::new_owned(text_buffer.finish()), range, ctx)?;
         ctx.after_text = true;
     }
 
@@ -992,7 +992,7 @@ fn process_cdata<'input>(
         return Ok(());
     }
 
-    let mut text_buffer = String::with_capacity(32);
+    let mut text_buffer = TextBuffer::new();
     let count = text.chars().count();
     for (i, c) in text.chars().enumerate() {
         for b in CharToBytes::new(c) {
@@ -1001,7 +1001,7 @@ fn process_cdata<'input>(
     }
 
     if !text_buffer.is_empty() {
-        append_text(StringStorage::new_owned(text_buffer), range, ctx)?;
+        append_text(StringStorage::new_owned(text_buffer.finish()), range, ctx)?;
         ctx.after_text = true;
     }
 
@@ -1076,9 +1076,9 @@ fn normalize_attribute<'input>(
     ctx: &mut Context<'input>,
 ) -> Result<StringStorage<'input>> {
     if is_normalization_required(&text) {
-        let mut text_buffer = String::with_capacity(32);
+        let mut text_buffer = TextBuffer::new();
         _normalize_attribute(text, &mut text_buffer, ctx)?;
-        Ok(StringStorage::new_owned(text_buffer))
+        Ok(StringStorage::new_owned(text_buffer.finish()))
     } else {
         Ok(StringStorage::Borrowed(text.as_str()))
     }
@@ -1096,7 +1096,7 @@ fn is_normalization_required(text: &StrSpan) -> bool {
     text.as_str().bytes().any(check)
 }
 
-fn _normalize_attribute(text: StrSpan, buffer: &mut String, ctx: &mut Context) -> Result<()> {
+fn _normalize_attribute(text: StrSpan, buffer: &mut TextBuffer, ctx: &mut Context) -> Result<()> {
     let mut stream = Stream::from_substr(ctx.doc.text, text.range());
     while !stream.at_end() {
         // Safe, because we already checked that the stream is not at the end.
@@ -1239,16 +1239,21 @@ impl Iterator for CharToBytes {
     }
 }
 
-trait StringExt {
-    fn push_raw(&mut self, c: u8);
-    fn push_from_attr(&mut self, current: u8, next: Option<u8>);
-    fn push_from_text(&mut self, c: u8, at_end: bool);
+struct TextBuffer {
+    buffer: Vec<u8>,
 }
 
-impl StringExt for String {
+impl TextBuffer {
+    #[inline]
+    fn new() -> Self {
+        TextBuffer {
+            buffer: Vec::with_capacity(32),
+        }
+    }
+
     #[inline]
     fn push_raw(&mut self, c: u8) {
-        self.push(c as char);
+        self.buffer.push(c);
     }
 
     fn push_from_attr(&mut self, mut current: u8, next: Option<u8>) {
@@ -1263,26 +1268,48 @@ impl StringExt for String {
             _ => current,
         };
 
-        self.push(current as char);
+        self.buffer.push(current);
     }
 
     // Translate \r\n and any \r that is not followed by \n into a single \n character.
     //
     // https://www.w3.org/TR/xml/#sec-line-ends
     fn push_from_text(&mut self, c: u8, at_end: bool) {
-        if self.as_bytes().last() == Some(&b'\r') {
-            self.pop();
-            self.push('\n');
+        if self.buffer.last() == Some(&b'\r') {
+            let idx = self.buffer.len() - 1;
+            self.buffer[idx] = b'\n';
 
             if at_end && c == b'\r' {
-                self.push('\n');
+                self.buffer.push(b'\n');
             } else if c != b'\n' {
-                self.push(c as char);
+                self.buffer.push(c);
             }
         } else if at_end && c == b'\r' {
-            self.push('\n');
+            self.buffer.push(b'\n');
         } else {
-            self.push(c as char);
+            self.buffer.push(c);
         }
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.buffer.is_empty()
+    }
+
+    #[inline]
+    fn to_str(&self) -> &str {
+        // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
+        core::str::from_utf8(&self.buffer).unwrap()
+    }
+
+    #[inline]
+    fn finish(self) -> String {
+        // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
+        String::from_utf8(self.buffer).unwrap()
     }
 }
