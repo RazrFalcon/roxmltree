@@ -9,7 +9,7 @@ description = "Represent an XML as a read-only tree."
 repository = "https://github.com/RazrFalcon/roxmltree"
 documentation = "https://docs.rs/roxmltree/"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 rust-version = "1.60"
 
 [workspace]

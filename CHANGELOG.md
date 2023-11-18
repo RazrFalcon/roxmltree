@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - ~5% faster parsing.
 - Fallback to `Rc` when `Arc` isn't available.
 - Bump MSRV to 1.60
+- Bump edition to 2021
 - `Error` variants have changed quite a lot.
 - XML declaration validation was simplified. We no longer check for attributes content.
   Meaning that `version`, `encoding` and `standalone` can contain any value now.
