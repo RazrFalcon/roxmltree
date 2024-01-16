@@ -1,5 +1,5 @@
 /*!
-Represent an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
+Represent an [XML](https://www.w3.org/TR/xml/) document as a read-only tree.
 
 The root point of the documentations is [`Document::parse`].
 

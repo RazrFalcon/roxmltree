@@ -4,7 +4,7 @@
 [![Documentation](https://docs.rs/roxmltree/badge.svg)](https://docs.rs/roxmltree)
 [![Rust 1.60+](https://img.shields.io/badge/rust-1.60+-orange.svg)](https://www.rust-lang.org)
 
-Represents an [XML 1.0](https://www.w3.org/TR/xml/) document as a read-only tree.
+Represents an [XML](https://www.w3.org/TR/xml/) document as a read-only tree.
 
 ```rust
 // Find element by id.
