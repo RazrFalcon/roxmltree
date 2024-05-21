@@ -490,6 +490,10 @@ struct AttributeData<'input> {
     value: StringStorage<'input>,
     #[cfg(feature = "positions")]
     range: Range<usize>,
+    #[cfg(feature = "positions-extra-attr")]
+    qname_len: u8,
+    #[cfg(feature = "positions-extra-attr")]
+    eq_len: u8, // includes any surrounding spaces
 }
 
 /// An attribute.
@@ -586,6 +590,43 @@ impl<'a, 'input> Attribute<'a, 'input> {
     #[inline]
     pub fn range(&self) -> Range<usize> {
         self.data.range.clone()
+    }
+
+    /// Returns attribute's qname's range in bytes in the original document.
+    ///
+    /// ```text
+    /// <e n:attr='value'/>
+    ///    ^^^^^^
+    /// ```
+    ///
+    /// This method will return incorrect data if the attribute's qname is longer than 255 bytes,
+    /// although it will not panic or exhibit undefined behavior.
+    #[cfg(feature = "positions-extra-attr")]
+    #[inline]
+    pub fn range_qname(&self) -> Range<usize> {
+        let end = self.data.range.start + self.data.qname_len as usize;
+        self.data.range.start..end
+    }
+
+    /// Returns attribute's value's range in bytes in the original document, excluding the surrounding quotes.
+    ///
+    /// If the attribute's value is an empty string then the `start` and `end` of this `Range` are equal, and indicate the closing quote.
+    ///
+    /// ```text
+    /// <e n:attr='value'/>
+    ///            ^^^^^
+    /// ```
+    ///
+    /// This method will return incorrect data if the attribute's qname is longer than 255 bytes
+    /// or if there are more than 254 spaces surrounding the attribute's equal sign,
+    /// although it will not panic or exhibit undefined behavior.
+    #[cfg(feature = "positions-extra-attr")]
+    #[inline]
+    pub fn range_value(&self) -> Range<usize> {
+        // +1 on start and -1 on end are to exclude the quotes around the value (all valid quotes are 1 byte)
+        let start = self.data.range.start + self.data.qname_len as usize + self.data.eq_len as usize + 1;
+        let end = self.data.range.end - 1;
+        start..end
     }
 }
 

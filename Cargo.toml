@@ -22,3 +22,6 @@ std = []
 # Enables Nodes and Attributes position in the original document preserving.
 # Increases memory usage by `Range<usize>` for each Node and Attribute.
 positions = []
+# Enables ranges for each Attribute's qname and value individually.
+# Increases memory usage by two `u8`s for each Attribute.
+positions-extra-attr = ["positions"]

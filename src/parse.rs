@@ -353,6 +353,10 @@ struct TempAttributeData<'input> {
     local: &'input str,
     value: StringStorage<'input>,
     range: Range<usize>,
+    #[allow(unused)] // only used for feature positions-extra-attr
+    qname_len: u8,
+    #[allow(unused)] // only used for feature positions-extra-attr
+    eq_len: u8,
 }
 
 impl<'input> Document<'input> {
@@ -644,8 +648,8 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
 
                 self.after_text = false;
             }
-            tokenizer::Token::Attribute(range, prefix, local, value) => {
-                process_attribute(range, prefix, local, value, self)?;
+            tokenizer::Token::Attribute(range, qname_len, eq_len, prefix, local, value) => {
+                process_attribute(range, qname_len, eq_len, prefix, local, value, self)?;
             }
             tokenizer::Token::ElementEnd(end, range) => {
                 process_element(end, range, self)?;
@@ -666,6 +670,8 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
 #[allow(clippy::too_many_arguments)]
 fn process_attribute<'input>(
     range: Range<usize>,
+    qname_len: u8,
+    eq_len: u8,
     prefix: &'input str,
     local: &'input str,
     value: StrSpan<'input>,
@@ -732,6 +738,8 @@ fn process_attribute<'input>(
             local,
             value,
             range,
+            qname_len,
+            eq_len,
         });
     }
 
@@ -909,6 +917,10 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
             value: attr.value,
             #[cfg(feature = "positions")]
             range: attr.range,
+            #[cfg(feature = "positions-extra-attr")]
+            qname_len: attr.qname_len,
+            #[cfg(feature = "positions-extra-attr")]
+            eq_len: attr.eq_len,
         });
     }
 
