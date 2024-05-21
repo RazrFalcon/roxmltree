@@ -352,7 +352,7 @@ struct TempAttributeData<'input> {
     prefix: &'input str,
     local: &'input str,
     value: StringStorage<'input>,
-    pos: usize,
+    range: Range<usize>,
 }
 
 impl<'input> Document<'input> {
@@ -644,8 +644,8 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
 
                 self.after_text = false;
             }
-            tokenizer::Token::Attribute(attr_start, prefix, local, value) => {
-                process_attribute(attr_start, prefix, local, value, self)?;
+            tokenizer::Token::Attribute(range, prefix, local, value) => {
+                process_attribute(range, prefix, local, value, self)?;
             }
             tokenizer::Token::ElementEnd(end, range) => {
                 process_element(end, range, self)?;
@@ -665,7 +665,7 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
 
 #[allow(clippy::too_many_arguments)]
 fn process_attribute<'input>(
-    attr_pos: usize,
+    range: Range<usize>,
     prefix: &'input str,
     local: &'input str,
     value: StrSpan<'input>,
@@ -676,7 +676,7 @@ fn process_attribute<'input>(
     if prefix == XMLNS {
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XMLNS_URI {
-            let pos = ctx.err_pos_at(attr_pos);
+            let pos = ctx.err_pos_at(range.start);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
@@ -687,13 +687,13 @@ fn process_attribute<'input>(
         // It MUST NOT be bound to any other namespace name.
         if local == NS_XML_PREFIX {
             if !is_xml_ns_uri {
-                let pos = ctx.err_pos_at(attr_pos);
+                let pos = ctx.err_pos_at(range.start);
                 return Err(Error::InvalidXmlPrefixUri(pos));
             }
         } else {
             // The xml namespace MUST NOT be bound to a non-xml prefix.
             if is_xml_ns_uri {
-                let pos = ctx.err_pos_at(attr_pos);
+                let pos = ctx.err_pos_at(range.start);
                 return Err(Error::UnexpectedXmlUri(pos));
             }
         }
@@ -704,7 +704,7 @@ fn process_attribute<'input>(
             .namespaces
             .exists(ctx.namespace_start_idx, Some(local))
         {
-            let pos = ctx.err_pos_at(attr_pos);
+            let pos = ctx.err_pos_at(range.start);
             return Err(Error::DuplicatedNamespace(local.to_string(), pos));
         }
 
@@ -715,13 +715,13 @@ fn process_attribute<'input>(
     } else if local == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XML_URI {
-            let pos = ctx.err_pos_at(attr_pos);
+            let pos = ctx.err_pos_at(range.start);
             return Err(Error::UnexpectedXmlUri(pos));
         }
 
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XMLNS_URI {
-            let pos = ctx.err_pos_at(attr_pos);
+            let pos = ctx.err_pos_at(range.start);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
@@ -731,7 +731,7 @@ fn process_attribute<'input>(
             prefix,
             local,
             value,
-            pos: attr_pos,
+            range,
         });
     }
 
@@ -888,7 +888,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
             // always has no value.'
             None
         } else {
-            get_ns_idx_by_prefix(namespaces, attr.pos, attr.prefix, ctx)?
+            get_ns_idx_by_prefix(namespaces, attr.range.start, attr.prefix, ctx)?
         };
 
         let attr_name = ExpandedNameIndexed {
@@ -900,7 +900,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
         if ctx.doc.attributes[start_idx..].iter().any(|attr| {
             attr.name.as_expanded_name(&ctx.doc) == attr_name.as_expanded_name(&ctx.doc)
         }) {
-            let pos = ctx.err_pos_at(attr.pos);
+            let pos = ctx.err_pos_at(attr.range.start);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
@@ -908,7 +908,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
             name: attr_name,
             value: attr.value,
             #[cfg(feature = "positions")]
-            pos: attr.pos,
+            range: attr.range,
         });
     }
 
