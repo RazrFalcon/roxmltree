@@ -490,9 +490,9 @@ struct AttributeData<'input> {
     value: StringStorage<'input>,
     #[cfg(feature = "positions")]
     range: Range<usize>,
-    #[cfg(feature = "positions-extra-attr")]
-    qname_len: u8,
-    #[cfg(feature = "positions-extra-attr")]
+    #[cfg(feature = "positions")]
+    qname_len: u16,
+    #[cfg(feature = "positions")]
     eq_len: u8, // includes any surrounding spaces
 }
 
@@ -599,12 +599,12 @@ impl<'a, 'input> Attribute<'a, 'input> {
     ///    ^^^^^^
     /// ```
     ///
-    /// This method will return incorrect data if the attribute's qname is longer than 255 bytes,
-    /// although it will not panic or exhibit undefined behavior.
-    #[cfg(feature = "positions-extra-attr")]
+    /// To reduce memory usage the qname length is limited by u16::MAX.
+    /// If the attribute exceeds that limit then the end of the returned range will be incorrect.
+    #[cfg(feature = "positions")]
     #[inline]
     pub fn range_qname(&self) -> Range<usize> {
-        let end = self.data.range.start + self.data.qname_len as usize;
+        let end = self.data.range.start + usize::from(self.data.qname_len);
         self.data.range.start..end
     }
 
@@ -617,14 +617,14 @@ impl<'a, 'input> Attribute<'a, 'input> {
     ///            ^^^^^
     /// ```
     ///
-    /// This method will return incorrect data if the attribute's qname is longer than 255 bytes
-    /// or if there are more than 254 spaces surrounding the attribute's equal sign,
-    /// although it will not panic or exhibit undefined behavior.
-    #[cfg(feature = "positions-extra-attr")]
+    /// To reduce memory usage the qname length is limited by u16::MAX,
+    /// and the number of spaces around the equal sign is limited by u8::MAX.
+    /// If the attribute exceeds those limits then the start of the returned range will be incorrect.
+    #[cfg(feature = "positions")]
     #[inline]
     pub fn range_value(&self) -> Range<usize> {
         // +1 on start and -1 on end are to exclude the quotes around the value (all valid quotes are 1 byte)
-        let start = self.data.range.start + self.data.qname_len as usize + self.data.eq_len as usize + 1;
+        let start = self.data.range.start + usize::from(self.data.qname_len) + usize::from(self.data.eq_len) + 1;
         let end = self.data.range.end - 1;
         start..end
     }

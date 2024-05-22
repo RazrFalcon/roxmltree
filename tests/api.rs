@@ -158,13 +158,10 @@ fn text_pos_01() {
     if let Some(attr) = node.attribute_node("a") {
         assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 4));
         assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 9));
-        #[cfg(feature = "positions-extra-attr")]
-        {
-            assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 4));
-            assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 5));
-            assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 7));
-            assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 8));
-        }
+        assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 4));
+        assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 5));
+        assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 7));
+        assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 8));
     }
 
     // first child is a text/whitespace, not a comment
@@ -191,13 +188,10 @@ fn text_pos_02() {
     if let Some(attr) = node.attribute_node(("http://www.w3.org", "a")) {
         assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 36));
         assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 44));
-        #[cfg(feature = "positions-extra-attr")]
-        {
-            assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 36));
-            assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 40));
-            assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 42));
-            assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 43));
-        }
+        assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 36));
+        assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 40));
+        assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 42));
+        assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 43));
     }
 }
 
@@ -216,7 +210,7 @@ fn text_pos_03() {
     assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(2, 5));
 }
 
-#[cfg(feature = "positions-extra-attr")]
+#[cfg(feature = "positions")]
 #[test]
 fn text_pos_04() {
     let data = "<n1:e xmlns:n1='http://www.w3.org' n1:a=''/>";
@@ -234,7 +228,7 @@ fn text_pos_04() {
 }
 }
 
-#[cfg(feature = "positions-extra-attr")]
+#[cfg(feature = "positions")]
 #[test]
 fn text_pos_05() {
     let data = "<n1:e xmlns:n1='http://www.w3.org' n1:a  =   'b'/>";
@@ -252,28 +246,9 @@ fn text_pos_05() {
     }
 }
 
-#[cfg(feature = "positions-extra-attr")]
+#[cfg(feature = "positions")]
 #[test]
 fn text_pos_06() {
-    //             0         1         2         3         4         5         6         7         8         9        10        11        12        13        14        15        16        17        18        19        20        21        22        23        24        25        26
-    let data = "<e a12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890='b'/>";
-
-    let doc = Document::parse(data).unwrap();
-    let node = doc.root_element();
-
-    if let Some(attr) = node.attribute_node("a") {
-        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 4));
-        assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 268));
-
-        // these are unreliable since qname.len > 255, but they still shouldn't panic
-        attr.range_qname();
-        attr.range_value();
-    }
-}
-
-#[cfg(feature = "positions-extra-attr")]
-#[test]
-fn text_pos_07() {
     //              0         1         2         3         4         5         6         7         8         9        10        11        12        13        14        15        16        17        18        19        20        21        22        23        24        25        26
     let data = "<e a                                                                                                    =                                                                                                                                                                'b'/>";
 
