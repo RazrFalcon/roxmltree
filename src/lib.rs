@@ -489,7 +489,7 @@ struct AttributeData<'input> {
     name: ExpandedNameIndexed<'input>,
     value: StringStorage<'input>,
     #[cfg(feature = "positions")]
-    pos: usize,
+    range: Range<usize>,
 }
 
 /// An attribute.
@@ -569,10 +569,23 @@ impl<'a, 'input> Attribute<'a, 'input> {
     /// ```
     ///
     /// [Document::text_pos_at]: struct.Document.html#method.text_pos_at
+    #[deprecated(note="replaced by `range`")]
     #[cfg(feature = "positions")]
     #[inline]
     pub fn position(&self) -> usize {
-        self.data.pos
+        self.data.range.start
+    }
+
+    /// Returns attribute's range in bytes in the original document.
+    ///
+    /// ```text
+    /// <e n:attr='value'/>
+    ///    ^^^^^^^^^^^^^^
+    /// ```
+    #[cfg(feature = "positions")]
+    #[inline]
+    pub fn range(&self) -> Range<usize> {
+        self.data.range.clone()
     }
 }
 

@@ -156,7 +156,8 @@ fn text_pos_01() {
     assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(4, 5));
 
     if let Some(attr) = node.attribute_node("a") {
-        assert_eq!(doc.text_pos_at(attr.position()), TextPos::new(1, 4));
+        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 4));
+        assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 9));
     }
 
     // first child is a text/whitespace, not a comment
@@ -181,7 +182,8 @@ fn text_pos_02() {
     assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
 
     if let Some(attr) = node.attribute_node(("http://www.w3.org", "a")) {
-        assert_eq!(doc.text_pos_at(attr.position()), TextPos::new(1, 36));
+        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 36));
+        assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 44));
     }
 }
 

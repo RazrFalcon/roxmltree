@@ -160,7 +160,7 @@ pub enum Token<'input> {
     ElementStart(&'input str, &'input str, usize),
 
     // ns:attr="value"
-    Attribute(usize, &'input str, &'input str, StrSpan<'input>),
+    Attribute(Range<usize>, &'input str, &'input str, StrSpan<'input>),
 
     ElementEnd(ElementEnd<'input>, Range<usize>),
 
@@ -561,7 +561,8 @@ fn parse_element<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'inp
                 s.skip_chars(|_, c| c != quote_c && c != '<')?;
                 let value = s.slice_back_span(value_start);
                 s.consume_byte(quote)?;
-                events.token(Token::Attribute(start, prefix, local, value))?;
+                let end = s.pos();
+                events.token(Token::Attribute(start..end, prefix, local, value))?;
             }
         }
     }
