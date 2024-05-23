@@ -90,7 +90,7 @@ impl<'a> xml::XmlEvents<'a> for EventsCollector<'a> {
             xml::Token::ElementStart(prefix, local, start) => {
                 Token::ElementStart(prefix, local, start)
             }
-            xml::Token::Attribute(_, prefix, local, value) => {
+            xml::Token::Attribute(_, _, _, prefix, local, value) => {
                 Token::Attribute(prefix, local, value.as_str())
             }
             xml::Token::ElementEnd(end, range) => Token::ElementEnd(

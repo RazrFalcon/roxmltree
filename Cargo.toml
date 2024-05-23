@@ -20,5 +20,6 @@ exclude = ["testing-tools"]
 default = ["std", "positions"]
 std = []
 # Enables Nodes and Attributes position in the original document preserving.
-# Increases memory usage by `Range<usize>` for each Node and Attribute.
+# Increases memory usage by `Range<usize>` for each Node.
+# Increases memory usage by `Range<usize>` + `u16` + `u8` for each Attribute.
 positions = []
