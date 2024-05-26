@@ -163,6 +163,9 @@ This library uses Rust's idiomatic API based on iterators.
 In case you are more familiar with browser/JS DOM APIs - you can check out
 [tests/dom-api.rs](tests/dom-api.rs) to see how it can be mapped onto the Rust one.
 
+Built on top of this API, a mapping to the [Serde data model](https://serde.rs/data-model.html)
+is available via the [`serde-roxmltree` crate](https://crates.io/crates/serde-roxmltree).
+
 ## License
 
 Licensed under either of
