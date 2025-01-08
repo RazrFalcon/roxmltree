@@ -756,7 +756,8 @@ impl<'input> Namespaces<'input> {
     fn shrink_to_fit(&mut self) {
         self.values.shrink_to_fit();
         self.tree_order.shrink_to_fit();
-        self.sorted_order.shrink_to_fit();
+        // Only needed to deduplicate namespaces during parsing.
+        self.sorted_order = Vec::new();
     }
 
     #[inline]
