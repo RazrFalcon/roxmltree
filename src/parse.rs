@@ -1012,11 +1012,8 @@ fn process_cdata<'input>(
     }
 
     let mut text_buffer = TextBuffer::new();
-    let count = text.chars().count();
-    for (i, c) in text.chars().enumerate() {
-        for b in CharToBytes::new(c) {
-            text_buffer.push_from_text(b, i + 1 == count);
-        }
+    for (i, b) in text.as_bytes().iter().enumerate() {
+        text_buffer.push_from_text(*b, i + 1 == text.len());
     }
 
     if !text_buffer.is_empty() {
