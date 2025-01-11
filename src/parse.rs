@@ -351,9 +351,9 @@ struct TempAttributeData<'input> {
     local: &'input str,
     value: StringStorage<'input>,
     range: Range<usize>,
-    #[allow(unused)] // only used for feature "positions"
+    #[cfg(feature = "positions")]
     qname_len: u16,
-    #[allow(unused)] // only used for feature "positions"
+    #[cfg(feature = "positions")]
     eq_len: u8,
 }
 
@@ -730,12 +730,17 @@ fn process_attribute<'input>(
 
         ctx.doc.namespaces.push_ns(None, value)?;
     } else {
+        #[cfg(not(feature = "positions"))]
+        let _ = (qname_len, eq_len);
+
         ctx.current_attributes.push(TempAttributeData {
             prefix,
             local,
             value,
             range,
+            #[cfg(feature = "positions")]
             qname_len,
+            #[cfg(feature = "positions")]
             eq_len,
         });
     }
