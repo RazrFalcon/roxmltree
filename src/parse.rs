@@ -1,5 +1,5 @@
 use alloc::string::{String, ToString};
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::ops::Range;
 
 use crate::{
@@ -337,13 +337,11 @@ pub struct ParsingOptions {
     pub nodes_limit: u32,
 }
 
-// Explicit for readability.
-#[allow(clippy::derivable_impls)]
 impl Default for ParsingOptions {
     fn default() -> Self {
         ParsingOptions {
             allow_dtd: false,
-            nodes_limit: core::u32::MAX,
+            nodes_limit: u32::MAX,
         }
     }
 }
@@ -487,7 +485,7 @@ impl LoopDetector {
             // Allow infinite amount of references at zero depth.
             Ok(())
         } else {
-            if self.references == core::u8::MAX {
+            if self.references == u8::MAX {
                 return Err(Error::EntityReferenceLoop(stream.gen_text_pos()));
             }
 
@@ -588,14 +586,13 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
         current_attributes: Vec::with_capacity(16),
         entities: Vec::new(),
         awaiting_subtree: Vec::new(),
-        parent_prefixes: Vec::new(),
+        parent_prefixes: vec![""],
         after_text: false,
         parent_id: NodeId::new(0),
         tag_name: TagNameSpan::new_null(),
         loop_detector: LoopDetector::default(),
         doc,
     };
-    ctx.parent_prefixes.push("");
 
     tokenizer::parse(text, opt.allow_dtd, &mut ctx)?;
 
@@ -878,7 +875,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
         return Ok(ShortRange::new(0, 0));
     }
 
-    if ctx.doc.attributes.len() + ctx.current_attributes.len() >= core::u32::MAX as usize {
+    if ctx.doc.attributes.len() + ctx.current_attributes.len() >= u32::MAX as usize {
         return Err(Error::AttributesLimitReached);
     }
 
@@ -1107,12 +1104,7 @@ fn normalize_attribute<'input>(
 fn is_normalization_required(text: &StrSpan) -> bool {
     // We assume that `&` indicates an entity or a character reference.
     // But in rare cases it can be just an another character.
-
-    fn check(c: u8) -> bool {
-        matches!(c, b'&' | b'\t' | b'\n' | b'\r')
-    }
-
-    text.as_str().bytes().any(check)
+    text.as_str().bytes().any(|c| matches!(c, b'&' | b'\t' | b'\n' | b'\r'))
 }
 
 fn _normalize_attribute(text: StrSpan, buffer: &mut TextBuffer, ctx: &mut Context) -> Result<()> {

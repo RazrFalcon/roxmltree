@@ -910,7 +910,7 @@ impl<'input> Stream<'input> {
         let reference = if self.try_consume_byte(b'#') {
             let (value, radix) = if self.try_consume_byte(b'x') {
                 let value =
-                    self.consume_bytes(|c| matches!(c, b'0'..=b'9' | b'A'..=b'F' | b'a'..=b'f'));
+                    self.consume_bytes(|c| c.is_ascii_hexdigit());
                 (value, 16)
             } else {
                 let value = self.consume_bytes(|c| c.is_ascii_digit());

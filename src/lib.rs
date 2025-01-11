@@ -332,8 +332,8 @@ struct ShortRange {
 impl From<Range<usize>> for ShortRange {
     #[inline]
     fn from(range: Range<usize>) -> Self {
-        debug_assert!(range.start <= core::u32::MAX as usize);
-        debug_assert!(range.end <= core::u32::MAX as usize);
+        debug_assert!(range.start <= u32::MAX as usize);
+        debug_assert!(range.end <= u32::MAX as usize);
         ShortRange::new(range.start as u32, range.end as u32)
     }
 }
@@ -365,7 +365,7 @@ impl NodeId {
     /// Construct a new `NodeId` from a `u32`.
     #[inline]
     pub fn new(id: u32) -> Self {
-        debug_assert!(id < core::u32::MAX);
+        debug_assert!(id < u32::MAX);
 
         // We are using `NonZeroU32` to reduce overhead of `Option<NodeId>`.
         NodeId(NonZeroU32::new(id + 1).unwrap())
@@ -395,7 +395,7 @@ impl From<usize> for NodeId {
     #[inline]
     fn from(id: usize) -> Self {
         // We already checked that `id` is limited by u32::MAX.
-        debug_assert!(id <= core::u32::MAX as usize);
+        debug_assert!(id <= u32::MAX as usize);
         NodeId::new(id as u32)
     }
 }
@@ -725,7 +725,7 @@ impl<'input> Namespaces<'input> {
         }) {
             Ok(sorted_idx) => self.sorted_order[sorted_idx],
             Err(sorted_idx) => {
-                if self.values.len() > core::u16::MAX as usize {
+                if self.values.len() > u16::MAX as usize {
                     return Err(Error::NamespacesLimitReached);
                 }
                 let idx = NamespaceIdx(self.values.len() as u16);
@@ -1373,7 +1373,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     /// Returns the last element child of this node.
     pub fn last_element_child(&self) -> Option<Self> {
-        self.children().filter(|n| n.is_element()).last()
+        self.children().filter(|n| n.is_element()).next_back()
     }
 
     /// Returns true if this node has siblings.
