@@ -242,6 +242,7 @@ test!(entity_err_006);
 test!(entity_err_007);
 test!(entity_err_008);
 test!(entity_err_009);
+test!(entity_err_010);
 test!(ns_001);
 test!(ns_002);
 test!(ns_003);

@@ -40,7 +40,6 @@ pub enum Error {
     /// Incorrect tree structure.
     ///
     /// expected, actual, position
-    #[allow(missing_docs)]
     UnexpectedCloseTag(String, String, TextPos),
 
     /// Entity value starts with a close tag.
@@ -818,7 +817,13 @@ fn process_element<'input>(
                 ctx.parent_prefixes.pop();
                 debug_assert!(!ctx.parent_prefixes.is_empty());
             } else {
-                unreachable!("should be already checked by the tokenizer");
+                // May occur in XML like this:
+                // <!DOCTYPE test [ <!ENTITY p '<p></p></p>'> ]>
+                // <p>&p;&p;
+
+                return Err(Error::UnexpectedEntityCloseTag(
+                    ctx.err_pos_at(token_range.start),
+                ));
             }
         }
         tokenizer::ElementEnd::Open => {
