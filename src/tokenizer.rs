@@ -25,7 +25,7 @@ impl XmlCharExt for char {
     fn is_xml_name_start(&self) -> bool {
         // Check for ASCII first.
         if *self as u32 <= 128 {
-            return matches!(*self as u8, b'A'..=b'Z' | b'a'..=b'z' | b':' | b'_');
+            return (*self as u8).is_xml_name_start();
         }
 
         matches!(*self as u32,
@@ -85,6 +85,10 @@ trait XmlByteExt {
     /// `[ \r\n\t]`
     fn is_xml_space(&self) -> bool;
 
+    /// Checks if the value is within the
+    /// [NameStartChar](https://www.w3.org/TR/xml/#NT-NameStartChar) range.
+    fn is_xml_name_start(&self) -> bool;
+
     /// Checks if byte is within the ASCII
     /// [Char](https://www.w3.org/TR/xml/#NT-Char) range.
     fn is_xml_name(&self) -> bool;
@@ -94,6 +98,11 @@ impl XmlByteExt for u8 {
     #[inline]
     fn is_xml_space(&self) -> bool {
         matches!(*self, b' ' | b'\t' | b'\n' | b'\r')
+    }
+
+    #[inline]
+    fn is_xml_name_start(&self) -> bool {
+        matches!(*self, b'A'..=b'Z' | b'a'..=b'z' | b':' | b'_')
     }
 
     #[inline]
@@ -1006,7 +1015,7 @@ impl<'input> Stream<'input> {
                 }
             } else {
                 // Fallback to Unicode code point.
-                match self.chars().nth(0) {
+                match self.chars().next() {
                     Some(c) if c.is_xml_name() => {
                         self.advance(c.len_utf8());
                     }
@@ -1025,20 +1034,25 @@ impl<'input> Stream<'input> {
             (self.span.slice_region(start, start), local)
         };
 
-        // Prefix must start with a `NameStartChar`.
-        if let Some(c) = prefix.chars().nth(0) {
-            if !c.is_xml_name_start() {
-                return Err(Error::InvalidName(self.gen_text_pos_from(start)));
+        fn is_xml_name_start(name: &str) -> bool {
+            if let Some(b) = name.as_bytes().first() {
+                if *b < 128 {
+                    return b.is_xml_name_start();
+                } else if let Some(c) = name.chars().next() {
+                    return c.is_xml_name_start();
+                }
             }
+
+            false
+        }
+
+        // Prefix must be empty or start with a `NameStartChar`.
+        if !prefix.is_empty() && !is_xml_name_start(prefix) {
+            return Err(Error::InvalidName(self.gen_text_pos_from(start)));
         }
 
         // Local name must start with a `NameStartChar`.
-        if let Some(c) = local.chars().nth(0) {
-            if !c.is_xml_name_start() {
-                return Err(Error::InvalidName(self.gen_text_pos_from(start)));
-            }
-        } else {
-            // If empty - error.
+        if !is_xml_name_start(local) {
             return Err(Error::InvalidName(self.gen_text_pos_from(start)));
         }
 
