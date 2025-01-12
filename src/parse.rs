@@ -547,10 +547,6 @@ impl<'input> Context<'input> {
 
         Ok(new_child_id)
     }
-
-    fn err_pos_at(&self, pos: usize) -> TextPos {
-        self.doc.text_pos_at(pos)
-    }
 }
 
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
@@ -632,7 +628,7 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
             }
             tokenizer::Token::ElementStart(prefix, local, start) => {
                 if prefix == XMLNS {
-                    let pos = self.err_pos_at(start + 1);
+                    let pos = self.doc.text_pos_at(start + 1);
                     return Err(Error::InvalidElementNamePrefix(pos));
                 }
 
@@ -679,7 +675,7 @@ fn process_attribute<'input>(
     if prefix == XMLNS {
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XMLNS_URI {
-            let pos = ctx.err_pos_at(range.start);
+            let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
@@ -690,13 +686,13 @@ fn process_attribute<'input>(
         // It MUST NOT be bound to any other namespace name.
         if local == NS_XML_PREFIX {
             if !is_xml_ns_uri {
-                let pos = ctx.err_pos_at(range.start);
+                let pos = ctx.doc.text_pos_at(range.start);
                 return Err(Error::InvalidXmlPrefixUri(pos));
             }
         } else {
             // The xml namespace MUST NOT be bound to a non-xml prefix.
             if is_xml_ns_uri {
-                let pos = ctx.err_pos_at(range.start);
+                let pos = ctx.doc.text_pos_at(range.start);
                 return Err(Error::UnexpectedXmlUri(pos));
             }
         }
@@ -707,7 +703,7 @@ fn process_attribute<'input>(
             .namespaces
             .exists(ctx.namespace_start_idx, Some(local))
         {
-            let pos = ctx.err_pos_at(range.start);
+            let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::DuplicatedNamespace(local.to_string(), pos));
         }
 
@@ -718,13 +714,13 @@ fn process_attribute<'input>(
     } else if local == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XML_URI {
-            let pos = ctx.err_pos_at(range.start);
+            let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::UnexpectedXmlUri(pos));
         }
 
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XMLNS_URI {
-            let pos = ctx.err_pos_at(range.start);
+            let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
@@ -760,7 +756,7 @@ fn process_element<'input>(
 
         if let tokenizer::ElementEnd::Close(..) = end_token {
             return Err(Error::UnexpectedEntityCloseTag(
-                ctx.err_pos_at(token_range.start),
+                ctx.doc.text_pos_at(token_range.start),
             ));
         } else {
             unreachable!("should be already checked by the tokenizer");
@@ -778,7 +774,7 @@ fn process_element<'input>(
                 namespaces,
                 ctx.tag_name.prefix_pos,
                 ctx.tag_name.prefix,
-                ctx,
+                &ctx.doc,
             )?;
             let new_element_id = ctx.append_node(
                 NodeKind::Element {
@@ -809,7 +805,7 @@ fn process_element<'input>(
                     return Err(Error::UnexpectedCloseTag(
                         gen_qname_string(parent_prefix, tag_name.local_name),
                         gen_qname_string(prefix, local),
-                        ctx.err_pos_at(token_range.start),
+                        ctx.doc.text_pos_at(token_range.start),
                     ));
                 }
             }
@@ -828,7 +824,7 @@ fn process_element<'input>(
                 namespaces,
                 ctx.tag_name.prefix_pos,
                 ctx.tag_name.prefix,
-                ctx,
+                &ctx.doc,
             )?;
             ctx.parent_id = ctx.append_node(
                 NodeKind::Element {
@@ -886,8 +882,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
 
     let start_idx = ctx.doc.attributes.len();
 
-    let mut current_attributes = core::mem::take(&mut ctx.current_attributes);
-    for attr in current_attributes.drain(..) {
+    for attr in ctx.current_attributes.drain(..) {
         let namespace_idx = if attr.prefix == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace. This namespace is added
@@ -898,7 +893,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
             // always has no value.'
             None
         } else {
-            get_ns_idx_by_prefix(namespaces, attr.range.start, attr.prefix, ctx)?
+            get_ns_idx_by_prefix(namespaces, attr.range.start, attr.prefix, &ctx.doc)?
         };
 
         let attr_name = ExpandedNameIndexed {
@@ -910,7 +905,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
         if ctx.doc.attributes[start_idx..].iter().any(|attr| {
             attr.name.as_expanded_name(&ctx.doc) == attr_name.as_expanded_name(&ctx.doc)
         }) {
-            let pos = ctx.err_pos_at(attr.range.start);
+            let pos = ctx.doc.text_pos_at(attr.range.start);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
@@ -925,7 +920,6 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
             eq_len: attr.eq_len,
         });
     }
-    ctx.current_attributes = current_attributes;
 
     Ok((start_idx..ctx.doc.attributes.len()).into())
 }
@@ -1173,7 +1167,7 @@ fn get_ns_idx_by_prefix(
     namespaces: ShortRange,
     prefix_pos: usize,
     prefix: &str,
-    ctx: &Context,
+    doc: &Document<'_>,
 ) -> Result<Option<NamespaceIdx>> {
     // Prefix CAN be empty when the default namespace was defined.
     //
@@ -1185,9 +1179,9 @@ fn get_ns_idx_by_prefix(
         Some(prefix)
     };
 
-    let idx = ctx.doc.namespaces.tree_order[namespaces.to_urange()]
+    let idx = doc.namespaces.tree_order[namespaces.to_urange()]
         .iter()
-        .find(|idx| ctx.doc.namespaces.get(**idx).name == prefix_opt);
+        .find(|idx| doc.namespaces.get(**idx).name == prefix_opt);
 
     match idx {
         Some(idx) => Ok(Some(*idx)),
@@ -1198,7 +1192,7 @@ fn get_ns_idx_by_prefix(
                 //
                 // Example:
                 // <e random:a='b'/>
-                let pos = ctx.err_pos_at(prefix_pos);
+                let pos = doc.text_pos_at(prefix_pos);
                 Err(Error::UnknownNamespace(prefix.to_string(), pos))
             } else {
                 // If an URI was not found and prefix IS empty than
