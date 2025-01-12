@@ -201,7 +201,7 @@ pub trait XmlEvents<'input> {
 pub fn parse<'input>(
     text: &'input str,
     allow_dtd: bool,
-    events: &mut dyn XmlEvents<'input>,
+    events: &mut impl XmlEvents<'input>,
 ) -> Result<()> {
     let s = &mut Stream::new(text);
 
@@ -241,7 +241,7 @@ pub fn parse<'input>(
 }
 
 // Misc ::= Comment | PI | S
-fn parse_misc<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
+fn parse_misc<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
     while !s.at_end() {
         s.skip_spaces();
         if s.starts_with(b"<!--") {
@@ -301,7 +301,7 @@ fn parse_declaration(s: &mut Stream) -> Result<()> {
 }
 
 // '<!--' ((Char - '-') | ('-' (Char - '-')))* '-->'
-fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
+fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(4);
     let text = s.consume_chars(|s, c| !(c == '-' && s.starts_with(b"-->")))?;
@@ -323,7 +323,7 @@ fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'inp
 
 // PI       ::= '<?' PITarget (S (Char* - (Char* '?>' Char*)))? '?>'
 // PITarget ::= Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'))
-fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
+fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
     if s.starts_with(b"<?xml ") {
         return Err(Error::UnexpectedDeclaration(s.gen_text_pos()));
     }
@@ -346,7 +346,7 @@ fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) 
     Ok(())
 }
 
-fn parse_doctype<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
+fn parse_doctype<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     parse_doctype_start(s)?;
     s.skip_spaces();
@@ -450,7 +450,7 @@ fn parse_external_id(s: &mut Stream) -> Result<bool> {
 // PEDecl      ::= '<!ENTITY' S '%' S Name S PEDef S? '>'
 fn parse_entity_decl<'input>(
     s: &mut Stream<'input>,
-    events: &mut dyn XmlEvents<'input>,
+    events: &mut impl XmlEvents<'input>,
 ) -> Result<()> {
     s.advance(8);
     s.consume_spaces()?;
@@ -525,7 +525,7 @@ fn consume_decl(s: &mut Stream) -> Result<()> {
 
 // element ::= EmptyElemTag | STag content ETag
 // '<' Name (S Attribute)* S? '>'
-fn parse_element<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
+fn parse_element<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(1); // <
     let (prefix, local) = s.consume_qname()?;
@@ -605,7 +605,7 @@ fn parse_attribute<'input>(
 // content ::= CharData? ((element | Reference | CDSect | PI | Comment) CharData?)*
 pub fn parse_content<'input>(
     s: &mut Stream<'input>,
-    events: &mut dyn XmlEvents<'input>,
+    events: &mut impl XmlEvents<'input>,
 ) -> Result<()> {
     while !s.at_end() {
         match s.curr_byte() {
@@ -639,7 +639,7 @@ pub fn parse_content<'input>(
 // CDStart ::= '<![CDATA['
 // CData   ::= (Char* - (Char* ']]>' Char*))
 // CDEnd   ::= ']]>'
-fn parse_cdata<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
+fn parse_cdata<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(9); // <![CDATA[
     let text = s.consume_chars(|s, c| !(c == ']' && s.starts_with(b"]]>")))?;
@@ -652,7 +652,7 @@ fn parse_cdata<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input
 // '</' Name S? '>'
 fn parse_close_element<'input>(
     s: &mut Stream<'input>,
-    events: &mut dyn XmlEvents<'input>,
+    events: &mut impl XmlEvents<'input>,
 ) -> Result<()> {
     let start = s.pos();
     s.advance(2); // </
@@ -669,7 +669,7 @@ fn parse_close_element<'input>(
     Ok(())
 }
 
-fn parse_text<'input>(s: &mut Stream<'input>, events: &mut dyn XmlEvents<'input>) -> Result<()> {
+fn parse_text<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
     let start = s.pos();
     let text = s.consume_chars(|_, c| c != '<')?;
 

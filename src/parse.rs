@@ -609,6 +609,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
 }
 
 impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
+    #[inline(always)]
     fn token(&mut self, token: tokenizer::Token<'input>) -> Result<()> {
         match token {
             tokenizer::Token::ProcessingInstruction(target, value, range) => {
