@@ -886,8 +886,8 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
 
     let start_idx = ctx.doc.attributes.len();
 
-    let current_attributes = core::mem::take(&mut ctx.current_attributes);
-    for attr in current_attributes {
+    let mut current_attributes = core::mem::take(&mut ctx.current_attributes);
+    for attr in current_attributes.drain(..) {
         let namespace_idx = if attr.prefix == NS_XML_PREFIX {
             // The prefix 'xml' is by definition bound to the namespace name
             // http://www.w3.org/XML/1998/namespace. This namespace is added
@@ -925,6 +925,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
             eq_len: attr.eq_len,
         });
     }
+    ctx.current_attributes = current_attributes;
 
     Ok((start_idx..ctx.doc.attributes.len()).into())
 }
