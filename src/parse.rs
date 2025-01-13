@@ -1,6 +1,7 @@
 use alloc::string::{String, ToString};
 use alloc::{vec, vec::Vec};
 use core::ops::Range;
+use memchr::{memchr, memchr2, memchr_iter};
 
 use crate::{
     AttributeData, Document, ExpandedNameIndexed, NamespaceIdx, Namespaces, NodeData, NodeId,
@@ -550,8 +551,8 @@ impl<'input> Context<'input> {
 
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
     // Trying to guess rough nodes and attributes amount.
-    let nodes_capacity = text.match_indices('<').count();
-    let attributes_capacity = text.match_indices('=').count();
+    let nodes_capacity = memchr_iter(b'<', text.as_bytes()).count();
+    let attributes_capacity = memchr_iter(b'=', text.as_bytes()).count();
 
     // Init document.
     let mut doc = Document {
@@ -935,7 +936,7 @@ fn process_text<'input>(
     ctx: &mut Context<'input>,
 ) -> Result<()> {
     // Add text as is if it has only valid characters.
-    if !text.bytes().any(|b| b == b'&' || b == b'\r') {
+    if memchr2(b'&', b'\r', text.as_bytes()).is_none() {
         append_text(StringStorage::Borrowed(text), range, ctx)?;
         ctx.after_text = true;
         return Ok(());
@@ -1006,7 +1007,7 @@ fn process_cdata<'input>(
     range: Range<usize>,
     ctx: &mut Context<'input>,
 ) -> Result<()> {
-    let mut pos = text.find('\r');
+    let mut pos = memchr(b'\r', text.as_bytes());
 
     // Add text as is if it has only valid characters.
     if pos.is_none() {
@@ -1029,7 +1030,7 @@ fn process_cdata<'input>(
             &rest[1..]
         };
 
-        pos = text.find('\r');
+        pos = memchr(b'\r', text.as_bytes());
     }
 
     buf.push_str(text);
@@ -1106,20 +1107,15 @@ fn normalize_attribute<'input>(
     text: StrSpan<'input>,
     ctx: &mut Context<'input>,
 ) -> Result<StringStorage<'input>> {
-    if is_normalization_required(&text) {
+    // We assume that `&` indicates an entity or a character reference.
+    // But in rare cases it can be just an another character.
+    if memchr2(b'&', b'\t', text.as_str().as_bytes()).is_some() || memchr2(b'\n', b'\r', text.as_str().as_bytes()).is_some() {
         let mut text_buffer = TextBuffer::new();
         _normalize_attribute(text, &mut text_buffer, ctx)?;
         Ok(StringStorage::new_owned(text_buffer.finish()))
     } else {
         Ok(StringStorage::Borrowed(text.as_str()))
     }
-}
-
-#[inline]
-fn is_normalization_required(text: &StrSpan) -> bool {
-    // We assume that `&` indicates an entity or a character reference.
-    // But in rare cases it can be just an another character.
-    text.as_str().bytes().any(|c| matches!(c, b'&' | b'\t' | b'\n' | b'\r'))
 }
 
 fn _normalize_attribute(text: StrSpan, buffer: &mut TextBuffer, ctx: &mut Context) -> Result<()> {

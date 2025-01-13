@@ -24,6 +24,9 @@ jobs:
         toolchain: ${{ matrix.rust }}
         override: true
 
+    - name: Use MSRV-compatible version of memchr
+      run: cargo update --package memchr --precise 2.6.2
+
     - name: Run tests
       run: cargo test
 
