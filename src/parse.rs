@@ -820,7 +820,7 @@ fn process_element<'input>(
                 // <p>&p;&p;
 
                 return Err(Error::UnexpectedEntityCloseTag(
-                    ctx.err_pos_at(token_range.start),
+                    ctx.doc.text_pos_at(token_range.start),
                 ));
             }
         }
