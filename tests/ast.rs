@@ -15,20 +15,6 @@ impl<'a> fmt::Debug for TStr<'a> {
     }
 }
 
-trait HasExtension {
-    fn has_extension(&self, ext: &str) -> bool;
-}
-
-impl HasExtension for path::Path {
-    fn has_extension(&self, ext: &str) -> bool {
-        if let Some(e) = self.extension() {
-            e == ext
-        } else {
-            false
-        }
-    }
-}
-
 fn actual_test(path: &str) {
     let path = path::Path::new(path);
     let expected = load_file(&path.with_extension("yaml"));
@@ -216,6 +202,8 @@ test!(cdata_004);
 test!(cdata_005);
 test!(cdata_006);
 test!(cdata_007);
+test!(cdata_008);
+test!(cdata_009);
 test!(comments_001);
 test!(elems_err_001);
 test!(elems_err_002);
