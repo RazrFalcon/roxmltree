@@ -1013,16 +1013,22 @@ fn process_cdata<'input>(
         return Ok(());
     }
 
-    let mut text_buffer = TextBuffer::new();
-    let count = text.chars().count();
-    for (i, c) in text.chars().enumerate() {
-        for b in CharToBytes::new(c) {
-            text_buffer.push_from_text(b, i + 1 == count);
+    let mut buffer = Vec::new();
+    let mut bytes = text.bytes().peekable();
+
+    while let Some(byte) = bytes.next() {
+        if byte == b'\r' {
+            if bytes.peek() == Some(&b'\n') {
+                bytes.next().unwrap();
+            }
+            buffer.push(b'\n');
+        } else {
+            buffer.push(byte);
         }
     }
 
-    if !text_buffer.is_empty() {
-        append_text(StringStorage::new_owned(text_buffer.finish()), range, ctx)?;
+    if !buffer.is_empty() {
+        append_text(StringStorage::new_owned(String::from_utf8(buffer).unwrap()), range, ctx)?;
         ctx.after_text = true;
     }
 
