@@ -18,8 +18,11 @@ exclude = ["testing-tools"]
 
 [features]
 default = ["std", "positions"]
-std = []
+std = ["memchr/std"]
 # Enables Nodes and Attributes position in the original document preserving.
 # Increases memory usage by `Range<usize>` for each Node.
 # Increases memory usage by `Range<usize>` + `u16` + `u8` for each Attribute.
 positions = []
+
+[dependencies]
+memchr = { version = "2", default-features = false }
