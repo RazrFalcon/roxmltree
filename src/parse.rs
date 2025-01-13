@@ -550,8 +550,8 @@ impl<'input> Context<'input> {
 
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
     // Trying to guess rough nodes and attributes amount.
-    let nodes_capacity = text.bytes().filter(|c| *c == b'<').count();
-    let attributes_capacity = text.bytes().filter(|c| *c == b'=').count();
+    let nodes_capacity = text.match_indices('<').count();
+    let attributes_capacity = text.match_indices('=').count();
 
     // Init document.
     let mut doc = Document {
@@ -1002,36 +1002,40 @@ fn process_text<'input>(
 // While the whole purpose of CDATA is to indicate to an XML library that this text
 // has to be stored as is, carriage return (`\r`) is still has to be replaced with `\n`.
 fn process_cdata<'input>(
-    text: &'input str,
+    mut text: &'input str,
     range: Range<usize>,
     ctx: &mut Context<'input>,
 ) -> Result<()> {
+    let mut pos = text.find('\r');
+
     // Add text as is if it has only valid characters.
-    if !text.as_bytes().contains(&b'\r') {
+    if pos.is_none() {
         append_text(StringStorage::Borrowed(text), range, ctx)?;
         ctx.after_text = true;
         return Ok(());
     }
 
-    let mut buffer = Vec::new();
-    let mut bytes = text.bytes().peekable();
+    let mut buf = String::new();
 
-    while let Some(byte) = bytes.next() {
-        if byte == b'\r' {
-            if bytes.peek() == Some(&b'\n') {
-                bytes.next().unwrap();
-            }
-            buffer.push(b'\n');
+    while let Some(pos1) = pos {
+        let (line, rest) = text.split_at(pos1);
+
+        buf.push_str(line);
+        buf.push('\n');
+
+        text = if rest.as_bytes().get(1) == Some(&b'\n') {
+            &rest[2..]
         } else {
-            buffer.push(byte);
-        }
+            &rest[1..]
+        };
+
+        pos = text.find('\r');
     }
 
-    if !buffer.is_empty() {
-        append_text(StringStorage::new_owned(String::from_utf8(buffer).unwrap()), range, ctx)?;
-        ctx.after_text = true;
-    }
+    buf.push_str(text);
 
+    append_text(StringStorage::new_owned(buf), range, ctx)?;
+    ctx.after_text = true;
     Ok(())
 }
 
