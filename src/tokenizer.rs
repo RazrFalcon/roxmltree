@@ -897,21 +897,8 @@ impl<'input> Stream<'input> {
     }
 
     /// Consumes according to: <https://www.w3.org/TR/xml/#NT-Reference>
-    pub fn try_consume_reference(&mut self) -> Option<Reference<'input>> {
-        let start = self.pos();
-
-        // Consume reference on a substream.
-        let mut s = self.clone();
-        let result = s.consume_reference()?;
-
-        // If the current data is a reference than advance the current stream
-        // by number of bytes read by substream.
-        self.advance(s.pos() - start);
-        Some(result)
-    }
-
     #[inline(never)]
-    fn consume_reference(&mut self) -> Option<Reference<'input>> {
+    pub fn consume_reference(&mut self) -> Option<Reference<'input>> {
         if !self.try_consume_byte(b'&') {
             return None;
         }
