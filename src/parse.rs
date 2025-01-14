@@ -1082,7 +1082,7 @@ fn parse_next_chunk<'a>(stream: &mut Stream<'a>, entities: &[Entity<'a>]) -> Res
     // Check for character/entity references.
     if c == b'&' {
         let start = stream.pos();
-        match stream.try_consume_reference() {
+        match stream.consume_reference() {
             Some(Reference::Char(ch)) => Ok(NextChunk::Char(ch)),
             Some(Reference::Entity(name)) => entities
                 .iter()
@@ -1133,7 +1133,7 @@ fn _normalize_attribute(text: StrSpan, buffer: &mut TextBuffer, ctx: &mut Contex
 
         // Check for character/entity references.
         let start = stream.pos();
-        match stream.try_consume_reference() {
+        match stream.consume_reference() {
             Some(Reference::Char(ch)) => {
                 for b in CharToBytes::new(ch) {
                     if ctx.loop_detector.depth > 0 {
