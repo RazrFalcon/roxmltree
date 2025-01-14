@@ -3,7 +3,7 @@ use alloc::{vec, vec::Vec};
 use alloc::borrow::Cow;
 use core::ops::Range;
 use core::mem::take;
-use memchr::{memchr, memchr2, memchr_iter};
+use memchr::{memchr, memchr2, memchr3, memchr_iter};
 
 use crate::{
     AttributeData, Document, ExpandedNameIndexed, NamespaceIdx, Namespaces, NodeData, NodeId,
@@ -1124,54 +1124,67 @@ fn normalize_attribute<'input>(
 ) -> Result<StringStorage<'input>> {
     // We assume that `&` indicates an entity or a character reference.
     // But in rare cases it can be just an another character.
-    if memchr2(b'&', b'\t', text.as_str().as_bytes()).is_some() || memchr2(b'\n', b'\r', text.as_str().as_bytes()).is_some() {
-        let mut text_buffer = TextBuffer::new();
-        _normalize_attribute(text, &mut text_buffer, ctx)?;
-        Ok(StringStorage::new_owned(&text_buffer.finish()))
+    if memchr(b'&', text.as_str().as_bytes()).is_some() || memchr3(b'\t', b'\r', b'\n', text.as_str().as_bytes()).is_some() {
+        let mut buf = String::new();
+        _normalize_attribute(text, &mut buf, ctx)?;
+        Ok(StringStorage::new_owned(&buf))
     } else {
         Ok(StringStorage::Borrowed(text.as_str()))
     }
 }
 
-fn _normalize_attribute(text: StrSpan, buffer: &mut TextBuffer, ctx: &mut Context) -> Result<()> {
+fn _normalize_attribute(text: StrSpan, buf: &mut String, ctx: &mut Context) -> Result<()> {
     let mut stream = Stream::from_substr(ctx.doc.text, text.range());
-    while !stream.at_end() {
-        // Safe, because we already checked that the stream is not at the end.
-        let c = stream.curr_byte_unchecked();
 
-        if c != b'&' {
-            stream.advance(1);
-            buffer.push_from_attr(c, stream.curr_byte().ok());
-            continue;
+    while let Some(mut pos) = memchr(b'&', stream.as_str().as_bytes()) {
+        while let Some(pos1) = memchr3(b'\t', b'\r', b'\n', &stream.as_str().as_bytes()[..pos]) {
+            let (before, after) = stream.as_str().split_at(pos1);
+
+            buf.push_str(before);
+            buf.push(' ');
+
+            let skip = if after.starts_with("\r\n") {
+                2
+            } else {
+                1
+            };
+
+            stream.advance(pos1 + skip);
+            pos -= pos1 + skip;
         }
+
+        buf.push_str(&stream.as_str()[..pos]);
+        stream.advance(pos);
 
         // Check for character/entity references.
         let start = stream.pos();
         match stream.consume_reference() {
             Some(Reference::Char(ch)) => {
-                for b in CharToBytes::new(ch) {
-                    if ctx.loop_detector.depth > 0 {
-                        // Escaped `<` inside an ENTITY is an error.
-                        // Escaped `<` outside an ENTITY is ok.
-                        if b == b'<' {
-                            return Err(Error::InvalidAttributeValue(
-                                stream.gen_text_pos_from(start),
-                            ));
-                        }
-
-                        buffer.push_from_attr(b, None);
-                    } else {
-                        // Characters not from entity should be added as is.
-                        // Not sure why... At least `lxml` produces the same results.
-                        buffer.push_raw(b);
+                if ctx.loop_detector.depth > 0 {
+                    // Escaped `<` inside an ENTITY is an error.
+                    // Escaped `<` outside an ENTITY is ok.
+                    if ch == '<' {
+                        return Err(Error::InvalidAttributeValue(
+                            stream.gen_text_pos_from(start),
+                        ));
                     }
+
+                    if matches!(ch, '\t' | '\r' | '\n') {
+                        buf.push(' ');
+                    } else {
+                        buf.push(ch);
+                    }
+                } else {
+                    // Characters not from entity should be added as is.
+                    // Not sure why... At least `lxml` produces the same results.
+                    buf.push(ch);
                 }
             }
             Some(Reference::Entity(name)) => match ctx.entities.iter().find(|e| e.name == name) {
                 Some(entity) => {
                     ctx.loop_detector.inc_references(&stream)?;
                     ctx.loop_detector.inc_depth(&stream)?;
-                    _normalize_attribute(entity.value, buffer, ctx)?;
+                    _normalize_attribute(entity.value, buf, ctx)?;
                     ctx.loop_detector.dec_depth();
                 }
                 None => {
@@ -1186,6 +1199,22 @@ fn _normalize_attribute(text: StrSpan, buffer: &mut TextBuffer, ctx: &mut Contex
         }
     }
 
+    while let Some(pos) = memchr3(b'\t', b'\r', b'\n', stream.as_str().as_bytes()) {
+        let (before, after) = stream.as_str().split_at(pos);
+
+        buf.push_str(before);
+        buf.push(' ');
+
+        let skip = if after.starts_with("\r\n") {
+            2
+        } else {
+            1
+        };
+
+        stream.advance(pos + skip);
+    }
+
+    buf.push_str(stream.as_str());
     Ok(())
 }
 
@@ -1291,21 +1320,6 @@ impl TextBuffer {
     #[inline]
     fn push_raw(&mut self, c: u8) {
         self.buffer.push(c);
-    }
-
-    fn push_from_attr(&mut self, mut current: u8, next: Option<u8>) {
-        // \r in \r\n should be ignored.
-        if current == b'\r' && next == Some(b'\n') {
-            return;
-        }
-
-        // \n, \r and \t should be converted into spaces.
-        current = match current {
-            b'\n' | b'\r' | b'\t' => b' ',
-            _ => current,
-        };
-
-        self.buffer.push(current);
     }
 
     // Translate \r\n and any \r that is not followed by \n into a single \n character.

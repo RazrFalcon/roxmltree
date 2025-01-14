@@ -737,6 +737,11 @@ impl<'input> Stream<'input> {
     }
 
     #[inline]
+    pub fn as_str(&self) -> &str {
+        &self.span.text[self.pos..self.end]
+    }
+
+    #[inline]
     pub fn curr_byte(&self) -> Result<u8> {
         if self.at_end() {
             return Err(Error::UnexpectedEndOfStream);
