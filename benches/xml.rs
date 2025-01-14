@@ -103,6 +103,20 @@ fn cdata_roxmltree(bencher: &mut Bencher) {
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
+fn text_roxmltree(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("text.xml").unwrap();
+    let mut opt = roxmltree::ParsingOptions::default();
+    opt.allow_dtd = true;
+    bencher.iter(|| roxmltree::Document::parse_with_options(&text, opt).unwrap())
+}
+
+fn attributes_roxmltree(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("attributes.xml").unwrap();
+    let mut opt = roxmltree::ParsingOptions::default();
+    opt.allow_dtd = true;
+    bencher.iter(|| roxmltree::Document::parse_with_options(&text, opt).unwrap())
+}
+
 fn tiny_xmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
     bencher.iter(|| xmltree::Element::parse(text.as_bytes()).unwrap())
@@ -299,7 +313,9 @@ benchmark_group!(
     medium_roxmltree,
     large_roxmltree,
     huge_roxmltree,
-    cdata_roxmltree
+    cdata_roxmltree,
+    text_roxmltree,
+    attributes_roxmltree
 );
 benchmark_group!(
     xmltree,
