@@ -982,61 +982,101 @@ fn process_text<'input>(
     range: Range<usize>,
     ctx: &mut Context<'input>,
 ) -> Result<()> {
+    let mut stream = Stream::from_substr(ctx.doc.text, range.clone());
+
     // Add text as is if it has only valid characters.
-    if memchr2(b'&', b'\r', text.as_bytes()).is_none() {
+    let mut pos = memchr2(b'&', b'\r', stream.as_str().as_bytes());
+
+    if pos.is_none() {
         ctx.append_text(Cow::Borrowed(text), range)?;
         return Ok(());
     }
 
-    let mut text_buffer = TextBuffer::new();
-    let mut is_as_is = false; // TODO: explain
-    let mut stream = Stream::from_substr(ctx.doc.text, range.clone());
-    while !stream.at_end() {
-        match parse_next_chunk(&mut stream, &ctx.entities)? {
-            NextChunk::Byte(c) => {
-                if is_as_is {
-                    text_buffer.push_raw(c);
-                    is_as_is = false;
-                } else {
-                    text_buffer.push_from_text(c, stream.at_end());
-                }
-            }
-            NextChunk::Char(c) => {
-                for b in CharToBytes::new(c) {
-                    if ctx.loop_detector.depth > 0 {
-                        text_buffer.push_from_text(b, stream.at_end());
-                    } else {
-                        // Characters not from entity should be added as is.
-                        // Not sure why... At least `lxml` produces the same result.
-                        text_buffer.push_raw(b);
-                        is_as_is = true;
+    let mut buf = String::new();
+    let mut was_cr = false;
+
+    while let Some(pos1) = pos {
+        let (before, after) = stream.as_str().split_at(pos1);
+
+        buf.push_str(before);
+
+        if after.as_bytes().first() == Some(&b'\r') {
+            let skip = match after.as_bytes().get(1) {
+                Some(&b'\n') => 2,
+                _ => 1,
+            };
+
+            buf.push('\n');
+            stream.advance(pos1 + skip);
+        } else {
+            stream.advance(pos1);
+
+            // Check for character/entity references.
+            let start = stream.pos();
+            match stream.consume_reference() {
+                Some(Reference::Char(ch)) => {
+                    // Characters not from entity should be added as is.
+                    // Not sure why... At least `lxml` produces the same result.
+                    let is_entity = ctx.loop_detector.depth > 0;
+
+                    match ch {
+                        '\r' if is_entity => {
+                            buf.push('\n');
+                            was_cr = true;
+                        }
+                        '\n' if is_entity => {
+                            if !was_cr {
+                                buf.push('\n');
+                            }
+                            was_cr = false;
+                        }
+                        ch => {
+                            buf.push(ch);
+                            was_cr = false;
+                        }
                     }
                 }
-            }
-            NextChunk::Text(fragment) => {
-                is_as_is = false;
+                Some(Reference::Entity(name)) => {
+                    let fragment = ctx
+                        .entities
+                        .iter()
+                        .find(|e| e.name == name)
+                        .map(|e| e.value)
+                        .ok_or_else(|| {
+                            let pos = stream.gen_text_pos_from(start);
+                            Error::UnknownEntityReference(name.into(), pos)
+                        })?;
 
-                if !text_buffer.is_empty() {
-                    ctx.append_text(Cow::Owned(text_buffer.finish()), range.clone())?;
+                    if !buf.is_empty() {
+                        ctx.append_text(Cow::Owned(take(&mut buf)), range.clone())?;
+                    }
+
+                    ctx.loop_detector.inc_references(&stream)?;
+                    ctx.loop_detector.inc_depth(&stream)?;
+
+                    let mut stream = Stream::from_substr(ctx.doc.text, fragment.range());
+                    let prev_tag_name = ctx.tag_name;
+                    ctx.tag_name = TagNameSpan::new_null();
+                    tokenizer::parse_content(&mut stream, ctx)?;
+                    ctx.tag_name = prev_tag_name;
+                    buf.clear();
+
+                    ctx.loop_detector.dec_depth();
                 }
-
-                ctx.loop_detector.inc_references(&stream)?;
-                ctx.loop_detector.inc_depth(&stream)?;
-
-                let mut stream = Stream::from_substr(ctx.doc.text, fragment.range());
-                let prev_tag_name = ctx.tag_name;
-                ctx.tag_name = TagNameSpan::new_null();
-                tokenizer::parse_content(&mut stream, ctx)?;
-                ctx.tag_name = prev_tag_name;
-                text_buffer.clear();
-
-                ctx.loop_detector.dec_depth();
+                None => {
+                    let pos = stream.gen_text_pos_from(start);
+                    return Err(Error::MalformedEntityReference(pos));
+                }
             }
         }
+
+        pos = memchr2(b'&', b'\r', stream.as_str().as_bytes());
     }
 
-    if !text_buffer.is_empty() {
-        ctx.append_text(Cow::Owned(text_buffer.finish()), range)?;
+    buf.push_str(stream.as_str());
+
+    if !buf.is_empty() {
+        ctx.append_text(Cow::Owned(buf), range)?;
     }
 
     Ok(())
@@ -1065,10 +1105,9 @@ fn process_cdata<'input>(
         buf.push_str(line);
         buf.push('\n');
 
-        text = if rest.as_bytes().get(1) == Some(&b'\n') {
-            &rest[2..]
-        } else {
-            &rest[1..]
+        text = match rest.as_bytes().get(1) {
+            Some(&b'\n') => &rest[2..],
+            _ => &rest[1..],
         };
 
         pos = memchr(b'\r', text.as_bytes());
@@ -1078,43 +1117,6 @@ fn process_cdata<'input>(
 
     ctx.append_text(Cow::Owned(buf), range)?;
     Ok(())
-}
-
-enum NextChunk<'a> {
-    Byte(u8),
-    Char(char),
-    Text(StrSpan<'a>),
-}
-
-fn parse_next_chunk<'a>(stream: &mut Stream<'a>, entities: &[Entity<'a>]) -> Result<NextChunk<'a>> {
-    debug_assert!(!stream.at_end());
-
-    // Safe, because we already checked that stream is not at the end.
-    // But we have an additional `debug_assert` above just in case.
-    let c = stream.curr_byte_unchecked();
-
-    // Check for character/entity references.
-    if c == b'&' {
-        let start = stream.pos();
-        match stream.consume_reference() {
-            Some(Reference::Char(ch)) => Ok(NextChunk::Char(ch)),
-            Some(Reference::Entity(name)) => entities
-                .iter()
-                .find(|e| e.name == name)
-                .map(|e| NextChunk::Text(e.value))
-                .ok_or_else(|| {
-                    let pos = stream.gen_text_pos_from(start);
-                    Error::UnknownEntityReference(name.into(), pos)
-                }),
-            None => {
-                let pos = stream.gen_text_pos_from(start);
-                Err(Error::MalformedEntityReference(pos))
-            }
-        }
-    } else {
-        stream.advance(1);
-        Ok(NextChunk::Byte(c))
-    }
 }
 
 // https://www.w3.org/TR/REC-xml/#AVNormalize
@@ -1266,95 +1268,5 @@ fn gen_qname_string(prefix: &str, local: &str) -> String {
         local.to_string()
     } else {
         alloc::format!("{}:{}", prefix, local)
-    }
-}
-
-/// Iterate over `char` by `u8`.
-struct CharToBytes {
-    buf: [u8; 4],
-    idx: u8,
-}
-
-impl CharToBytes {
-    #[inline]
-    fn new(c: char) -> Self {
-        let mut buf = [0xFF; 4];
-        c.encode_utf8(&mut buf);
-
-        CharToBytes { buf, idx: 0 }
-    }
-}
-
-impl Iterator for CharToBytes {
-    type Item = u8;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.idx < 4 {
-            let b = self.buf[self.idx as usize];
-
-            if b != 0xFF {
-                self.idx += 1;
-                return Some(b);
-            } else {
-                self.idx = 4;
-            }
-        }
-
-        None
-    }
-}
-
-struct TextBuffer {
-    buffer: Vec<u8>,
-}
-
-impl TextBuffer {
-    #[inline]
-    fn new() -> Self {
-        TextBuffer {
-            buffer: Vec::with_capacity(32),
-        }
-    }
-
-    #[inline]
-    fn push_raw(&mut self, c: u8) {
-        self.buffer.push(c);
-    }
-
-    // Translate \r\n and any \r that is not followed by \n into a single \n character.
-    //
-    // https://www.w3.org/TR/xml/#sec-line-ends
-    fn push_from_text(&mut self, c: u8, at_end: bool) {
-        if self.buffer.last() == Some(&b'\r') {
-            let idx = self.buffer.len() - 1;
-            self.buffer[idx] = b'\n';
-
-            if at_end && c == b'\r' {
-                self.buffer.push(b'\n');
-            } else if c != b'\n' {
-                self.buffer.push(c);
-            }
-        } else if at_end && c == b'\r' {
-            self.buffer.push(b'\n');
-        } else {
-            self.buffer.push(c);
-        }
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        self.buffer.clear();
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        self.buffer.is_empty()
-    }
-
-    #[inline]
-    fn finish(&mut self) -> String {
-        // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
-        String::from_utf8(take(&mut self.buffer)).unwrap()
     }
 }
