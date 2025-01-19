@@ -450,8 +450,8 @@ pub enum StringStorage<'input> {
 }
 
 impl StringStorage<'_> {
-    /// Creates a new owned string from `&str` or `String`.
-    pub fn new_owned<T: Into<OwnedSharedString>>(s: T) -> Self {
+    /// Creates a new owned string copied from a `&str`.
+    pub fn new_owned(s: &str) -> Self {
         StringStorage::Owned(s.into())
     }
 
