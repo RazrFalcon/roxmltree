@@ -1,6 +1,8 @@
 use alloc::string::{String, ToString};
 use alloc::{vec, vec::Vec};
+use alloc::borrow::Cow;
 use core::ops::Range;
+use core::mem::take;
 use memchr::{memchr, memchr2, memchr_iter};
 
 use crate::{
@@ -502,7 +504,7 @@ struct Context<'input> {
     awaiting_subtree: Vec<NodeId>,
     parent_prefixes: Vec<&'input str>,
     entities: Vec<Entity<'input>>,
-    after_text: bool,
+    after_text: Vec<Cow<'input, str>>,
     parent_id: NodeId,
     tag_name: TagNameSpan<'input>,
     loop_detector: LoopDetector,
@@ -547,6 +549,50 @@ impl<'input> Context<'input> {
 
         Ok(new_child_id)
     }
+
+    fn append_text(
+        &mut self,
+        text: Cow<'input, str>,
+        range: Range<usize>,
+    ) -> Result<()> {
+        if self.after_text.is_empty() {
+            let text = match &text {
+                Cow::Borrowed(text) => StringStorage::Borrowed(text),
+                Cow::Owned(text) => StringStorage::new_owned(text.as_str()),
+            };
+
+            self.append_node(NodeKind::Text(text), range)?;
+        }
+
+        self.after_text.push(text);
+        Ok(())
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn merge_text(&mut self) {
+        let node = &mut self.doc.nodes.last_mut().unwrap();
+
+        let text = match &mut node.kind {
+            NodeKind::Text(text) => text,
+            _ => unreachable!(),
+        };
+
+        *text = StringStorage::new_owned(&self.after_text.join(""));
+    }
+
+    #[inline]
+    fn reset_after_text(&mut self) {
+        if self.after_text.is_empty() {
+            return;
+        }
+
+        if self.after_text.len() > 1 {
+            self.merge_text();
+        }
+
+        self.after_text.clear();
+    }
 }
 
 fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
@@ -583,7 +629,7 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
         entities: Vec::new(),
         awaiting_subtree: Vec::new(),
         parent_prefixes: vec![""],
-        after_text: false,
+        after_text: Vec::with_capacity(1),
         parent_id: NodeId::new(0),
         tag_name: TagNameSpan::new_null(),
         loop_detector: LoopDetector::default(),
@@ -613,13 +659,13 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
     fn token(&mut self, token: tokenizer::Token<'input>) -> Result<()> {
         match token {
             tokenizer::Token::ProcessingInstruction(target, value, range) => {
+                self.reset_after_text();
                 let pi = NodeKind::PI(PI { target, value });
                 self.append_node(pi, range)?;
-                self.after_text = false;
             }
             tokenizer::Token::Comment(text, range) => {
+                self.reset_after_text();
                 self.append_node(NodeKind::Comment(StringStorage::Borrowed(text)), range)?;
-                self.after_text = false;
             }
             tokenizer::Token::EntityDeclaration(name, definition) => {
                 self.entities.push(Entity {
@@ -628,6 +674,8 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
                 });
             }
             tokenizer::Token::ElementStart(prefix, local, start) => {
+                self.reset_after_text();
+
                 if prefix == XMLNS {
                     let pos = self.doc.text_pos_at(start + 1);
                     return Err(Error::InvalidElementNamePrefix(pos));
@@ -639,15 +687,13 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
                     pos: start,
                     prefix_pos: start + 1,
                 };
-
-                self.after_text = false;
             }
             tokenizer::Token::Attribute(range, qname_len, eq_len, prefix, local, value) => {
                 process_attribute(range, qname_len, eq_len, prefix, local, value, self)?;
             }
             tokenizer::Token::ElementEnd(end, range) => {
+                self.reset_after_text();
                 process_element(end, range, self)?;
-                self.after_text = false;
             }
             tokenizer::Token::Text(text, range) => {
                 process_text(text, range, self)?;
@@ -938,8 +984,7 @@ fn process_text<'input>(
 ) -> Result<()> {
     // Add text as is if it has only valid characters.
     if memchr2(b'&', b'\r', text.as_bytes()).is_none() {
-        append_text(StringStorage::Borrowed(text), range, ctx)?;
-        ctx.after_text = true;
+        ctx.append_text(Cow::Borrowed(text), range)?;
         return Ok(());
     }
 
@@ -972,10 +1017,7 @@ fn process_text<'input>(
                 is_as_is = false;
 
                 if !text_buffer.is_empty() {
-                    let storage = StringStorage::new_owned(text_buffer.to_str());
-                    append_text(storage, range.clone(), ctx)?;
-                    text_buffer.clear();
-                    ctx.after_text = true;
+                    ctx.append_text(Cow::Owned(text_buffer.finish()), range.clone())?;
                 }
 
                 ctx.loop_detector.inc_references(&stream)?;
@@ -994,8 +1036,7 @@ fn process_text<'input>(
     }
 
     if !text_buffer.is_empty() {
-        append_text(StringStorage::new_owned(text_buffer.finish()), range, ctx)?;
-        ctx.after_text = true;
+        ctx.append_text(Cow::Owned(text_buffer.finish()), range)?;
     }
 
     Ok(())
@@ -1012,8 +1053,7 @@ fn process_cdata<'input>(
 
     // Add text as is if it has only valid characters.
     if pos.is_none() {
-        append_text(StringStorage::Borrowed(text), range, ctx)?;
-        ctx.after_text = true;
+        ctx.append_text(Cow::Borrowed(text), range)?;
         return Ok(());
     }
 
@@ -1036,33 +1076,7 @@ fn process_cdata<'input>(
 
     buf.push_str(text);
 
-    append_text(StringStorage::new_owned(buf), range, ctx)?;
-    ctx.after_text = true;
-    Ok(())
-}
-
-fn append_text<'input>(
-    text: StringStorage<'input>,
-    range: Range<usize>,
-    ctx: &mut Context<'input>,
-) -> Result<()> {
-    if ctx.after_text {
-        // Prepend to a previous text node.
-        if let Some(node) = ctx.doc.nodes.last_mut() {
-            if let NodeKind::Text(ref mut prev_text) = node.kind {
-                let text_str = text.as_str();
-                let prev_text_str = prev_text.as_str();
-
-                let mut concat_text = String::with_capacity(text_str.len() + prev_text_str.len());
-                concat_text.push_str(prev_text_str);
-                concat_text.push_str(text_str);
-                *prev_text = StringStorage::new_owned(concat_text);
-            }
-        }
-    } else {
-        ctx.append_node(NodeKind::Text(text), range)?;
-    }
-
+    ctx.append_text(Cow::Owned(buf), range)?;
     Ok(())
 }
 
@@ -1113,7 +1127,7 @@ fn normalize_attribute<'input>(
     if memchr2(b'&', b'\t', text.as_str().as_bytes()).is_some() || memchr2(b'\n', b'\r', text.as_str().as_bytes()).is_some() {
         let mut text_buffer = TextBuffer::new();
         _normalize_attribute(text, &mut text_buffer, ctx)?;
-        Ok(StringStorage::new_owned(text_buffer.finish()))
+        Ok(StringStorage::new_owned(&text_buffer.finish()))
     } else {
         Ok(StringStorage::Borrowed(text.as_str()))
     }
@@ -1325,14 +1339,8 @@ impl TextBuffer {
     }
 
     #[inline]
-    fn to_str(&self) -> &str {
+    fn finish(&mut self) -> String {
         // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
-        core::str::from_utf8(&self.buffer).unwrap()
-    }
-
-    #[inline]
-    fn finish(self) -> String {
-        // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
-        String::from_utf8(self.buffer).unwrap()
+        String::from_utf8(take(&mut self.buffer)).unwrap()
     }
 }
