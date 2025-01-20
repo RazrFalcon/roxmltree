@@ -98,6 +98,13 @@ fn huge_roxmltree(bencher: &mut Bencher) {
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
 }
 
+fn jupiter_roxmltree(bencher: &mut Bencher) {
+    let text = std::fs::read_to_string("jupiter.svg").unwrap();
+    let mut opt = roxmltree::ParsingOptions::default();
+    opt.allow_dtd = true;
+    bencher.iter(|| roxmltree::Document::parse_with_options(&text, opt).unwrap())
+}
+
 fn cdata_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("cdata.xml").unwrap();
     bencher.iter(|| roxmltree::Document::parse(&text).unwrap())
@@ -313,6 +320,7 @@ benchmark_group!(
     medium_roxmltree,
     large_roxmltree,
     huge_roxmltree,
+    jupiter_roxmltree,
     cdata_roxmltree,
     text_roxmltree,
     attributes_roxmltree
