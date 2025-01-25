@@ -1,6 +1,8 @@
 use core::ops::Range;
 use core::str;
 
+use memchr::memchr2;
+
 use crate::{Error, TextPos};
 
 type Result<T> = core::result::Result<T, Error>;
@@ -92,6 +94,10 @@ trait XmlByteExt {
     /// Checks if byte is within the ASCII
     /// [Char](https://www.w3.org/TR/xml/#NT-Char) range.
     fn is_xml_name(&self) -> bool;
+
+    /// Checks if the value is within the
+    /// [Char](https://www.w3.org/TR/xml/#NT-Char) range.
+    fn is_xml_char(&self) -> bool;
 }
 
 impl XmlByteExt for u8 {
@@ -109,6 +115,39 @@ impl XmlByteExt for u8 {
     fn is_xml_name(&self) -> bool {
         matches!(*self, b'A'..=b'Z' | b'a'..=b'z'| b'0'..=b'9'| b':' | b'_' | b'-' | b'.')
     }
+
+    #[inline]
+    fn is_xml_char(&self) -> bool {
+        *self > 0x20 || self.is_xml_space()
+    }
+}
+
+#[inline]
+fn is_xml_str(s: &str, value_start: usize, stream: &mut Stream<'_>) -> Result<()> {
+    if s.as_bytes().is_ascii() {
+        for (i, b) in s.as_bytes().iter().enumerate() {
+            if !b.is_xml_char() {
+                return Err(Error::NonXmlChar(*b as char, stream.gen_text_pos_from(value_start + i)));
+            }
+        }
+
+        Ok(())
+    } else {
+        is_xml_str_unicode(s, value_start, stream)
+    }
+}
+
+
+#[cold]
+#[inline(never)]
+fn is_xml_str_unicode(s: &str, value_start: usize, stream: &mut Stream<'_>) -> Result<()> {
+    for (i, ch) in s.char_indices() {
+        if !ch.is_xml_char() {
+            return Err(Error::NonXmlChar(ch, stream.gen_text_pos_from(value_start + i)));
+        }
+    }
+
+    Ok(())
 }
 
 /// A string slice.
@@ -567,11 +606,11 @@ fn parse_element<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
                 s.consume_eq()?;
                 let eq_len = u8::try_from(s.pos() - qname_end).unwrap_or(u8::MAX);
                 let quote = s.consume_quote()?;
-                let quote_c = quote as char;
                 // The attribute value must not contain the < character.
                 let value_start = s.pos();
-                s.skip_chars(|_, c| c != quote_c && c != '<')?;
+                s.advance_until2(quote, b'<')?;
                 let value = s.slice_back_span(value_start);
+                is_xml_str(value.as_str(), value_start, s)?;
                 s.consume_byte(quote)?;
                 let end = s.pos();
                 events.token(Token::Attribute(start..end, qname_len, eq_len, prefix, local, value))?;
@@ -760,6 +799,11 @@ impl<'input> Stream<'input> {
     }
 
     #[inline]
+    fn as_bytes(&self) -> &[u8] {
+        &self.span.text.as_bytes()[self.pos..self.end]
+    }
+
+    #[inline]
     pub fn advance(&mut self, n: usize) {
         debug_assert!(self.pos + n <= self.end);
         self.pos += n;
@@ -844,6 +888,17 @@ impl<'input> Stream<'input> {
         }
 
         Ok(())
+    }
+
+    #[inline]
+    fn advance_until2(&mut self, needle1: u8, needle2: u8) -> Result<()> {
+        match memchr2(needle1, needle2, self.as_bytes()) {
+            Some(pos) => {
+                self.advance(pos);
+                Ok(())
+            }
+            None => Err(Error::UnexpectedEndOfStream),
+        }
     }
 
     #[inline]
