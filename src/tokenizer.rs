@@ -4,6 +4,7 @@ use core::str;
 use memchr::memchr2;
 
 use crate::{Error, TextPos};
+use crate::parse::{process_attribute, process_cdata, process_element, process_text, Context};
 
 type Result<T> = core::result::Result<T, Error>;
 
@@ -194,33 +195,6 @@ impl<'input> StrSpan<'input> {
     }
 }
 
-pub enum Token<'input> {
-    // <?target content?>
-    ProcessingInstruction(&'input str, Option<&'input str>, Range<usize>),
-
-    // <!-- text -->
-    Comment(&'input str, Range<usize>),
-
-    // <!ENTITY ns_extend "http://test.com">
-    EntityDeclaration(&'input str, StrSpan<'input>),
-
-    // <ns:elem
-    ElementStart(&'input str, &'input str, usize),
-
-    // ns:attr="value"
-    Attribute(Range<usize>, u16, u8, &'input str, &'input str, StrSpan<'input>),
-
-    ElementEnd(ElementEnd<'input>, Range<usize>),
-
-    // Contains text between elements including whitespaces.
-    // Basically everything between `>` and `<`.
-    // Except `]]>`, which is not allowed and will lead to an error.
-    Text(&'input str, Range<usize>),
-
-    // <![CDATA[text]]>
-    Cdata(&'input str, Range<usize>),
-}
-
 /// `ElementEnd` token.
 #[derive(Clone, Copy)]
 pub enum ElementEnd<'input> {
@@ -232,15 +206,11 @@ pub enum ElementEnd<'input> {
     Empty,
 }
 
-pub trait XmlEvents<'input> {
-    fn token(&mut self, token: Token<'input>) -> Result<()>;
-}
-
 // document ::= prolog element Misc*
-pub fn parse<'input>(
+pub(crate) fn parse<'input>(
     text: &'input str,
     allow_dtd: bool,
-    events: &mut impl XmlEvents<'input>,
+    ctx: &mut Context<'input>,
 ) -> Result<()> {
     let s = &mut Stream::new(text);
 
@@ -253,7 +223,7 @@ pub fn parse<'input>(
         parse_declaration(s)?;
     }
 
-    parse_misc(s, events)?;
+    parse_misc(s, ctx)?;
 
     s.skip_spaces();
     if s.starts_with(b"<!DOCTYPE") {
@@ -261,16 +231,16 @@ pub fn parse<'input>(
             return Err(Error::DtdDetected);
         }
 
-        parse_doctype(s, events)?;
-        parse_misc(s, events)?;
+        parse_doctype(s, ctx)?;
+        parse_misc(s, ctx)?;
     }
 
     s.skip_spaces();
     if s.curr_byte().ok() == Some(b'<') {
-        parse_element(s, events)?;
+        parse_element(s, ctx)?;
     }
 
-    parse_misc(s, events)?;
+    parse_misc(s, ctx)?;
 
     if !s.at_end() {
         return Err(Error::UnknownToken(s.gen_text_pos()));
@@ -280,13 +250,13 @@ pub fn parse<'input>(
 }
 
 // Misc ::= Comment | PI | S
-fn parse_misc<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
+fn parse_misc<'input>(s: &mut Stream<'input>, ctx: &mut Context<'input>) -> Result<()> {
     while !s.at_end() {
         s.skip_spaces();
         if s.starts_with(b"<!--") {
-            parse_comment(s, events)?;
+            parse_comment(s, ctx)?;
         } else if s.starts_with(b"<?") {
-            parse_pi(s, events)?;
+            parse_pi(s, ctx)?;
         } else {
             break;
         }
@@ -340,7 +310,7 @@ fn parse_declaration(s: &mut Stream) -> Result<()> {
 }
 
 // '<!--' ((Char - '-') | ('-' (Char - '-')))* '-->'
-fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
+fn parse_comment<'input>(s: &mut Stream<'input>, ctx: &mut Context<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(4);
     let text = s.consume_chars(|s, c| !(c == '-' && s.starts_with(b"-->")))?;
@@ -355,14 +325,14 @@ fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
     }
 
     let range = s.range_from(start);
-    events.token(Token::Comment(text, range))?;
+    ctx.process_comment(text, range)?;
 
     Ok(())
 }
 
 // PI       ::= '<?' PITarget (S (Char* - (Char* '?>' Char*)))? '?>'
 // PITarget ::= Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'))
-fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
+fn parse_pi<'input>(s: &mut Stream<'input>, ctx: &mut Context<'input>) -> Result<()> {
     if s.starts_with(b"<?xml ") {
         return Err(Error::UnexpectedDeclaration(s.gen_text_pos()));
     }
@@ -381,11 +351,11 @@ fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>)
     s.skip_string(b"?>")?;
 
     let range = s.range_from(start);
-    events.token(Token::ProcessingInstruction(target, content, range))?;
+    ctx.process_pi(target, content, range)?;
     Ok(())
 }
 
-fn parse_doctype<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
+fn parse_doctype<'input>(s: &mut Stream<'input>, ctx: &mut Context<'input>) -> Result<()> {
     let start = s.pos();
     parse_doctype_start(s)?;
     s.skip_spaces();
@@ -399,11 +369,11 @@ fn parse_doctype<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
     while !s.at_end() {
         s.skip_spaces();
         if s.starts_with(b"<!ENTITY") {
-            parse_entity_decl(s, events)?;
+            parse_entity_decl(s, ctx)?;
         } else if s.starts_with(b"<!--") {
-            parse_comment(s, events)?;
+            parse_comment(s, ctx)?;
         } else if s.starts_with(b"<?") {
-            parse_pi(s, events)?;
+            parse_pi(s, ctx)?;
         } else if s.starts_with(b"]") {
             // DTD ends with ']' S? '>', therefore we have to skip possible spaces.
             s.advance(1);
@@ -489,7 +459,7 @@ fn parse_external_id(s: &mut Stream) -> Result<bool> {
 // PEDecl      ::= '<!ENTITY' S '%' S Name S PEDef S? '>'
 fn parse_entity_decl<'input>(
     s: &mut Stream<'input>,
-    events: &mut impl XmlEvents<'input>,
+    ctx: &mut Context<'input>,
 ) -> Result<()> {
     s.advance(8);
     s.consume_spaces()?;
@@ -504,7 +474,7 @@ fn parse_entity_decl<'input>(
     let name = s.consume_name()?;
     s.consume_spaces()?;
     if let Some(definition) = parse_entity_def(s, is_ge)? {
-        events.token(Token::EntityDeclaration(name, definition))?;
+        ctx.process_entity_decl(name, definition);
     }
     s.skip_spaces();
     s.consume_byte(b'>')?;
@@ -564,11 +534,11 @@ fn consume_decl(s: &mut Stream) -> Result<()> {
 
 // element ::= EmptyElemTag | STag content ETag
 // '<' Name (S Attribute)* S? '>'
-fn parse_element<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
+fn parse_element<'input>(s: &mut Stream<'input>, ctx: &mut Context<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(1); // <
     let (prefix, local) = s.consume_qname()?;
-    events.token(Token::ElementStart(prefix, local, start))?;
+    ctx.process_element_start(prefix, local, start)?;
 
     let mut open = false;
     while !s.at_end() {
@@ -580,13 +550,13 @@ fn parse_element<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
                 s.advance(1);
                 s.consume_byte(b'>')?;
                 let range = s.range_from(start);
-                events.token(Token::ElementEnd(ElementEnd::Empty, range))?;
+                process_element(ElementEnd::Empty, range, ctx)?;
                 break;
             }
             b'>' => {
                 s.advance(1);
                 let range = s.range_from(start);
-                events.token(Token::ElementEnd(ElementEnd::Open, range))?;
+                process_element(ElementEnd::Open, range, ctx)?;
                 open = true;
                 break;
             }
@@ -613,13 +583,13 @@ fn parse_element<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
                 is_xml_str(value.as_str(), value_start, s)?;
                 s.consume_byte(quote)?;
                 let end = s.pos();
-                events.token(Token::Attribute(start..end, qname_len, eq_len, prefix, local, value))?;
+                process_attribute(start..end, qname_len, eq_len, prefix, local, value, ctx)?;
             }
         }
     }
 
     if open {
-        parse_content(s, events)?;
+        parse_content(s, ctx)?;
     }
 
     Ok(())
@@ -642,31 +612,31 @@ fn parse_attribute<'input>(
 }
 
 // content ::= CharData? ((element | Reference | CDSect | PI | Comment) CharData?)*
-pub fn parse_content<'input>(
+pub(crate) fn parse_content<'input>(
     s: &mut Stream<'input>,
-    events: &mut impl XmlEvents<'input>,
+    ctx: &mut Context<'input>,
 ) -> Result<()> {
     while !s.at_end() {
         match s.curr_byte() {
             Ok(b'<') => match s.next_byte() {
                 Ok(b'!') => {
                     if s.starts_with(b"<!--") {
-                        parse_comment(s, events)?;
+                        parse_comment(s, ctx)?;
                     } else if s.starts_with(b"<![CDATA[") {
-                        parse_cdata(s, events)?;
+                        parse_cdata(s, ctx)?;
                     } else {
                         return Err(Error::UnknownToken(s.gen_text_pos()));
                     }
                 }
-                Ok(b'?') => parse_pi(s, events)?,
+                Ok(b'?') => parse_pi(s, ctx)?,
                 Ok(b'/') => {
-                    parse_close_element(s, events)?;
+                    parse_close_element(s, ctx)?;
                     break;
                 }
-                Ok(_) => parse_element(s, events)?,
+                Ok(_) => parse_element(s, ctx)?,
                 Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
             },
-            Ok(_) => parse_text(s, events)?,
+            Ok(_) => parse_text(s, ctx)?,
             Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
         }
     }
@@ -678,20 +648,20 @@ pub fn parse_content<'input>(
 // CDStart ::= '<![CDATA['
 // CData   ::= (Char* - (Char* ']]>' Char*))
 // CDEnd   ::= ']]>'
-fn parse_cdata<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
+fn parse_cdata<'input>(s: &mut Stream<'input>, ctx: &mut Context<'input>) -> Result<()> {
     let start = s.pos();
     s.advance(9); // <![CDATA[
     let text = s.consume_chars(|s, c| !(c == ']' && s.starts_with(b"]]>")))?;
     s.skip_string(b"]]>")?;
     let range = s.range_from(start);
-    events.token(Token::Cdata(text, range))?;
+    process_cdata(text, range, ctx)?;
     Ok(())
 }
 
 // '</' Name S? '>'
 fn parse_close_element<'input>(
     s: &mut Stream<'input>,
-    events: &mut impl XmlEvents<'input>,
+    ctx: &mut Context<'input>,
 ) -> Result<()> {
     let start = s.pos();
     s.advance(2); // </
@@ -701,14 +671,15 @@ fn parse_close_element<'input>(
     s.consume_byte(b'>')?;
 
     let range = s.range_from(start);
-    events.token(Token::ElementEnd(
+    process_element(
         ElementEnd::Close(prefix, tag_name),
         range,
-    ))?;
+        ctx,
+    )?;
     Ok(())
 }
 
-fn parse_text<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
+fn parse_text<'input>(s: &mut Stream<'input>, ctx: &mut Context<'input>) -> Result<()> {
     let start = s.pos();
     let text = s.consume_chars(|_, c| c != '<')?;
 
@@ -721,7 +692,7 @@ fn parse_text<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input
     }
 
     let range = s.range_from(start);
-    events.token(Token::Text(text, range))?;
+    process_text(text, range, ctx)?;
     Ok(())
 }
 

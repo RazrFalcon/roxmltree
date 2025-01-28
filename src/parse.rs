@@ -497,7 +497,7 @@ impl LoopDetector {
     }
 }
 
-struct Context<'input> {
+pub(crate) struct Context<'input> {
     opt: ParsingOptions,
     namespace_start_idx: usize,
     current_attributes: Vec<TempAttributeData<'input>>,
@@ -654,61 +654,48 @@ fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
     Ok(doc)
 }
 
-impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
-    #[inline(always)]
-    fn token(&mut self, token: tokenizer::Token<'input>) -> Result<()> {
-        match token {
-            tokenizer::Token::ProcessingInstruction(target, value, range) => {
-                self.reset_after_text();
-                let pi = NodeKind::PI(PI { target, value });
-                self.append_node(pi, range)?;
-            }
-            tokenizer::Token::Comment(text, range) => {
-                self.reset_after_text();
-                self.append_node(NodeKind::Comment(StringStorage::Borrowed(text)), range)?;
-            }
-            tokenizer::Token::EntityDeclaration(name, definition) => {
-                self.entities.push(Entity {
-                    name,
-                    value: definition,
-                });
-            }
-            tokenizer::Token::ElementStart(prefix, local, start) => {
-                self.reset_after_text();
+impl<'input> Context<'input> {
+    pub(crate) fn process_pi(&mut self, target: &'input str, value: Option<&'input str>, range: Range<usize>) -> Result<()> {
+        self.reset_after_text();
+        let pi = NodeKind::PI(PI { target, value });
+        self.append_node(pi, range)?;
+        Ok(())
+    }
 
-                if prefix == XMLNS {
-                    let pos = self.doc.text_pos_at(start + 1);
-                    return Err(Error::InvalidElementNamePrefix(pos));
-                }
+    pub(crate) fn process_comment(&mut self, text: &'input str, range: Range<usize>) -> Result<()> {
+        self.reset_after_text();
+        self.append_node(NodeKind::Comment(StringStorage::Borrowed(text)), range)?;
+        Ok(())
+    }
 
-                self.tag_name = TagNameSpan {
-                    prefix,
-                    name: local,
-                    pos: start,
-                    prefix_pos: start + 1,
-                };
-            }
-            tokenizer::Token::Attribute(range, qname_len, eq_len, prefix, local, value) => {
-                process_attribute(range, qname_len, eq_len, prefix, local, value, self)?;
-            }
-            tokenizer::Token::ElementEnd(end, range) => {
-                self.reset_after_text();
-                process_element(end, range, self)?;
-            }
-            tokenizer::Token::Text(text, range) => {
-                process_text(text, range, self)?;
-            }
-            tokenizer::Token::Cdata(text, range) => {
-                process_cdata(text, range, self)?;
-            }
+    pub(crate) fn process_entity_decl(&mut self, name: &'input str, definition: StrSpan<'input>) {
+        self.entities.push(Entity {
+            name,
+            value: definition,
+        });
+    }
+
+    pub(crate) fn process_element_start(&mut self, prefix: &'input str, local: &'input str, start: usize) -> Result<()> {
+        self.reset_after_text();
+
+        if prefix == XMLNS {
+            let pos = self.doc.text_pos_at(start + 1);
+            return Err(Error::InvalidElementNamePrefix(pos));
         }
+
+        self.tag_name = TagNameSpan {
+            prefix,
+            name: local,
+            pos: start,
+            prefix_pos: start + 1,
+        };
 
         Ok(())
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn process_attribute<'input>(
+pub(crate) fn process_attribute<'input>(
     range: Range<usize>,
     qname_len: u16,
     eq_len: u8,
@@ -791,11 +778,13 @@ fn process_attribute<'input>(
     Ok(())
 }
 
-fn process_element<'input>(
+pub(crate) fn process_element<'input>(
     end_token: tokenizer::ElementEnd<'input>,
     token_range: Range<usize>,
     ctx: &mut Context<'input>,
 ) -> Result<()> {
+    ctx.reset_after_text();
+
     if ctx.tag_name.name.is_empty() {
         // May occur in XML like this:
         // <!DOCTYPE test [ <!ENTITY p '</p>'> ]>
@@ -977,7 +966,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
     Ok((start_idx..ctx.doc.attributes.len()).into())
 }
 
-fn process_text<'input>(
+pub(crate) fn process_text<'input>(
     text: &'input str,
     range: Range<usize>,
     ctx: &mut Context<'input>,
@@ -1044,7 +1033,7 @@ fn process_text<'input>(
 
 // While the whole purpose of CDATA is to indicate to an XML library that this text
 // has to be stored as is, carriage return (`\r`) is still has to be replaced with `\n`.
-fn process_cdata<'input>(
+pub(crate) fn process_cdata<'input>(
     mut text: &'input str,
     range: Range<usize>,
     ctx: &mut Context<'input>,

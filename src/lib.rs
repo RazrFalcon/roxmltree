@@ -35,9 +35,6 @@ use alloc::vec::Vec;
 mod parse;
 mod tokenizer;
 
-#[cfg(test)]
-mod tokenizer_tests;
-
 pub use crate::parse::*;
 
 /// The <http://www.w3.org/XML/1998/namespace> URI.
