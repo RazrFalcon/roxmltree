@@ -8,21 +8,21 @@ use crate::tokenizer as xml;
 fn text_pos_1() {
     let mut s = xml::Stream::new("text");
     s.advance(2);
-    assert_eq!(s.gen_text_pos(), crate::TextPos::new(1, 3));
+    assert_eq!(s.gen_text_pos(), crate::TextPos::new(2, 1, 3));
 }
 
 #[test]
 fn text_pos_2() {
     let mut s = xml::Stream::new("text\ntext");
     s.advance(6);
-    assert_eq!(s.gen_text_pos(), crate::TextPos::new(2, 2));
+    assert_eq!(s.gen_text_pos(), crate::TextPos::new(6, 2, 2));
 }
 
 #[test]
 fn text_pos_3() {
     let mut s = xml::Stream::new("текст\nтекст");
     s.advance(15);
-    assert_eq!(s.gen_text_pos(), crate::TextPos::new(2, 3));
+    assert_eq!(s.gen_text_pos(), crate::TextPos::new(15, 2, 3));
 }
 
 #[test]

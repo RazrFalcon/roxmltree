@@ -164,13 +164,13 @@ impl Error {
             Error::EntityReferenceLoop(pos) => pos,
             Error::InvalidAttributeValue(pos) => pos,
             Error::DuplicatedAttribute(_, pos) => pos,
-            Error::NoRootNode => TextPos::new(1, 1),
-            Error::UnclosedRootNode => TextPos::new(1, 1),
+            Error::NoRootNode => TextPos::start(),
+            Error::UnclosedRootNode => TextPos::start(),
             Error::UnexpectedDeclaration(pos) => pos,
-            Error::DtdDetected => TextPos::new(1, 1),
-            Error::NodesLimitReached => TextPos::new(1, 1),
-            Error::AttributesLimitReached => TextPos::new(1, 1),
-            Error::NamespacesLimitReached => TextPos::new(1, 1),
+            Error::DtdDetected => TextPos::start(),
+            Error::NodesLimitReached => TextPos::start(),
+            Error::AttributesLimitReached => TextPos::start(),
+            Error::NamespacesLimitReached => TextPos::start(),
             Error::InvalidName(pos) => pos,
             Error::NonXmlChar(_, pos) => pos,
             Error::InvalidChar(_, _, pos) => pos,
@@ -180,7 +180,7 @@ impl Error {
             Error::InvalidComment(pos) => pos,
             Error::InvalidCharacterData(pos) => pos,
             Error::UnknownToken(pos) => pos,
-            Error::UnexpectedEndOfStream => TextPos::new(1, 1),
+            Error::UnexpectedEndOfStream => TextPos::start(),
         }
     }
 }

@@ -1129,7 +1129,7 @@ impl<'input> Stream<'input> {
 
         let row = Self::calc_curr_row(text, end);
         let col = Self::calc_curr_col(text, end);
-        TextPos::new(row, col)
+        TextPos::new(end, row, col)
     }
 
     /// Calculates an absolute position at `pos`.

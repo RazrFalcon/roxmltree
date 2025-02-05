@@ -56,19 +56,35 @@ const XMLNS: &str = "xmlns";
 #[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct TextPos {
+    pub byte: usize,
     pub row: u32,
     pub col: u32,
 }
 
 impl TextPos {
     /// Constructs a new `TextPos`.
-    pub fn new(row: u32, col: u32) -> TextPos {
-        TextPos { row, col }
+    pub fn new(byte: usize, row: u32, col: u32) -> TextPos {
+        TextPos { byte, row, col }
+    }
+
+    /// Constructs a new `TextPos` that indicates the start of the data.
+    ///
+    /// Useful for errors that don't have a meaningful position in the data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use roxmltree::*;
+    /// assert_eq!(TextPos::start(), TextPos::new(0, 1, 1));
+    /// ```
+    pub fn start() -> TextPos {
+        Self::new(0, 1, 1)
     }
 }
 
 impl fmt::Display for TextPos {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // TODO: incorporate `byte` into `Display`?
         write!(f, "{}:{}", self.row, self.col)
     }
 }
@@ -194,8 +210,8 @@ impl<'input> Document<'input> {
     /// <e/>"
     /// ).unwrap();
     ///
-    /// assert_eq!(doc.text_pos_at(10), TextPos::new(1, 11));
-    /// assert_eq!(doc.text_pos_at(9999), TextPos::new(2, 5));
+    /// assert_eq!(doc.text_pos_at(10), TextPos::new(10, 1, 11));
+    /// assert_eq!(doc.text_pos_at(9999), TextPos::new(21, 2, 5));
     /// ```
     #[inline]
     pub fn text_pos_at(&self, pos: usize) -> TextPos {
