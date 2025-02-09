@@ -1,1 +1,1 @@
-error: "the root node was opened but never closed"
+error: "the root node was opened but never closed at 1:1"

@@ -1,1 +1,1 @@
-error: "namespace 'n' at 1:34 is already defined"
+error: "namespace 'n' is already defined at 1:34"

@@ -1,1 +1,1 @@
-error: "attribute 'a' at 1:72 is already defined"
+error: "attribute 'a' is already defined at 1:72"

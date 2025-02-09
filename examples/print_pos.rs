@@ -26,7 +26,7 @@ fn main() {
             println!(
                 "{:?} at {}",
                 node.tag_name(),
-                doc.text_pos_at(node.range().start)
+                roxmltree::text_pos(&text, node.range().start)
             );
         }
     }

@@ -3,7 +3,7 @@ use core::str;
 
 use memchr::memchr2;
 
-use crate::{Error, TextPos};
+use crate::Error;
 
 type Result<T> = core::result::Result<T, Error>;
 
@@ -123,27 +123,27 @@ impl XmlByteExt for u8 {
 }
 
 #[inline]
-fn is_xml_str(s: &str, value_start: usize, stream: &mut Stream<'_>) -> Result<()> {
+fn is_xml_str(s: &str, value_start: usize) -> Result<()> {
     if s.as_bytes().is_ascii() {
         for (i, b) in s.as_bytes().iter().enumerate() {
             if !b.is_xml_char() {
-                return Err(Error::NonXmlChar(*b as char, stream.gen_text_pos_from(value_start + i)));
+                return Err(Error::NonXmlChar(*b as char, value_start + i));
             }
         }
 
         Ok(())
     } else {
-        is_xml_str_unicode(s, value_start, stream)
+        is_xml_str_unicode(s, value_start)
     }
 }
 
 
 #[cold]
 #[inline(never)]
-fn is_xml_str_unicode(s: &str, value_start: usize, stream: &mut Stream<'_>) -> Result<()> {
+fn is_xml_str_unicode(s: &str, value_start: usize) -> Result<()> {
     for (i, ch) in s.char_indices() {
         if !ch.is_xml_char() {
-            return Err(Error::NonXmlChar(ch, stream.gen_text_pos_from(value_start + i)));
+            return Err(Error::NonXmlChar(ch, value_start + i));
         }
     }
 
@@ -273,7 +273,7 @@ pub fn parse<'input>(
     parse_misc(s, events)?;
 
     if !s.at_end() {
-        return Err(Error::UnknownToken(s.gen_text_pos()));
+        return Err(Error::UnknownToken(s.pos()));
     }
 
     Ok(())
@@ -306,7 +306,7 @@ fn parse_declaration(s: &mut Stream) -> Result<()> {
             return Err(Error::InvalidChar2(
                 "a whitespace",
                 s.curr_byte_unchecked(),
-                s.gen_text_pos(),
+                s.pos(),
             ));
         }
 
@@ -347,11 +347,11 @@ fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
     s.skip_string(b"-->")?;
 
     if text.contains("--") {
-        return Err(Error::InvalidComment(s.gen_text_pos_from(start)));
+        return Err(Error::InvalidComment(start));
     }
 
     if text.ends_with('-') {
-        return Err(Error::InvalidComment(s.gen_text_pos_from(start)));
+        return Err(Error::InvalidComment(start));
     }
 
     let range = s.range_from(start);
@@ -364,7 +364,7 @@ fn parse_comment<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
 // PITarget ::= Name - (('X' | 'x') ('M' | 'm') ('L' | 'l'))
 fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
     if s.starts_with(b"<?xml ") {
-        return Err(Error::UnexpectedDeclaration(s.gen_text_pos()));
+        return Err(Error::UnexpectedDeclaration(s.pos()));
     }
 
     let start = s.pos();
@@ -414,7 +414,7 @@ fn parse_doctype<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
                     break;
                 }
                 Ok(c) => {
-                    return Err(Error::InvalidChar2("'>'", c, s.gen_text_pos()));
+                    return Err(Error::InvalidChar2("'>'", c, s.pos()));
                 }
                 Err(_) => {
                     return Err(Error::UnexpectedEndOfStream);
@@ -425,11 +425,10 @@ fn parse_doctype<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
             || s.starts_with(b"<!NOTATION")
         {
             if consume_decl(s).is_err() {
-                let pos = s.gen_text_pos_from(start);
-                return Err(Error::UnknownToken(pos));
+                return Err(Error::UnknownToken(start));
             }
         } else {
-            return Err(Error::UnknownToken(s.gen_text_pos()));
+            return Err(Error::UnknownToken(s.pos()));
         }
     }
 
@@ -449,7 +448,7 @@ fn parse_doctype_start(s: &mut Stream) -> Result<()> {
 
     let c = s.curr_byte()?;
     if c != b'[' && c != b'>' {
-        return Err(Error::InvalidChar2("'[' or '>'", c, s.gen_text_pos()));
+        return Err(Error::InvalidChar2("'[' or '>'", c, s.pos()));
     }
 
     Ok(())
@@ -546,12 +545,11 @@ fn parse_entity_def<'input>(
 
                 Ok(None)
             } else {
-                Err(Error::InvalidExternalID(s.gen_text_pos()))
+                Err(Error::InvalidExternalID(s.pos()))
             }
         }
         _ => {
-            let pos = s.gen_text_pos();
-            Err(Error::InvalidChar2("a quote, SYSTEM or PUBLIC", c, pos))
+            Err(Error::InvalidChar2("a quote, SYSTEM or PUBLIC", c, s.pos()))
         }
     }
 }
@@ -610,7 +608,7 @@ fn parse_element<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
                 let value_start = s.pos();
                 s.advance_until2(quote, b'<')?;
                 let value = s.slice_back_span(value_start);
-                is_xml_str(value.as_str(), value_start, s)?;
+                is_xml_str(value.as_str(), value_start)?;
                 s.consume_byte(quote)?;
                 let end = s.pos();
                 events.token(Token::Attribute(start..end, qname_len, eq_len, prefix, local, value))?;
@@ -655,7 +653,7 @@ pub fn parse_content<'input>(
                     } else if s.starts_with(b"<![CDATA[") {
                         parse_cdata(s, events)?;
                     } else {
-                        return Err(Error::UnknownToken(s.gen_text_pos()));
+                        return Err(Error::UnknownToken(s.pos()));
                     }
                 }
                 Ok(b'?') => parse_pi(s, events)?,
@@ -664,10 +662,10 @@ pub fn parse_content<'input>(
                     break;
                 }
                 Ok(_) => parse_element(s, events)?,
-                Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
+                Err(_) => return Err(Error::UnknownToken(s.pos())),
             },
             Ok(_) => parse_text(s, events)?,
-            Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
+            Err(_) => return Err(Error::UnknownToken(s.pos())),
         }
     }
 
@@ -717,7 +715,7 @@ fn parse_text<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input
     //
     // Search for `>` first, since it's a bit faster than looking for `]]>`.
     if text.contains('>') && text.contains("]]>") {
-        return Err(Error::InvalidCharacterData(s.gen_text_pos()));
+        return Err(Error::InvalidCharacterData(s.pos()));
     }
 
     let range = s.range_from(start);
@@ -817,7 +815,7 @@ impl<'input> Stream<'input> {
     fn consume_byte(&mut self, c: u8) -> Result<()> {
         let curr = self.curr_byte()?;
         if curr != c {
-            return Err(Error::InvalidChar(c, curr, self.gen_text_pos()));
+            return Err(Error::InvalidChar(c, curr, self.pos()));
         }
 
         self.advance(1);
@@ -837,12 +835,10 @@ impl<'input> Stream<'input> {
 
     fn skip_string(&mut self, text: &'static [u8]) -> Result<()> {
         if !self.starts_with(text) {
-            let pos = self.gen_text_pos();
-
             // Assume that all input `text` are valid UTF-8 strings, so unwrap is safe.
             let expected = str::from_utf8(text).unwrap();
 
-            return Err(Error::InvalidString(expected, pos));
+            return Err(Error::InvalidString(expected, self.pos()));
         }
 
         self.advance(text.len());
@@ -879,7 +875,7 @@ impl<'input> Stream<'input> {
     {
         for c in self.chars() {
             if !c.is_xml_char() {
-                return Err(Error::NonXmlChar(c, self.gen_text_pos()));
+                return Err(Error::NonXmlChar(c, self.pos()));
             } else if f(self, c) {
                 self.advance(c.len_utf8());
             } else {
@@ -943,7 +939,7 @@ impl<'input> Stream<'input> {
             return Err(Error::InvalidChar2(
                 "a whitespace",
                 self.curr_byte_unchecked(),
-                self.gen_text_pos(),
+                self.pos(),
             ));
         }
 
@@ -1000,7 +996,7 @@ impl<'input> Stream<'input> {
 
         let name = self.slice_back(start);
         if name.is_empty() {
-            return Err(Error::InvalidName(self.gen_text_pos_from(start)));
+            return Err(Error::InvalidName(start));
         }
 
         Ok(name)
@@ -1014,7 +1010,7 @@ impl<'input> Stream<'input> {
             if c.is_xml_name_start() {
                 self.advance(c.len_utf8());
             } else {
-                return Err(Error::InvalidName(self.gen_text_pos_from(start)));
+                return Err(Error::InvalidName(start));
             }
         }
 
@@ -1048,7 +1044,7 @@ impl<'input> Stream<'input> {
                         self.advance(1);
                     } else {
                         // Multiple `:` is an error.
-                        return Err(Error::InvalidName(self.gen_text_pos_from(start)));
+                        return Err(Error::InvalidName(start));
                     }
                 } else if b.is_xml_name() {
                     self.advance(1);
@@ -1090,12 +1086,12 @@ impl<'input> Stream<'input> {
 
         // Prefix must be empty or start with a `NameStartChar`.
         if !prefix.is_empty() && !is_xml_name_start(prefix) {
-            return Err(Error::InvalidName(self.gen_text_pos_from(start)));
+            return Err(Error::InvalidName(start));
         }
 
         // Local name must start with a `NameStartChar`.
         if !is_xml_name_start(local) {
-            return Err(Error::InvalidName(self.gen_text_pos_from(start)));
+            return Err(Error::InvalidName(start));
         }
 
         Ok((prefix, local))
@@ -1115,54 +1111,7 @@ impl<'input> Stream<'input> {
             self.advance(1);
             Ok(c)
         } else {
-            Err(Error::InvalidChar2("a quote", c, self.gen_text_pos()))
+            Err(Error::InvalidChar2("a quote", c, self.pos()))
         }
-    }
-
-    /// Calculates a current absolute position.
-    ///
-    /// This operation is very expensive. Use only for errors.
-    #[inline(never)]
-    pub fn gen_text_pos(&self) -> TextPos {
-        let text = self.span.as_str();
-        let end = self.pos;
-
-        let row = Self::calc_curr_row(text, end);
-        let col = Self::calc_curr_col(text, end);
-        TextPos::new(row, col)
-    }
-
-    /// Calculates an absolute position at `pos`.
-    ///
-    /// This operation is very expensive. Use only for errors.
-    #[inline(never)]
-    pub fn gen_text_pos_from(&self, pos: usize) -> TextPos {
-        let mut s = self.clone();
-        s.pos = core::cmp::min(pos, s.span.as_str().len());
-        s.gen_text_pos()
-    }
-
-    fn calc_curr_row(text: &str, end: usize) -> u32 {
-        let mut row = 1;
-        for c in &text.as_bytes()[..end] {
-            if *c == b'\n' {
-                row += 1;
-            }
-        }
-
-        row
-    }
-
-    fn calc_curr_col(text: &str, end: usize) -> u32 {
-        let mut col = 1;
-        for c in text[..end].chars().rev() {
-            if c == '\n' {
-                break;
-            } else {
-                col += 1;
-            }
-        }
-
-        col
     }
 }

@@ -1,1 +1,1 @@
-error: "the 'xmlns' URI is used at 1:6, but it must not be declared"
+error: "the 'xmlns' URI must not be declared, but is used at 1:6"

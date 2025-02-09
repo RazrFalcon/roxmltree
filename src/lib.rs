@@ -180,28 +180,6 @@ impl<'input> Document<'input> {
         self.root().descendants()
     }
 
-    /// Calculates `TextPos` in the original document from position in bytes.
-    ///
-    /// **Note:** this operation is expensive.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use roxmltree::*;
-    ///
-    /// let doc = Document::parse("\
-    /// <!-- comment -->
-    /// <e/>"
-    /// ).unwrap();
-    ///
-    /// assert_eq!(doc.text_pos_at(10), TextPos::new(1, 11));
-    /// assert_eq!(doc.text_pos_at(9999), TextPos::new(2, 5));
-    /// ```
-    #[inline]
-    pub fn text_pos_at(&self, pos: usize) -> TextPos {
-        tokenizer::Stream::new(self.text).gen_text_pos_from(pos)
-    }
-
     /// Returns the input text of the original document.
     ///
     /// # Examples
@@ -1744,4 +1722,62 @@ impl fmt::Debug for NamespaceIter<'_, '_> {
             .field("namespaces", &self.namespaces)
             .finish()
     }
+}
+
+/// Calculates `TextPos` in a string from position in bytes.
+///
+/// **Note:** this operation is expensive.
+///
+/// # Examples
+///
+/// ```
+/// use roxmltree::*;
+///
+/// let s = "\
+/// <!-- comment -->
+/// <e/>"
+/// ;
+///
+/// assert_eq!(text_pos(s, 10), TextPos::new(1, 11));
+/// assert_eq!(text_pos(s, 9999), TextPos::new(2, 5));
+/// ```
+///
+/// ```
+/// use roxmltree::*;
+///
+/// let s = "example";
+/// if let Err(e) = Document::parse(s) {
+///     let text_pos = text_pos(s, e.pos());
+///     eprintln!("Error at {}: {}", text_pos, e);
+/// }
+/// ```
+pub fn text_pos(text: &str, pos: usize) -> TextPos {
+    let pos = pos.min(text.len());
+    let row = calc_curr_row(text, pos);
+    let col = calc_curr_col(text, pos);
+    TextPos::new(row, col)
+}
+
+fn calc_curr_row(text: &str, end: usize) -> u32 {
+    let mut row = 1;
+    for c in &text.as_bytes()[..end] {
+        if *c == b'\n' {
+            row += 1;
+        }
+    }
+
+    row
+}
+
+fn calc_curr_col(text: &str, end: usize) -> u32 {
+    let mut col = 1;
+    for c in text[..end].chars().rev() {
+        if c == '\n' {
+            break;
+        } else {
+            col += 1;
+        }
+    }
+
+    col
 }
