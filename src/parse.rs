@@ -7,7 +7,7 @@ use memchr::{memchr, memchr2, memchr_iter};
 
 use crate::{
     AttributeData, Document, ExpandedNameIndexed, NamespaceIdx, Namespaces, NodeData, NodeId,
-    NodeKind, ShortRange, StringStorage, TextPos, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI,
+    NodeKind, ShortRange, StringStorage, NS_XMLNS_URI, NS_XML_PREFIX, NS_XML_URI, PI,
     XMLNS,
 };
 
@@ -19,31 +19,31 @@ type Result<T> = core::result::Result<T, Error>;
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Error {
     /// The `xmlns:xml` attribute must have an <http://www.w3.org/XML/1998/namespace> URI.
-    InvalidXmlPrefixUri(TextPos),
+    InvalidXmlPrefixUri(usize),
 
     /// Only the `xmlns:xml` attribute can have the <http://www.w3.org/XML/1998/namespace> URI.
-    UnexpectedXmlUri(TextPos),
+    UnexpectedXmlUri(usize),
 
     /// The <http://www.w3.org/2000/xmlns/> URI must not be declared.
-    UnexpectedXmlnsUri(TextPos),
+    UnexpectedXmlnsUri(usize),
 
     /// `xmlns` can't be used as an element prefix.
-    InvalidElementNamePrefix(TextPos),
+    InvalidElementNamePrefix(usize),
 
     /// A namespace was already defined on this element.
-    DuplicatedNamespace(String, TextPos),
+    DuplicatedNamespace(String, usize),
 
     /// An unknown namespace.
     ///
     /// Indicates that an element or an attribute has an unknown qualified name prefix.
     ///
     /// The first value is a prefix.
-    UnknownNamespace(String, TextPos),
+    UnknownNamespace(String, usize),
 
     /// Incorrect tree structure.
     ///
     /// expected, actual, position
-    UnexpectedCloseTag(String, String, TextPos),
+    UnexpectedCloseTag(String, String, usize),
 
     /// Entity value starts with a close tag.
     ///
@@ -52,24 +52,24 @@ pub enum Error {
     /// <!DOCTYPE test [ <!ENTITY p '</p>'> ]>
     /// <root>&p;</root>
     /// ```
-    UnexpectedEntityCloseTag(TextPos),
+    UnexpectedEntityCloseTag(usize),
 
     /// A reference to an entity that was not defined in the DTD.
-    UnknownEntityReference(String, TextPos),
+    UnknownEntityReference(String, usize),
 
     /// A malformed entity reference.
     ///
     /// A `&` character inside an attribute value or text indicates an entity reference.
     /// Otherwise, the document is not well-formed.
-    MalformedEntityReference(TextPos),
+    MalformedEntityReference(usize),
 
     /// A possible entity reference loop.
     ///
     /// The current depth limit is 10. The max number of references per reference is 255.
-    EntityReferenceLoop(TextPos),
+    EntityReferenceLoop(usize),
 
     /// Attribute value cannot have a `<` character.
-    InvalidAttributeValue(TextPos),
+    InvalidAttributeValue(usize),
 
     /// An element has a duplicated attributes.
     ///
@@ -78,7 +78,7 @@ pub enum Error {
     /// ```xml
     /// <e xmlns:n1='http://www.w3.org' xmlns:n2='http://www.w3.org' n1:a='b1' n2:a='b2'/>
     /// ```
-    DuplicatedAttribute(String, TextPos),
+    DuplicatedAttribute(String, usize),
 
     /// The XML document must have at least one element.
     NoRootNode,
@@ -88,7 +88,7 @@ pub enum Error {
 
     /// An XML document can have only one XML declaration
     /// and it must be at the start of the document.
-    UnexpectedDeclaration(TextPos),
+    UnexpectedDeclaration(usize),
 
     /// An XML with DTD detected.
     ///
@@ -105,41 +105,41 @@ pub enum Error {
     NamespacesLimitReached,
 
     /// An invalid name.
-    InvalidName(TextPos),
+    InvalidName(usize),
 
     /// A non-XML character has occurred.
     ///
     /// Valid characters are: <https://www.w3.org/TR/xml/#char32>
-    NonXmlChar(char, TextPos),
+    NonXmlChar(char, usize),
 
     /// An invalid/unexpected character.
     ///
     /// expected, actual, position
-    InvalidChar(u8, u8, TextPos),
+    InvalidChar(u8, u8, usize),
 
     /// An invalid/unexpected character.
     ///
     /// expected, actual, position
-    InvalidChar2(&'static str, u8, TextPos),
+    InvalidChar2(&'static str, u8, usize),
 
     /// An unexpected string.
     ///
     /// Contains what string was expected.
-    InvalidString(&'static str, TextPos),
+    InvalidString(&'static str, usize),
 
     /// An invalid ExternalID in the DTD.
-    InvalidExternalID(TextPos),
+    InvalidExternalID(usize),
 
     /// A comment cannot contain `--` or end with `-`.
-    InvalidComment(TextPos),
+    InvalidComment(usize),
 
     /// A Character Data node contains an invalid data.
     ///
     /// Currently, only `]]>` is not allowed.
-    InvalidCharacterData(TextPos),
+    InvalidCharacterData(usize),
 
     /// An unknown token.
-    UnknownToken(TextPos),
+    UnknownToken(usize),
 
     /// The steam ended earlier than we expected.
     ///
@@ -149,7 +149,7 @@ pub enum Error {
 
 impl Error {
     /// Returns the error position.
-    pub fn pos(&self) -> TextPos {
+    pub fn pos(&self) -> usize {
         match *self {
             Error::InvalidXmlPrefixUri(pos) => pos,
             Error::UnexpectedXmlUri(pos) => pos,
@@ -164,13 +164,13 @@ impl Error {
             Error::EntityReferenceLoop(pos) => pos,
             Error::InvalidAttributeValue(pos) => pos,
             Error::DuplicatedAttribute(_, pos) => pos,
-            Error::NoRootNode => TextPos::new(1, 1),
-            Error::UnclosedRootNode => TextPos::new(1, 1),
+            Error::NoRootNode => 0,
+            Error::UnclosedRootNode => 0,
             Error::UnexpectedDeclaration(pos) => pos,
-            Error::DtdDetected => TextPos::new(1, 1),
-            Error::NodesLimitReached => TextPos::new(1, 1),
-            Error::AttributesLimitReached => TextPos::new(1, 1),
-            Error::NamespacesLimitReached => TextPos::new(1, 1),
+            Error::DtdDetected => 0,
+            Error::NodesLimitReached => 0,
+            Error::AttributesLimitReached => 0,
+            Error::NamespacesLimitReached => 0,
             Error::InvalidName(pos) => pos,
             Error::NonXmlChar(_, pos) => pos,
             Error::InvalidChar(_, _, pos) => pos,
@@ -180,7 +180,7 @@ impl Error {
             Error::InvalidComment(pos) => pos,
             Error::InvalidCharacterData(pos) => pos,
             Error::UnknownToken(pos) => pos,
-            Error::UnexpectedEndOfStream => TextPos::new(1, 1),
+            Error::UnexpectedEndOfStream => 0,
         }
     }
 }
@@ -188,60 +188,57 @@ impl Error {
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match *self {
-            Error::InvalidXmlPrefixUri(pos) => {
-                write!(f, "'xml' namespace prefix mapped to wrong URI at {}", pos)
+            Error::InvalidXmlPrefixUri(_) => {
+                write!(f, "'xml' namespace prefix mapped to wrong URI")
             }
-            Error::UnexpectedXmlUri(pos) => {
+            Error::UnexpectedXmlUri(_) => {
                 write!(
                     f,
-                    "the 'xml' namespace URI is used for not 'xml' prefix at {}",
-                    pos
+                    "the 'xml' namespace URI is used for not 'xml' prefix",
                 )
             }
-            Error::UnexpectedXmlnsUri(pos) => {
+            Error::UnexpectedXmlnsUri(_) => {
                 write!(
                     f,
-                    "the 'xmlns' URI is used at {}, but it must not be declared",
-                    pos
+                    "the 'xmlns' URI must not be declared, but is used",
                 )
             }
-            Error::InvalidElementNamePrefix(pos) => {
+            Error::InvalidElementNamePrefix(_) => {
                 write!(
                     f,
-                    "the 'xmlns' prefix is used at {}, but it must not be",
-                    pos
+                    "the 'xmlns' prefix must not be used, but is",
                 )
             }
-            Error::DuplicatedNamespace(ref name, pos) => {
-                write!(f, "namespace '{}' at {} is already defined", name, pos)
+            Error::DuplicatedNamespace(ref name, _) => {
+                write!(f, "namespace '{}' is already defined", name)
             }
-            Error::UnknownNamespace(ref name, pos) => {
-                write!(f, "an unknown namespace prefix '{}' at {}", name, pos)
+            Error::UnknownNamespace(ref name, _) => {
+                write!(f, "an unknown namespace prefix '{}'", name)
             }
-            Error::UnexpectedCloseTag(ref expected, ref actual, pos) => {
+            Error::UnexpectedCloseTag(ref expected, ref actual, _) => {
                 write!(
                     f,
-                    "expected '{}' tag, not '{}' at {}",
-                    expected, actual, pos
+                    "expected '{}' tag, not '{}'",
+                    expected, actual
                 )
             }
-            Error::UnexpectedEntityCloseTag(pos) => {
-                write!(f, "unexpected close tag at {}", pos)
+            Error::UnexpectedEntityCloseTag(_) => {
+                write!(f, "unexpected close tag")
             }
-            Error::MalformedEntityReference(pos) => {
-                write!(f, "malformed entity reference at {}", pos)
+            Error::MalformedEntityReference(_) => {
+                write!(f, "malformed entity reference")
             }
-            Error::UnknownEntityReference(ref name, pos) => {
-                write!(f, "unknown entity reference '{}' at {}", name, pos)
+            Error::UnknownEntityReference(ref name, _) => {
+                write!(f, "unknown entity reference '{}'", name)
             }
-            Error::EntityReferenceLoop(pos) => {
-                write!(f, "a possible entity reference loop is detected at {}", pos)
+            Error::EntityReferenceLoop(_) => {
+                write!(f, "a possible entity reference loop is detected")
             }
-            Error::InvalidAttributeValue(pos) => {
-                write!(f, "unescaped '<' found at {}", pos)
+            Error::InvalidAttributeValue(_) => {
+                write!(f, "unescaped '<' found")
             }
-            Error::DuplicatedAttribute(ref name, pos) => {
-                write!(f, "attribute '{}' at {} is already defined", name, pos)
+            Error::DuplicatedAttribute(ref name, _) => {
+                write!(f, "attribute '{}' is already defined", name)
             }
             Error::NoRootNode => {
                 write!(f, "the document does not have a root node")
@@ -249,8 +246,8 @@ impl core::fmt::Display for Error {
             Error::UnclosedRootNode => {
                 write!(f, "the root node was opened but never closed")
             }
-            Error::UnexpectedDeclaration(pos) => {
-                write!(f, "unexpected XML declaration at {}", pos)
+            Error::UnexpectedDeclaration(_) => {
+                write!(f, "unexpected XML declaration")
             }
             Error::DtdDetected => {
                 write!(f, "XML with DTD detected")
@@ -264,40 +261,40 @@ impl core::fmt::Display for Error {
             Error::NamespacesLimitReached => {
                 write!(f, "more than 2^16 unique namespaces were parsed")
             }
-            Error::InvalidName(pos) => {
-                write!(f, "invalid name token at {}", pos)
+            Error::InvalidName(_) => {
+                write!(f, "invalid name token")
             }
-            Error::NonXmlChar(c, pos) => {
-                write!(f, "a non-XML character {:?} found at {}", c, pos)
+            Error::NonXmlChar(c, _) => {
+                write!(f, "a non-XML character {:?} found", c)
             }
-            Error::InvalidChar(expected, actual, pos) => {
+            Error::InvalidChar(expected, actual, _) => {
                 write!(
                     f,
-                    "expected '{}' not '{}' at {}",
-                    expected as char, actual as char, pos
+                    "expected '{}' not '{}'",
+                    expected as char, actual as char
                 )
             }
-            Error::InvalidChar2(expected, actual, pos) => {
+            Error::InvalidChar2(expected, actual, _) => {
                 write!(
                     f,
-                    "expected {} not '{}' at {}",
-                    expected, actual as char, pos
+                    "expected {} not '{}'",
+                    expected, actual as char
                 )
             }
-            Error::InvalidString(expected, pos) => {
-                write!(f, "expected '{}' at {}", expected, pos)
+            Error::InvalidString(expected, _) => {
+                write!(f, "expected '{}'", expected)
             }
-            Error::InvalidExternalID(pos) => {
-                write!(f, "invalid ExternalID at {}", pos)
+            Error::InvalidExternalID(_) => {
+                write!(f, "invalid ExternalID")
             }
-            Error::InvalidComment(pos) => {
-                write!(f, "comment at {} contains '--'", pos)
+            Error::InvalidComment(_) => {
+                write!(f, "comment contains '--'")
             }
-            Error::InvalidCharacterData(pos) => {
-                write!(f, "']]>' at {} is not allowed inside a character data", pos)
+            Error::InvalidCharacterData(_) => {
+                write!(f, "']]>' is not allowed inside a character data")
             }
-            Error::UnknownToken(pos) => {
-                write!(f, "unknown token at {}", pos)
+            Error::UnknownToken(_) => {
+                write!(f, "unknown token")
             }
             Error::UnexpectedEndOfStream => {
                 write!(f, "unexpected end of stream")
@@ -465,7 +462,7 @@ impl LoopDetector {
             self.depth += 1;
             Ok(())
         } else {
-            Err(Error::EntityReferenceLoop(stream.gen_text_pos()))
+            Err(Error::EntityReferenceLoop(stream.pos()))
         }
     }
 
@@ -488,7 +485,7 @@ impl LoopDetector {
             Ok(())
         } else {
             if self.references == u8::MAX {
-                return Err(Error::EntityReferenceLoop(stream.gen_text_pos()));
+                return Err(Error::EntityReferenceLoop(stream.pos()));
             }
 
             self.references += 1;
@@ -677,8 +674,7 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
                 self.reset_after_text();
 
                 if prefix == XMLNS {
-                    let pos = self.doc.text_pos_at(start + 1);
-                    return Err(Error::InvalidElementNamePrefix(pos));
+                    return Err(Error::InvalidElementNamePrefix(start + 1));
                 }
 
                 self.tag_name = TagNameSpan {
@@ -722,8 +718,7 @@ fn process_attribute<'input>(
     if prefix == XMLNS {
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XMLNS_URI {
-            let pos = ctx.doc.text_pos_at(range.start);
-            return Err(Error::UnexpectedXmlnsUri(pos));
+            return Err(Error::UnexpectedXmlnsUri(range.start));
         }
 
         let is_xml_ns_uri = value.as_str() == NS_XML_URI;
@@ -733,14 +728,12 @@ fn process_attribute<'input>(
         // It MUST NOT be bound to any other namespace name.
         if local == NS_XML_PREFIX {
             if !is_xml_ns_uri {
-                let pos = ctx.doc.text_pos_at(range.start);
-                return Err(Error::InvalidXmlPrefixUri(pos));
+                return Err(Error::InvalidXmlPrefixUri(range.start));
             }
         } else {
             // The xml namespace MUST NOT be bound to a non-xml prefix.
             if is_xml_ns_uri {
-                let pos = ctx.doc.text_pos_at(range.start);
-                return Err(Error::UnexpectedXmlUri(pos));
+                return Err(Error::UnexpectedXmlUri(range.start));
             }
         }
 
@@ -750,8 +743,7 @@ fn process_attribute<'input>(
             .namespaces
             .exists(ctx.namespace_start_idx, Some(local))
         {
-            let pos = ctx.doc.text_pos_at(range.start);
-            return Err(Error::DuplicatedNamespace(local.to_string(), pos));
+            return Err(Error::DuplicatedNamespace(local.to_string(), range.start));
         }
 
         // Xml namespace should not be added to the namespaces.
@@ -761,14 +753,12 @@ fn process_attribute<'input>(
     } else if local == XMLNS {
         // The xml namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XML_URI {
-            let pos = ctx.doc.text_pos_at(range.start);
-            return Err(Error::UnexpectedXmlUri(pos));
+            return Err(Error::UnexpectedXmlUri(range.start));
         }
 
         // The xmlns namespace MUST NOT be declared as the default namespace.
         if value.as_str() == NS_XMLNS_URI {
-            let pos = ctx.doc.text_pos_at(range.start);
-            return Err(Error::UnexpectedXmlnsUri(pos));
+            return Err(Error::UnexpectedXmlnsUri(range.start));
         }
 
         ctx.doc.namespaces.push_ns(None, value)?;
@@ -802,9 +792,7 @@ fn process_element<'input>(
         // <root>&p;</root>
 
         if let tokenizer::ElementEnd::Close(..) = end_token {
-            return Err(Error::UnexpectedEntityCloseTag(
-                ctx.doc.text_pos_at(token_range.start),
-            ));
+            return Err(Error::UnexpectedEntityCloseTag(token_range.start));
         } else {
             unreachable!("should be already checked by the tokenizer");
         }
@@ -852,7 +840,7 @@ fn process_element<'input>(
                     return Err(Error::UnexpectedCloseTag(
                         gen_qname_string(parent_prefix, tag_name.local_name),
                         gen_qname_string(prefix, local),
-                        ctx.doc.text_pos_at(token_range.start),
+                        token_range.start,
                     ));
                 }
             }
@@ -868,7 +856,7 @@ fn process_element<'input>(
                 // <p>&p;&p;
 
                 return Err(Error::UnexpectedEntityCloseTag(
-                    ctx.doc.text_pos_at(token_range.start),
+                    token_range.start,
                 ));
             }
         }
@@ -958,8 +946,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
         if ctx.doc.attributes[start_idx..].iter().any(|attr| {
             attr.name.as_expanded_name(&ctx.doc) == attr_name.as_expanded_name(&ctx.doc)
         }) {
-            let pos = ctx.doc.text_pos_at(attr.range.start);
-            return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
+            return Err(Error::DuplicatedAttribute(attr.local.to_string(), attr.range.start));
         }
 
         ctx.doc.attributes.push(AttributeData {
@@ -1103,12 +1090,10 @@ fn parse_next_chunk<'a>(stream: &mut Stream<'a>, entities: &[Entity<'a>]) -> Res
                 .find(|e| e.name == name)
                 .map(|e| NextChunk::Text(e.value))
                 .ok_or_else(|| {
-                    let pos = stream.gen_text_pos_from(start);
-                    Error::UnknownEntityReference(name.into(), pos)
+                    Error::UnknownEntityReference(name.into(), start)
                 }),
             None => {
-                let pos = stream.gen_text_pos_from(start);
-                Err(Error::MalformedEntityReference(pos))
+                Err(Error::MalformedEntityReference(start))
             }
         }
     } else {
@@ -1154,9 +1139,7 @@ fn _normalize_attribute(text: StrSpan, buffer: &mut TextBuffer, ctx: &mut Contex
                         // Escaped `<` inside an ENTITY is an error.
                         // Escaped `<` outside an ENTITY is ok.
                         if b == b'<' {
-                            return Err(Error::InvalidAttributeValue(
-                                stream.gen_text_pos_from(start),
-                            ));
+                            return Err(Error::InvalidAttributeValue(start));
                         }
 
                         buffer.push_from_attr(b, None);
@@ -1175,13 +1158,11 @@ fn _normalize_attribute(text: StrSpan, buffer: &mut TextBuffer, ctx: &mut Contex
                     ctx.loop_detector.dec_depth();
                 }
                 None => {
-                    let pos = stream.gen_text_pos_from(start);
-                    return Err(Error::UnknownEntityReference(name.into(), pos));
+                    return Err(Error::UnknownEntityReference(name.into(), start));
                 }
             },
             None => {
-                let pos = stream.gen_text_pos_from(start);
-                return Err(Error::MalformedEntityReference(pos));
+                return Err(Error::MalformedEntityReference(start));
             }
         }
     }
@@ -1218,8 +1199,7 @@ fn get_ns_idx_by_prefix(
                 //
                 // Example:
                 // <e random:a='b'/>
-                let pos = doc.text_pos_at(prefix_pos);
-                Err(Error::UnknownNamespace(prefix.to_string(), pos))
+                Err(Error::UnknownNamespace(prefix.to_string(), prefix_pos))
             } else {
                 // If an URI was not found and prefix IS empty than
                 // an element or an attribute doesn't have a namespace.

@@ -28,7 +28,14 @@ fn actual_test(path: &str) {
     let doc = match Document::parse_with_options(&input_xml, opt) {
         Ok(v) => v,
         Err(e) => {
-            assert_eq!(TStr(&format!("error: \"{}\"", e)), TStr(expected.trim()));
+            assert_eq!(
+                TStr(&format!(
+                    "error: \"{} at {}\"",
+                    e,
+                    text_pos(&input_xml, e.pos()),
+                )),
+                TStr(expected.trim())
+            );
             return;
         }
     };

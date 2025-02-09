@@ -147,32 +147,32 @@ fn text_pos_01() {
     let node = doc.root_element();
 
     assert_eq!(
-        doc.text_pos_at(doc.root().range().start),
+        text_pos(data, doc.root().range().start),
         TextPos::new(1, 1)
     );
-    assert_eq!(doc.text_pos_at(doc.root().range().end), TextPos::new(5, 1));
+    assert_eq!(text_pos(data, doc.root().range().end), TextPos::new(5, 1));
 
-    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
-    assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(4, 5));
+    assert_eq!(text_pos(data, node.range().start), TextPos::new(1, 1));
+    assert_eq!(text_pos(data, node.range().end), TextPos::new(4, 5));
 
     if let Some(attr) = node.attribute_node("a") {
-        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 4));
-        assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 9));
-        assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 4));
-        assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 5));
-        assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 7));
-        assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 8));
+        assert_eq!(text_pos(data, attr.range().start), TextPos::new(1, 4));
+        assert_eq!(text_pos(data, attr.range().end), TextPos::new(1, 9));
+        assert_eq!(text_pos(data, attr.range_qname().start), TextPos::new(1, 4));
+        assert_eq!(text_pos(data, attr.range_qname().end), TextPos::new(1, 5));
+        assert_eq!(text_pos(data, attr.range_value().start), TextPos::new(1, 7));
+        assert_eq!(text_pos(data, attr.range_value().end), TextPos::new(1, 8));
     }
 
     // first child is a text/whitespace, not a comment
     let comm = node.first_child().unwrap().next_sibling().unwrap();
-    assert_eq!(doc.text_pos_at(comm.range().start), TextPos::new(2, 5));
+    assert_eq!(text_pos(data, comm.range().start), TextPos::new(2, 5));
 
     let p = comm.next_sibling().unwrap().next_sibling().unwrap();
-    assert_eq!(doc.text_pos_at(p.range().start), TextPos::new(3, 5));
+    assert_eq!(text_pos(data, p.range().start), TextPos::new(3, 5));
 
     let text = p.first_child().unwrap();
-    assert_eq!(doc.text_pos_at(text.range().start), TextPos::new(3, 8));
+    assert_eq!(text_pos(data, text.range().start), TextPos::new(3, 8));
 }
 
 #[cfg(feature = "positions")]
@@ -183,15 +183,15 @@ fn text_pos_02() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(1, 1));
+    assert_eq!(text_pos(data, node.range().start), TextPos::new(1, 1));
 
     if let Some(attr) = node.attribute_node(("http://www.w3.org", "a")) {
-        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 36));
-        assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 44));
-        assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 36));
-        assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 40));
-        assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 42));
-        assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 43));
+        assert_eq!(text_pos(data, attr.range().start), TextPos::new(1, 36));
+        assert_eq!(text_pos(data, attr.range().end), TextPos::new(1, 44));
+        assert_eq!(text_pos(data, attr.range_qname().start), TextPos::new(1, 36));
+        assert_eq!(text_pos(data, attr.range_qname().end), TextPos::new(1, 40));
+        assert_eq!(text_pos(data, attr.range_value().start), TextPos::new(1, 42));
+        assert_eq!(text_pos(data, attr.range_value().end), TextPos::new(1, 43));
     }
 }
 
@@ -206,8 +206,8 @@ fn text_pos_03() {
     let doc = Document::parse(data).unwrap();
     let node = doc.root_element();
 
-    assert_eq!(doc.text_pos_at(node.range().start), TextPos::new(2, 1));
-    assert_eq!(doc.text_pos_at(node.range().end), TextPos::new(2, 5));
+    assert_eq!(text_pos(data, node.range().start), TextPos::new(2, 1));
+    assert_eq!(text_pos(data, node.range().end), TextPos::new(2, 5));
 }
 
 #[cfg(feature = "positions")]
@@ -219,12 +219,12 @@ fn text_pos_04() {
     let node = doc.root_element();
 
     if let Some(attr) = node.attribute_node("a") {
-        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 36));
-        assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 43));
-        assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 36));
-        assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 40));
-        assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 42));
-        assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 42));
+        assert_eq!(text_pos(data, attr.range().start), TextPos::new(1, 36));
+        assert_eq!(text_pos(data, attr.range().end), TextPos::new(1, 43));
+        assert_eq!(text_pos(data, attr.range_qname().start), TextPos::new(1, 36));
+        assert_eq!(text_pos(data, attr.range_qname().end), TextPos::new(1, 40));
+        assert_eq!(text_pos(data, attr.range_value().start), TextPos::new(1, 42));
+        assert_eq!(text_pos(data, attr.range_value().end), TextPos::new(1, 42));
 }
 }
 
@@ -237,12 +237,12 @@ fn text_pos_05() {
     let node = doc.root_element();
 
     if let Some(attr) = node.attribute_node("a") {
-        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 36));
-        assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 48));
-        assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 36));
-        assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 40));
-        assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 47));
-        assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 48));
+        assert_eq!(text_pos(data, attr.range().start), TextPos::new(1, 36));
+        assert_eq!(text_pos(data, attr.range().end), TextPos::new(1, 48));
+        assert_eq!(text_pos(data, attr.range_qname().start), TextPos::new(1, 36));
+        assert_eq!(text_pos(data, attr.range_qname().end), TextPos::new(1, 40));
+        assert_eq!(text_pos(data, attr.range_value().start), TextPos::new(1, 47));
+        assert_eq!(text_pos(data, attr.range_value().end), TextPos::new(1, 48));
     }
 }
 
@@ -256,12 +256,36 @@ fn text_pos_06() {
     let node = doc.root_element();
 
     if let Some(attr) = node.attribute_node("a") {
-        assert_eq!(doc.text_pos_at(attr.range().start), TextPos::new(1, 4));
-        assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 269));
-        assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 4));
-        assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 5));
+        assert_eq!(text_pos(data, attr.range().start), TextPos::new(1, 4));
+        assert_eq!(text_pos(data, attr.range().end), TextPos::new(1, 269));
+        assert_eq!(text_pos(data, attr.range_qname().start), TextPos::new(1, 4));
+        assert_eq!(text_pos(data, attr.range_qname().end), TextPos::new(1, 5));
         attr.range_value(); // unreliable since >254 spaces around equal sign, but still shouldn't panic
     }
+}
+
+#[test]
+fn text_pos_07() {
+    assert_eq!(
+        text_pos("text", 2),
+        crate::TextPos::new(1, 3),
+    );
+}
+
+#[test]
+fn text_pos_08() {
+    assert_eq!(
+        text_pos("text\ntext", 6),
+        crate::TextPos::new(2, 2),
+    );
+}
+
+#[test]
+fn text_pos_09() {
+    assert_eq!(
+        text_pos("текст\nтекст", 15),
+        crate::TextPos::new(2, 3),
+    );
 }
 
 #[test]
