@@ -1,5 +1,6 @@
 use core::ops::Range;
 use core::str;
+use alloc::string::String;
 
 use memchr::memchr2;
 
@@ -234,6 +235,8 @@ pub enum ElementEnd<'input> {
 
 pub trait XmlEvents<'input> {
     fn token(&mut self, token: Token<'input>) -> Result<()>;
+
+    fn resolve_entity(&mut self, _pub_id: Option<&str>, _uri: &str) -> core::result::Result<Option<&'input str>, String> { Ok(None) }
 }
 
 // document ::= prolog element Misc*
@@ -244,14 +247,7 @@ pub fn parse<'input>(
 ) -> Result<()> {
     let s = &mut Stream::new(text);
 
-    // Skip UTF-8 BOM.
-    if s.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        s.advance(3);
-    }
-
-    if s.starts_with(b"<?xml ") {
-        parse_declaration(s)?;
-    }
+    parse_declaration(s)?;
 
     parse_misc(s, events)?;
 
@@ -299,6 +295,15 @@ fn parse_misc<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input
 //
 // We don't actually return a token for the XML declaration and only validate it.
 fn parse_declaration(s: &mut Stream) -> Result<()> {
+    // Skip UTF-8 BOM.
+    if s.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        s.advance(3);
+    }
+
+    if !s.starts_with(b"<?xml ") {
+        return Ok(())
+    }
+
     fn consume_spaces(s: &mut Stream) -> Result<()> {
         if s.starts_with_space() {
             s.skip_spaces();
@@ -456,7 +461,7 @@ fn parse_doctype_start(s: &mut Stream) -> Result<()> {
 }
 
 // ExternalID ::= 'SYSTEM' S SystemLiteral | 'PUBLIC' S PubidLiteral S SystemLiteral
-fn parse_external_id(s: &mut Stream) -> Result<bool> {
+fn parse_external_id<'input>(s: &mut Stream<'input>) -> Result<Option<(Option<&'input str>, &'input str)>> {
     let v = if s.starts_with(b"SYSTEM") || s.starts_with(b"PUBLIC") {
         let start = s.pos();
         s.advance(6);
@@ -464,21 +469,21 @@ fn parse_external_id(s: &mut Stream) -> Result<bool> {
 
         s.consume_spaces()?;
         let quote = s.consume_quote()?;
-        let _ = s.consume_bytes(|c| c != quote);
+        let first = s.consume_bytes(|c| c != quote);
         s.consume_byte(quote)?;
 
         if id == "SYSTEM" {
-            // Ok
+            Some((None, first))
         } else {
             s.consume_spaces()?;
             let quote = s.consume_quote()?;
-            let _ = s.consume_bytes(|c| c != quote);
+            let second = s.consume_bytes(|c| c != quote);
             s.consume_byte(quote)?;
-        }
 
-        true
+            Some((Some(first), second))
+        }
     } else {
-        false
+        None
     };
 
     Ok(v)
@@ -503,7 +508,7 @@ fn parse_entity_decl<'input>(
 
     let name = s.consume_name()?;
     s.consume_spaces()?;
-    if let Some(definition) = parse_entity_def(s, is_ge)? {
+    if let Some(definition) = parse_entity_def(s, events, is_ge)? {
         events.token(Token::EntityDeclaration(name, definition))?;
     }
     s.skip_spaces();
@@ -520,6 +525,7 @@ fn parse_entity_decl<'input>(
 // NDataDecl   ::= S 'NDATA' S Name
 fn parse_entity_def<'input>(
     s: &mut Stream<'input>,
+    events: &mut impl XmlEvents<'input>,
     is_ge: bool,
 ) -> Result<Option<StrSpan<'input>>> {
     let c = s.curr_byte()?;
@@ -533,7 +539,7 @@ fn parse_entity_def<'input>(
             Ok(Some(value))
         }
         b'S' | b'P' => {
-            if parse_external_id(s)? {
+            if let Some((pub_id, uri)) = parse_external_id(s)? {
                 if is_ge {
                     s.skip_spaces();
                     if s.starts_with(b"NDATA") {
@@ -544,7 +550,18 @@ fn parse_entity_def<'input>(
                     }
                 }
 
-                Ok(None)
+                let value = events.resolve_entity(pub_id, uri).map_err(|msg| Error::EntityResolver(s.gen_text_pos(), msg))?;
+
+                match value {
+                    Some(value) => {
+                        let mut stream = Stream::new(value);
+                        parse_declaration(&mut stream)?;
+                        let value = StrSpan::from(&value[stream.pos..]);
+
+                        Ok(Some(value))
+                    }
+                    None => Ok(None),
+                }
             } else {
                 Err(Error::InvalidExternalID(s.gen_text_pos()))
             }

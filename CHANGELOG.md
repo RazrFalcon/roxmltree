@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `ParsingOptions::entity_resolver` can be used to resolve external entities referenced via public ID and URI.
+
 ### Changed
 - `Node::has_attribute`, `Node::attribute` and `Node::attribute_node` now match local names similar to how `Node::has_tag_name` works.
 
