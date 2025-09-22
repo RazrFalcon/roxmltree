@@ -3,6 +3,7 @@ use alloc::{vec, vec::Vec};
 use alloc::borrow::Cow;
 use core::ops::Range;
 use core::mem::take;
+use core::fmt;
 use memchr::{memchr, memchr2, memchr_iter};
 
 use crate::{
@@ -130,6 +131,9 @@ pub enum Error {
     /// An invalid ExternalID in the DTD.
     InvalidExternalID(TextPos),
 
+    /// The given entity resolved yielded an errror.
+    EntityResolver(TextPos, String),
+
     /// A comment cannot contain `--` or end with `-`.
     InvalidComment(TextPos),
 
@@ -177,6 +181,7 @@ impl Error {
             Error::InvalidChar2(_, _, pos) => pos,
             Error::InvalidString(_, pos) => pos,
             Error::InvalidExternalID(pos) => pos,
+            Error::EntityResolver(pos, _) => pos,
             Error::InvalidComment(pos) => pos,
             Error::InvalidCharacterData(pos) => pos,
             Error::UnknownToken(pos) => pos,
@@ -187,7 +192,7 @@ impl Error {
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        match *self {
+        match self {
             Error::InvalidXmlPrefixUri(pos) => {
                 write!(f, "'xml' namespace prefix mapped to wrong URI at {}", pos)
             }
@@ -274,14 +279,14 @@ impl core::fmt::Display for Error {
                 write!(
                     f,
                     "expected '{}' not '{}' at {}",
-                    expected as char, actual as char, pos
+                    *expected as char, *actual as char, pos
                 )
             }
             Error::InvalidChar2(expected, actual, pos) => {
                 write!(
                     f,
                     "expected {} not '{}' at {}",
-                    expected, actual as char, pos
+                    expected, *actual as char, pos
                 )
             }
             Error::InvalidString(expected, pos) => {
@@ -289,6 +294,9 @@ impl core::fmt::Display for Error {
             }
             Error::InvalidExternalID(pos) => {
                 write!(f, "invalid ExternalID at {}", pos)
+            }
+            Error::EntityResolver(pos, msg) => {
+                write!(f, "entity resolver failed at {}: {}", pos, msg)
             }
             Error::InvalidComment(pos) => {
                 write!(f, "comment at {} contains '--'", pos)
@@ -314,8 +322,7 @@ impl std::error::Error for Error {
 }
 
 /// Parsing options.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct ParsingOptions {
+pub struct ParsingOptions<'input> {
     /// Allow DTD parsing.
     ///
     /// When set to `false`, XML with DTD will cause an error.
@@ -337,14 +344,53 @@ pub struct ParsingOptions {
     ///
     /// Default: u32::MAX (no limit)
     pub nodes_limit: u32,
+
+    /// Function to resolve external entities
+    ///
+    /// See [`EntityResolver`] for the signature
+    /// and the expected behaviour.
+    pub entity_resolver: Option<&'input mut EntityResolver<'input>>,
 }
 
-impl Default for ParsingOptions {
+/// Function to resolve external entities
+///
+/// This function is passed the optional public ID
+/// and the mandatory URI of the external entity.
+///
+/// It is expected to yield the content defining
+/// the URI, possibly preceeded by a text declaration.
+///
+/// If it yields [`None`], the entity is discarded
+/// and will yield errors if referenced during parsing.
+///
+/// Errors must be stringified so they can be propagated
+/// via [`Error::EntityResolver`].
+pub type EntityResolver<'input> =
+    dyn FnMut(Option<&str>, &str) -> core::result::Result<Option<&'input str>, String>;
+
+impl Default for ParsingOptions<'_> {
     fn default() -> Self {
         ParsingOptions {
             allow_dtd: false,
             nodes_limit: u32::MAX,
+            entity_resolver: None,
         }
+    }
+}
+
+impl fmt::Debug for ParsingOptions<'_> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let entity_resolver = if self.entity_resolver.is_some() {
+            "Some(..)"
+        } else {
+            "None"
+        };
+
+        fmt.debug_struct("ParsingOptions")
+            .field("allow_dtd", &self.allow_dtd)
+            .field("nodes_limit", &self.nodes_limit)
+            .field("entity_resolver", &entity_resolver)
+            .finish()
     }
 }
 
@@ -391,7 +437,7 @@ impl<'input> Document<'input> {
     /// assert_eq!(doc.descendants().count(), 2); // root node + `e` element node
     /// ```
     #[inline]
-    pub fn parse_with_options(text: &'input str, opt: ParsingOptions) -> Result<Self> {
+    pub fn parse_with_options(text: &'input str, opt: ParsingOptions<'input>) -> Result<Self> {
         parse(text, opt)
     }
 }
@@ -498,7 +544,7 @@ impl LoopDetector {
 }
 
 struct Context<'input> {
-    opt: ParsingOptions,
+    opt: ParsingOptions<'input>,
     namespace_start_idx: usize,
     current_attributes: Vec<TempAttributeData<'input>>,
     awaiting_subtree: Vec<NodeId>,
@@ -595,7 +641,7 @@ impl<'input> Context<'input> {
     }
 }
 
-fn parse<'input>(text: &'input str, opt: ParsingOptions) -> Result<Document<'input>> {
+fn parse<'input>(text: &'input str, opt: ParsingOptions<'input>) -> Result<Document<'input>> {
     // Trying to guess rough nodes and attributes amount.
     let nodes_capacity = memchr_iter(b'<', text.as_bytes()).count();
     let attributes_capacity = memchr_iter(b'=', text.as_bytes()).count();
@@ -622,6 +668,8 @@ fn parse<'input>(text: &'input str, opt: ParsingOptions) -> Result<Document<'inp
     doc.namespaces
         .push_ns(Some(NS_XML_PREFIX), StringStorage::Borrowed(NS_XML_URI))?;
 
+    let allow_dtd = opt.allow_dtd;
+
     let mut ctx = Context {
         opt,
         namespace_start_idx: 1,
@@ -636,7 +684,7 @@ fn parse<'input>(text: &'input str, opt: ParsingOptions) -> Result<Document<'inp
         doc,
     };
 
-    tokenizer::parse(text, opt.allow_dtd, &mut ctx)?;
+    tokenizer::parse(text, allow_dtd, &mut ctx)?;
 
     let mut doc = ctx.doc;
     if !doc.root().children().any(|n| n.is_element()) {
@@ -705,6 +753,14 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
 
         Ok(())
     }
+
+    fn resolve_entity(&mut self, pub_id: Option<&str>, uri: &str) -> core::result::Result<Option<&'input str>, String> {
+        match &mut self.opt.entity_resolver {
+            Some(entity_resolver) => entity_resolver(pub_id, uri),
+            None => Ok(None),
+        }
+    }
+
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1023,7 +1079,13 @@ fn process_text<'input>(
                 ctx.loop_detector.inc_references(&stream)?;
                 ctx.loop_detector.inc_depth(&stream)?;
 
-                let mut stream = Stream::from_substr(ctx.doc.text, fragment.range());
+                let text = if fragment.range().start == 0 {
+                    fragment.as_str()
+                } else {
+                    ctx.doc.text
+                };
+
+                let mut stream = Stream::from_substr(text, fragment.range());
                 let prev_tag_name = ctx.tag_name;
                 ctx.tag_name = TagNameSpan::new_null();
                 tokenizer::parse_content(&mut stream, ctx)?;
