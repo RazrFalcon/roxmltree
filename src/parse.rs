@@ -374,7 +374,7 @@ impl<'input> Document<'input> {
     /// assert_eq!(doc.descendants().count(), 2); // root node + `e` element node
     /// ```
     #[inline]
-    pub fn parse(text: &str) -> Result<Document> {
+    pub fn parse(text: &'input str) -> Result<Self> {
         Self::parse_with_options(text, ParsingOptions::default())
     }
 
@@ -391,7 +391,7 @@ impl<'input> Document<'input> {
     /// assert_eq!(doc.descendants().count(), 2); // root node + `e` element node
     /// ```
     #[inline]
-    pub fn parse_with_options(text: &str, opt: ParsingOptions) -> Result<Document> {
+    pub fn parse_with_options(text: &'input str, opt: ParsingOptions) -> Result<Self> {
         parse(text, opt)
     }
 }
@@ -595,7 +595,7 @@ impl<'input> Context<'input> {
     }
 }
 
-fn parse(text: &str, opt: ParsingOptions) -> Result<Document> {
+fn parse<'input>(text: &'input str, opt: ParsingOptions) -> Result<Document<'input>> {
     // Trying to guess rough nodes and attributes amount.
     let nodes_capacity = memchr_iter(b'<', text.as_bytes()).count();
     let attributes_capacity = memchr_iter(b'=', text.as_bytes()).count();

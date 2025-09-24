@@ -310,8 +310,8 @@ fn nodes_document_order() {
     let b = a.next_sibling_element().unwrap();
     let c = b.next_sibling_element().unwrap();
 
-    let mut elems = vec![&b, &c, &a];
-    elems.sort();
+    let mut elems = [&b, &c, &a];
+    elems.sort_unstable();
     assert!(elems[0] == &a);
     assert!(elems[1] == &b);
     assert!(elems[2] == &c);

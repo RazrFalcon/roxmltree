@@ -110,7 +110,7 @@ impl<'a> xml::XmlEvents<'a> for EventsCollector<'a> {
 }
 
 #[inline(never)]
-pub fn collect_tokens(text: &str) -> Vec<Token> {
+pub fn collect_tokens(text: &str) -> Vec<Token<'_>> {
     let mut collector = EventsCollector { tokens: Vec::new() };
     if let Err(e) = xml::parse(text, true, &mut collector) {
         collector.tokens.push(Token::Error(e.to_string()));
