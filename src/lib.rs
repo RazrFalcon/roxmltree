@@ -1125,10 +1125,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     where
         N: Into<ExpandedName<'n, 'm>>,
     {
-        let name = name.into();
-        self.attributes()
-            .find(|a| a.data.name.as_expanded_name(self.doc) == name)
-            .map(|a| a.value())
+        self.attribute_node(name).map(|a| a.value())
     }
 
     /// Returns element's attribute object.
@@ -1141,8 +1138,11 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
         N: Into<ExpandedName<'n, 'm>>,
     {
         let name = name.into();
-        self.attributes()
-            .find(|a| a.data.name.as_expanded_name(self.doc) == name)
+
+        match name.namespace() {
+            Some(_) => self.attributes().find(|a| a.data.name.as_expanded_name(self.doc) == name),
+            None => self.attributes().find(|a| a.data.name.local_name == name.name),
+        }
     }
 
     /// Checks that element has a specified attribute.
@@ -1164,9 +1164,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
     where
         N: Into<ExpandedName<'n, 'm>>,
     {
-        let name = name.into();
-        self.attributes()
-            .any(|a| a.data.name.as_expanded_name(self.doc) == name)
+        self.attribute_node(name).is_some()
     }
 
     /// Returns element's attributes.

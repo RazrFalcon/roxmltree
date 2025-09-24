@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+- `Node::has_attribute`, `Node::attribute` and `Node::attribute_node` now match local names similar to how `Node::has_tag_name` works.
 
 ## [0.20.0] - 2024-05-23
 ### Added
