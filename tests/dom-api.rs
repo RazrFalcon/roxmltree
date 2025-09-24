@@ -132,7 +132,7 @@ fn last_element_child() {
     let elem = svg_elem
         .children()
         .filter(|n| n.is_element())
-        .last()
+        .next_back()
         .unwrap();
     assert!(elem.has_tag_name("rect"));
 }
