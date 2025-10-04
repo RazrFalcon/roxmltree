@@ -78,9 +78,16 @@ fn huge_quick_xml(bencher: &mut Bencher) {
 
 fn tiny_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("fonts.conf").unwrap();
-    let mut opt = roxmltree::ParsingOptions::default();
-    opt.allow_dtd = true;
-    bencher.iter(|| roxmltree::Document::parse_with_options(&text, opt).unwrap())
+    bencher.iter(|| {
+        roxmltree::Document::parse_with_options(
+            &text,
+            roxmltree::ParsingOptions {
+                allow_dtd: true,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    })
 }
 
 fn medium_roxmltree(bencher: &mut Bencher) {
@@ -100,9 +107,16 @@ fn huge_roxmltree(bencher: &mut Bencher) {
 
 fn gigantic_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("gigantic.svg").unwrap();
-    let mut opt = roxmltree::ParsingOptions::default();
-    opt.allow_dtd = true;
-    bencher.iter(|| roxmltree::Document::parse_with_options(&text, opt).unwrap())
+    bencher.iter(|| {
+        roxmltree::Document::parse_with_options(
+            &text,
+            roxmltree::ParsingOptions {
+                allow_dtd: true,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    })
 }
 
 fn cdata_roxmltree(bencher: &mut Bencher) {
@@ -112,16 +126,30 @@ fn cdata_roxmltree(bencher: &mut Bencher) {
 
 fn text_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("text.xml").unwrap();
-    let mut opt = roxmltree::ParsingOptions::default();
-    opt.allow_dtd = true;
-    bencher.iter(|| roxmltree::Document::parse_with_options(&text, opt).unwrap())
+    bencher.iter(|| {
+        roxmltree::Document::parse_with_options(
+            &text,
+            roxmltree::ParsingOptions {
+                allow_dtd: true,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    })
 }
 
 fn attributes_roxmltree(bencher: &mut Bencher) {
     let text = std::fs::read_to_string("attributes.xml").unwrap();
-    let mut opt = roxmltree::ParsingOptions::default();
-    opt.allow_dtd = true;
-    bencher.iter(|| roxmltree::Document::parse_with_options(&text, opt).unwrap())
+    bencher.iter(|| {
+        roxmltree::Document::parse_with_options(
+            &text,
+            roxmltree::ParsingOptions {
+                allow_dtd: true,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    })
 }
 
 fn tiny_xmltree(bencher: &mut Bencher) {
