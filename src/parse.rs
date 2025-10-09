@@ -366,7 +366,7 @@ pub struct ParsingOptions<'input> {
 /// Errors must be stringified so they can be propagated
 /// via [`Error::EntityResolver`].
 pub type EntityResolver<'input> =
-    dyn FnMut(Option<&str>, &str) -> core::result::Result<Option<&'input str>, String>;
+    dyn FnMut(Option<&str>, &str) -> core::result::Result<Option<&'input str>, String> + 'input;
 
 impl Default for ParsingOptions<'_> {
     fn default() -> Self {
