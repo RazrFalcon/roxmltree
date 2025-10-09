@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [0.21.1] - 2025-10-09
 ### Fixed
 - Remove implict `'static` lifetime bound on `EntityResolver` dyn trait type alias.
+- Upgrade `EntityResolver` dyn trait type alias from `FnMut` to `Fn` to resolve lifetime issues.
 
 ## [0.21.0] - 2025-10-04
 ### Added
