@@ -366,10 +366,12 @@ fn tag_name_lifetime() {
 
 #[test]
 fn entity_resolver_works() {
-    let text = r#"<!DOCTYPE foo [<!ENTITY bar SYSTEM "baz.xml">]> <qux>&bar;</qux>"#;
+    let text = r#"<!DOCTYPE foo [<!ENTITY bar SYSTEM "baz.xml">]> <qux>&bar;</qux>"#.to_owned();
+
+    let entity = r#"<?xml version="1.0"?><foobar/>"#.to_owned();
 
     let mut entity_resolver =
-        |_pub_id: Option<&str>, _uri: &str| Ok(Some(r#"<?xml version="1.0"?><foobar/>"#));
+        |_pub_id: Option<&str>, _uri: &str| Ok(Some(&*entity));
 
     let opts = roxmltree::ParsingOptions {
         allow_dtd: true,
@@ -377,7 +379,7 @@ fn entity_resolver_works() {
         ..Default::default()
     };
 
-    let doc = roxmltree::Document::parse_with_options(text, opts).unwrap();
+    let doc = roxmltree::Document::parse_with_options(&text, opts).unwrap();
 
     assert!(
         doc.root_element()
