@@ -349,7 +349,7 @@ pub struct ParsingOptions<'input> {
     ///
     /// See [`EntityResolver`] for the signature
     /// and the expected behaviour.
-    pub entity_resolver: Option<&'input mut EntityResolver<'input>>,
+    pub entity_resolver: Option<&'input EntityResolver<'input>>,
 }
 
 /// Function to resolve external entities
@@ -366,7 +366,7 @@ pub struct ParsingOptions<'input> {
 /// Errors must be stringified so they can be propagated
 /// via [`Error::EntityResolver`].
 pub type EntityResolver<'input> =
-    dyn FnMut(Option<&str>, &str) -> core::result::Result<Option<&'input str>, String> + 'input;
+    dyn Fn(Option<&str>, &str) -> core::result::Result<Option<&'input str>, String> + 'input;
 
 impl Default for ParsingOptions<'_> {
     fn default() -> Self {

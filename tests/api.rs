@@ -370,12 +370,12 @@ fn entity_resolver_works() {
 
     let entity = r#"<?xml version="1.0"?><foobar/>"#.to_owned();
 
-    let mut entity_resolver =
+    let entity_resolver =
         |_pub_id: Option<&str>, _uri: &str| Ok(Some(&*entity));
 
     let opts = roxmltree::ParsingOptions {
         allow_dtd: true,
-        entity_resolver: Some(&mut entity_resolver),
+        entity_resolver: Some(&entity_resolver),
         ..Default::default()
     };
 
