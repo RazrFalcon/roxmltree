@@ -131,7 +131,7 @@ pub enum Error {
     /// An invalid ExternalID in the DTD.
     InvalidExternalID(TextPos),
 
-    /// The given entity resolved yielded an error.
+    /// Resolving the given entity yielded an error.
     EntityResolver(TextPos, String),
 
     /// A comment cannot contain `--` or end with `-`.
