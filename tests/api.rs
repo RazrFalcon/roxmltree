@@ -389,3 +389,11 @@ fn entity_resolver_works() {
             .has_tag_name("foobar")
     );
 }
+
+#[test]
+fn deeply_nested_elements() {
+    const DEPTH: usize = 200_000;
+    let text = format!("{}{}", "<a>".repeat(DEPTH), "</a>".repeat(DEPTH));
+    let doc = Document::parse(&text).unwrap();
+    assert_eq!(doc.descendants().filter(|n| n.is_element()).count(), DEPTH);
+}

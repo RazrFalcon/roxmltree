@@ -96,7 +96,8 @@ pub enum Error {
     /// This error will be emitted only when `ParsingOptions::allow_dtd` is set to `false`.
     DtdDetected,
 
-    /// Indicates that the [`ParsingOptions::nodes_limit`] was reached.
+    /// Indicates that the [`ParsingOptions::nodes_limit`] was reached,
+    /// or that elements are nested deeper than `u32::MAX` levels.
     NodesLimitReached,
 
     /// Indicates that too many attributes were parsed.

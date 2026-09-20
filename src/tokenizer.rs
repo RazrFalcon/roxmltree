@@ -262,8 +262,8 @@ pub fn parse<'input>(
     }
 
     s.skip_spaces();
-    if s.curr_byte().ok() == Some(b'<') {
-        parse_element(s, events)?;
+    if s.curr_byte().ok() == Some(b'<') && parse_start_tag(s, events)? {
+        parse_content(s, events)?;
     }
 
     parse_misc(s, events)?;
@@ -579,9 +579,11 @@ fn consume_decl(s: &mut Stream) -> Result<()> {
     Ok(())
 }
 
-// element ::= EmptyElemTag | STag content ETag
-// '<' Name (S Attribute)* S? '>'
-fn parse_element<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
+// EmptyElemTag ::= '<' Name (S Attribute)* S? '/>'
+// STag         ::= '<' Name (S Attribute)* S? '>'
+//
+// Returns `true` for a start tag, i.e. when the element's content still has to be parsed.
+fn parse_start_tag<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<bool> {
     let start = s.pos();
     s.advance(1); // <
     let (prefix, local) = s.consume_qname()?;
@@ -635,11 +637,7 @@ fn parse_element<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'in
         }
     }
 
-    if open {
-        parse_content(s, events)?;
-    }
-
-    Ok(())
+    Ok(open)
 }
 
 // Attribute ::= Name Eq AttValue
@@ -659,10 +657,17 @@ fn parse_attribute<'input>(
 }
 
 // content ::= CharData? ((element | Reference | CDSect | PI | Comment) CharData?)*
+// element ::= EmptyElemTag | STag content ETag
+//
+// Nested elements are parsed iteratively, tracking the depth explicitly
+// instead of recursing, so deeply nested documents cannot overflow the stack.
+// An end tag at depth 0 closes the caller's element and ends this call.
 pub fn parse_content<'input>(
     s: &mut Stream<'input>,
     events: &mut impl XmlEvents<'input>,
 ) -> Result<()> {
+    let mut depth: u32 = 0;
+
     while !s.at_end() {
         match s.curr_byte() {
             Ok(b'<') => match s.next_byte() {
@@ -678,9 +683,16 @@ pub fn parse_content<'input>(
                 Ok(b'?') => parse_pi(s, events)?,
                 Ok(b'/') => {
                     parse_close_element(s, events)?;
-                    break;
+                    if depth == 0 {
+                        break;
+                    }
+                    depth -= 1;
                 }
-                Ok(_) => parse_element(s, events)?,
+                Ok(_) => {
+                    if parse_start_tag(s, events)? {
+                        depth = depth.checked_add(1).ok_or(Error::NodesLimitReached)?;
+                    }
+                }
                 Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
             },
             Ok(_) => parse_text(s, events)?,
