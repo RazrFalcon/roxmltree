@@ -609,6 +609,12 @@ impl<'input> Context<'input> {
             };
 
             self.append_node(NodeKind::Text(text), range)?;
+        } else {
+            #[cfg(feature = "positions")]
+            if self.loop_detector.depth == 0 {
+                // Entity fragments use offsets in the DTD or external input.
+                self.doc.nodes.last_mut().unwrap().range.end = range.end;
+            }
         }
 
         self.after_text.push(text);
