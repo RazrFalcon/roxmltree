@@ -397,3 +397,14 @@ fn deeply_nested_elements() {
     let doc = Document::parse(&text).unwrap();
     assert_eq!(doc.descendants().filter(|n| n.is_element()).count(), DEPTH);
 }
+
+#[test]
+fn too_many_attributes_on_one_element() {
+    let mut text = String::from("<e");
+    for i in 0..=u16::MAX as u32 {
+        text.push_str(&format!(" a{i}='1'"));
+    }
+    text.push_str("/>");
+    let err = Document::parse(&text).unwrap_err();
+    assert_eq!(err, Error::AttributesLimitReached);
+}

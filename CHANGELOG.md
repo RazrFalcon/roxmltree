@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Fixed
+- Reject an element with more than `u16::MAX` attributes. Duplicate-attribute
+  checks are quadratic, and the previous document-wide `u32` cap did not bound
+  a single element.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed

@@ -101,6 +101,9 @@ pub enum Error {
     NodesLimitReached,
 
     /// Indicates that too many attributes were parsed.
+    ///
+    /// Raised when one element has more than `u16::MAX` attributes, or when
+    /// the document-wide attribute count reaches `u32::MAX`.
     AttributesLimitReached,
 
     /// Indicates that too many namespaces were parsed.
@@ -265,7 +268,7 @@ impl core::fmt::Display for Error {
                 write!(f, "nodes limit reached")
             }
             Error::AttributesLimitReached => {
-                write!(f, "more than 2^32 attributes were parsed")
+                write!(f, "too many attributes were parsed")
             }
             Error::NamespacesLimitReached => {
                 write!(f, "more than 2^16 unique namespaces were parsed")
@@ -986,7 +989,12 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
         return Ok(ShortRange::new(0, 0));
     }
 
-    if ctx.doc.attributes.len() + ctx.current_attributes.len() >= u32::MAX as usize {
+    // Duplicate-attribute checks are O(n²) in the current element's
+    // attributes. Cap one element at u16::MAX so a huge attribute list
+    // cannot turn into a parse DoS. The document-wide list still uses u32.
+    if ctx.current_attributes.len() > u16::MAX as usize
+        || ctx.doc.attributes.len() + ctx.current_attributes.len() >= u32::MAX as usize
+    {
         return Err(Error::AttributesLimitReached);
     }
 
