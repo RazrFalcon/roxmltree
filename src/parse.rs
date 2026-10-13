@@ -1046,33 +1046,24 @@ fn process_text<'input>(
     }
 
     let mut text_buffer = TextBuffer::new();
-    let mut is_as_is = false; // TODO: explain
     let mut stream = Stream::from_substr(ctx.doc.text, range.clone());
     while !stream.at_end() {
         match parse_next_chunk(&mut stream, &ctx.entities)? {
             NextChunk::Byte(c) => {
-                if is_as_is {
-                    text_buffer.push_raw(c);
-                    is_as_is = false;
-                } else {
-                    text_buffer.push_from_text(c, stream.at_end());
-                }
+                text_buffer.push_from_text(c);
             }
             NextChunk::Char(c) => {
                 for b in CharToBytes::new(c) {
                     if ctx.loop_detector.depth > 0 {
-                        text_buffer.push_from_text(b, stream.at_end());
+                        text_buffer.push_from_text(b);
                     } else {
-                        // Characters not from entity should be added as is.
-                        // Not sure why... At least `lxml` produces the same result.
+                        // Character references are not subject to line-end normalization,
+                        // so `&#13;` stays a carriage return.
                         text_buffer.push_raw(b);
-                        is_as_is = true;
                     }
                 }
             }
             NextChunk::Text(fragment) => {
-                is_as_is = false;
-
                 if !text_buffer.is_empty() {
                     ctx.append_text(Cow::Owned(text_buffer.finish()), range.clone())?;
                 }
@@ -1341,6 +1332,9 @@ impl Iterator for CharToBytes {
 
 struct TextBuffer {
     buffer: Vec<u8>,
+    // Set when the last byte came from a literal `\r` in the input,
+    // so that a following `\n` is dropped.
+    after_cr: bool,
 }
 
 impl TextBuffer {
@@ -1348,11 +1342,13 @@ impl TextBuffer {
     fn new() -> Self {
         TextBuffer {
             buffer: Vec::with_capacity(32),
+            after_cr: false,
         }
     }
 
     #[inline]
     fn push_raw(&mut self, c: u8) {
+        self.after_cr = false;
         self.buffer.push(c);
     }
 
@@ -1374,26 +1370,20 @@ impl TextBuffer {
     // Translate \r\n and any \r that is not followed by \n into a single \n character.
     //
     // https://www.w3.org/TR/xml/#sec-line-ends
-    fn push_from_text(&mut self, c: u8, at_end: bool) {
-        if self.buffer.last() == Some(&b'\r') {
-            let idx = self.buffer.len() - 1;
-            self.buffer[idx] = b'\n';
-
-            if at_end && c == b'\r' {
-                self.buffer.push(b'\n');
-            } else if c != b'\n' {
-                self.buffer.push(c);
-            }
-        } else if at_end && c == b'\r' {
-            self.buffer.push(b'\n');
-        } else {
-            self.buffer.push(c);
+    fn push_from_text(&mut self, c: u8) {
+        if c == b'\n' && self.after_cr {
+            self.after_cr = false;
+            return;
         }
+
+        self.after_cr = c == b'\r';
+        self.buffer.push(if self.after_cr { b'\n' } else { c });
     }
 
     #[inline]
     fn clear(&mut self) {
         self.buffer.clear();
+        self.after_cr = false;
     }
 
     #[inline]
@@ -1403,6 +1393,7 @@ impl TextBuffer {
 
     #[inline]
     fn finish(&mut self) -> String {
+        self.after_cr = false;
         // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
         String::from_utf8(take(&mut self.buffer)).unwrap()
     }
