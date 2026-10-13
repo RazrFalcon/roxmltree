@@ -397,3 +397,9 @@ fn deeply_nested_elements() {
     let doc = Document::parse(&text).unwrap();
     assert_eq!(doc.descendants().filter(|n| n.is_element()).count(), DEPTH);
 }
+
+#[test]
+fn text_cr_before_reference() {
+    let doc = Document::parse("<r>a\r&#65;b\r&amp;c\r&#13;\n</r>").unwrap();
+    assert_eq!(doc.root_element().text(), Some("a\nAb\n&c\n\r\n"));
+}
