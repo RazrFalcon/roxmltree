@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.21.2] - 2026-10-24
 ### Fixed
 - Stack overflow when parsing deeply nested elements.
   Element content is now parsed iteratively instead of recursing once per nesting level.

@@ -1372,7 +1372,7 @@ impl<'a, 'input: 'a> Node<'a, 'input> {
 
     /// Returns the last element child of this node.
     pub fn last_element_child(&self) -> Option<Self> {
-        self.children().filter(|n| n.is_element()).next_back()
+        self.children().rfind(|n| n.is_element())
     }
 
     /// Returns true if this node has siblings.
