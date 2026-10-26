@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Reject an element with more than `u16::MAX` attributes. Duplicate-attribute
   checks are quadratic, and the previous document-wide `u32` cap did not bound
   a single element.
+- Character references to surrogates or to values above `U+10FFFF`, like `&#xD800;`,
+  were replaced with `U+FFFD` instead of being rejected.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed
