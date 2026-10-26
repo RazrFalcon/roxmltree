@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Comments or CDATA full of `<`, or text full of `=`, made parsing reserve a node
   or attribute slot per input byte up front. The initial guess is now capped by
   the input size.
+- Parameter entities were resolved by general entity references with the same name:
+  `<!ENTITY % e "...">` made `&e;` valid and could shadow a general entity `e` declared later.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed
