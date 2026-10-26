@@ -507,7 +507,11 @@ fn parse_entity_decl<'input>(
     let name = s.consume_name()?;
     s.consume_spaces()?;
     if let Some(definition) = parse_entity_def(s, events, is_ge)? {
-        events.token(Token::EntityDeclaration(name, definition))?;
+        // Parameter entities have their own namespace and can only be
+        // referenced in the DTD, so they must not resolve `&name;` references.
+        if is_ge {
+            events.token(Token::EntityDeclaration(name, definition))?;
+        }
     }
     s.skip_spaces();
     s.consume_byte(b'>')?;
