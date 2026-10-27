@@ -205,6 +205,7 @@ test!(cdata_007);
 test!(cdata_008);
 test!(cdata_009);
 test!(comments_001);
+test!(comments_002);
 test!(elems_err_001);
 test!(elems_err_002);
 test!(entity_001);
