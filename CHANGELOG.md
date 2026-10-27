@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Reject an element with more than `u16::MAX` attributes. Duplicate-attribute
   checks are quadratic, and the previous document-wide `u32` cap did not bound
   a single element.
+- Normalize `\r\n` and `\r` to `\n` in comment text, as already done for text and CDATA.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed

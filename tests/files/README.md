@@ -16,6 +16,7 @@
 - cdata_006 - simple case
 - cdata_007 - with \r
 - comments_001 - comment before and after the root element
+- comments_002 - with \r\n and \r
 - elems_err_001 - invalid tree structure
 - elems_err_002 - invalid tree structure with namespace
 - entity_001 - entity reference to an element
