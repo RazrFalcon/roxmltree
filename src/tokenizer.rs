@@ -125,17 +125,15 @@ impl XmlByteExt for u8 {
 
 #[inline]
 fn is_xml_str(s: &str, value_start: usize, stream: &mut Stream<'_>) -> Result<()> {
-    if s.as_bytes().is_ascii() {
-        for (i, b) in s.as_bytes().iter().enumerate() {
-            if !b.is_xml_char() {
-                return Err(Error::NonXmlChar(*b as char, stream.gen_text_pos_from(value_start + i)));
-            }
-        }
-
-        Ok(())
-    } else {
-        is_xml_str_unicode(s, value_start, stream)
+    let is_ascii_xml_str = s
+        .as_bytes()
+        .iter()
+        .fold(true, |ok, b| ok & (b.is_ascii() & b.is_xml_char()));
+    if is_ascii_xml_str {
+        return Ok(());
     }
+
+    is_xml_str_unicode(s, value_start, stream)
 }
 
 
