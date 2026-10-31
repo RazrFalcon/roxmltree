@@ -717,7 +717,11 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
             }
             tokenizer::Token::Comment(text, range) => {
                 self.reset_after_text();
-                self.append_node(NodeKind::Comment(StringStorage::Borrowed(text)), range)?;
+                let text = match normalize_line_endings(text) {
+                    Some(text) => StringStorage::new_owned(&text),
+                    None => StringStorage::Borrowed(text),
+                };
+                self.append_node(NodeKind::Comment(text), range)?;
             }
             tokenizer::Token::EntityDeclaration(name, definition) => {
                 self.entities.push(Entity {
@@ -1116,17 +1120,20 @@ fn process_text<'input>(
 // While the whole purpose of CDATA is to indicate to an XML library that this text
 // has to be stored as is, carriage return (`\r`) is still has to be replaced with `\n`.
 fn process_cdata<'input>(
-    mut text: &'input str,
+    text: &'input str,
     range: Range<usize>,
     ctx: &mut Context<'input>,
 ) -> Result<()> {
-    let mut pos = memchr(b'\r', text.as_bytes());
-
-    // Add text as is if it has only valid characters.
-    if pos.is_none() {
-        ctx.append_text(Cow::Borrowed(text), range)?;
-        return Ok(());
+    match normalize_line_endings(text) {
+        Some(text) => ctx.append_text(Cow::Owned(text), range),
+        None => ctx.append_text(Cow::Borrowed(text), range),
     }
+}
+
+// https://www.w3.org/TR/xml/#sec-line-ends
+// Returns `None` if `text` has no carriage return and can be used as is.
+fn normalize_line_endings(mut text: &str) -> Option<String> {
+    let mut pos = Some(memchr(b'\r', text.as_bytes())?);
 
     let mut buf = String::new();
 
@@ -1147,8 +1154,7 @@ fn process_cdata<'input>(
 
     buf.push_str(text);
 
-    ctx.append_text(Cow::Owned(buf), range)?;
-    Ok(())
+    Some(buf)
 }
 
 enum NextChunk<'a> {
