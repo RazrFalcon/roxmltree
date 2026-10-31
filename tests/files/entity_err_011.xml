@@ -1,0 +1,4 @@
+<!DOCTYPE test [
+    <!ENTITY % e 'text'>
+]>
+<root>&e;</root>

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Reject an element with more than `u16::MAX` attributes. Duplicate-attribute
   checks are quadratic, and the previous document-wide `u32` cap did not bound
   a single element.
+- Parameter entities were resolved by general entity references with the same name:
+  `<!ENTITY % e "...">` made `&e;` valid and could shadow a general entity `e` declared later.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed

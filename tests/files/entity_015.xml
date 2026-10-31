@@ -1,0 +1,5 @@
+<!DOCTYPE test [
+    <!ENTITY % e '<p/>'>
+    <!ENTITY e 'text'>
+]>
+<root>&e;</root>
