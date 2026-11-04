@@ -329,8 +329,8 @@ impl std::error::Error for Error {
 pub struct ParsingOptions<'input> {
     /// Allow DTD parsing.
     ///
-    /// When set to `false`, XML with DTD will cause an error.
-    /// Empty DTD block is not an error.
+    /// When set to `false`, XML with DTD will cause an error,
+    /// even when the DTD is empty, like `<!DOCTYPE root>`.
     ///
     /// Currently, there is no option to simply skip DTD.
     /// Mainly because you will get `UnknownEntityReference` error later anyway.
