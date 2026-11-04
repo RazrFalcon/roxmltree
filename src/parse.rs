@@ -1,6 +1,7 @@
 use alloc::string::{String, ToString};
 use alloc::{vec, vec::Vec};
 use alloc::borrow::Cow;
+use alloc::collections::BTreeSet;
 use core::ops::Range;
 use core::mem::take;
 use core::fmt;
@@ -967,15 +968,24 @@ impl Context<'_> {
                 return parent_ns;
             }
 
+            // Check inherited bindings only against the element's own declarations,
+            // not against the ones inherited before them, which was quadratic.
+            let ns = &mut self.doc.namespaces;
+            let mut own: BTreeSet<_> = ns.tree_order[self.namespace_start_idx..]
+                .iter()
+                .map(|idx| ns.get(*idx).name)
+                .collect();
+
             for i in parent_ns.to_urange() {
-                if !self.doc.namespaces.exists(
-                    self.namespace_start_idx,
-                    self.doc
-                        .namespaces
-                        .get(self.doc.namespaces.tree_order[i])
-                        .name,
-                ) {
-                    self.doc.namespaces.push_ref(i);
+                let prefix = ns.get(ns.tree_order[i]).name;
+                // A repeated `xmlns` is accepted, so the parent can have two default
+                // namespaces. Only the first one is inherited.
+                let shadowed = match prefix {
+                    None => !own.insert(None),
+                    Some(_) => own.contains(&prefix),
+                };
+                if !shadowed {
+                    ns.push_ref(i);
                 }
             }
         }

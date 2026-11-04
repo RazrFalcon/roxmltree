@@ -408,3 +408,20 @@ fn too_many_attributes_on_one_element() {
     let err = Document::parse(&text).unwrap_err();
     assert_eq!(err, Error::AttributesLimitReached);
 }
+
+#[test]
+fn inherited_namespaces_are_shadowed_by_own_declarations() {
+    let data = "<r xmlns='d1' xmlns:a='a1' xmlns:b='b1'><c xmlns='d2' xmlns:b='b2'/></r>";
+    let doc = Document::parse(data).unwrap();
+    let c = doc.root_element().first_element_child().unwrap();
+    let ns: Vec<_> = c.namespaces().map(|ns| (ns.name(), ns.uri())).collect();
+    assert_eq!(ns, [(None, "d2"), (Some("b"), "b2"), (Some("a"), "a1")]);
+}
+
+#[test]
+fn only_first_repeated_default_namespace_is_inherited() {
+    let doc = Document::parse("<r xmlns='a' xmlns='b'><c xmlns:p='p'/></r>").unwrap();
+    let c = doc.root_element().first_element_child().unwrap();
+    let ns: Vec<_> = c.namespaces().map(|ns| (ns.name(), ns.uri())).collect();
+    assert_eq!(ns, [(Some("p"), "p"), (None, "a")]);
+}
