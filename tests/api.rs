@@ -408,3 +408,9 @@ fn too_many_attributes_on_one_element() {
     let err = Document::parse(&text).unwrap_err();
     assert_eq!(err, Error::AttributesLimitReached);
 }
+
+#[test]
+fn empty_dtd_is_rejected_by_default() {
+    assert_eq!(Document::parse("<!DOCTYPE p><p/>").unwrap_err(), Error::DtdDetected);
+    assert_eq!(Document::parse("<!DOCTYPE p []><p/>").unwrap_err(), Error::DtdDetected);
+}
