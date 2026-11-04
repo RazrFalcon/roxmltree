@@ -207,7 +207,7 @@ pub enum Token<'input> {
     ElementStart(&'input str, &'input str, usize),
 
     // ns:attr="value"
-    Attribute(Range<usize>, u16, u8, &'input str, &'input str, StrSpan<'input>),
+    Attribute(Range<usize>, u32, u32, &'input str, &'input str, StrSpan<'input>),
 
     ElementEnd(ElementEnd<'input>, Range<usize>),
 
@@ -619,9 +619,9 @@ fn parse_start_tag<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'
                 // because it will blow up the binary size.
                 let (prefix, local) = s.consume_qname()?;
                 let qname_end = s.pos();
-                let qname_len = u16::try_from(qname_end - start).unwrap_or(u16::MAX);
+                let qname_len = u32::try_from(qname_end - start).unwrap_or(u32::MAX);
                 s.consume_eq()?;
-                let eq_len = u8::try_from(s.pos() - qname_end).unwrap_or(u8::MAX);
+                let eq_len = u32::try_from(s.pos() - qname_end).unwrap_or(u32::MAX);
                 let quote = s.consume_quote()?;
                 // The attribute value must not contain the < character.
                 let value_start = s.pos();
