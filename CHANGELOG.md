@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `Attribute::range_qname` and `Attribute::range_value` returned wrong ranges when the qname
   was longer than `u16::MAX` bytes or the equal sign with its surrounding spaces was longer
   than `u8::MAX` bytes. Both limits are `u32::MAX` now.
+- A repeated default namespace declaration (`xmlns`) on one element is an error now
+  (`Error::DuplicatedAttribute`), as XML requires each attribute name once per tag.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed

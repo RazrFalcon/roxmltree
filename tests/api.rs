@@ -435,3 +435,20 @@ fn empty_dtd_is_rejected_by_default() {
     assert_eq!(Document::parse("<!DOCTYPE p><p/>").unwrap_err(), Error::DtdDetected);
     assert_eq!(Document::parse("<!DOCTYPE p []><p/>").unwrap_err(), Error::DtdDetected);
 }
+
+#[test]
+fn duplicated_default_namespace() {
+    let err = Document::parse("<e xmlns='a' xmlns='b'/>").unwrap_err();
+    assert_eq!(err, Error::DuplicatedAttribute("xmlns".to_string(), TextPos::new(1, 14)));
+}
+
+#[test]
+fn duplicated_default_namespace_from_an_entity() {
+    let data = "<!DOCTYPE r [<!ENTITY c '<c xmlns=\"1\" xmlns=\"2\"/>'>]><r>&c;</r>";
+    let opt = ParsingOptions {
+        allow_dtd: true,
+        ..ParsingOptions::default()
+    };
+    let err = Document::parse_with_options(data, opt).unwrap_err();
+    assert!(matches!(err, Error::DuplicatedAttribute(ref name, _) if name == "xmlns"));
+}

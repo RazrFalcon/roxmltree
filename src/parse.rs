@@ -79,6 +79,9 @@ pub enum Error {
     /// ```xml
     /// <e xmlns:n1='http://www.w3.org' xmlns:n2='http://www.w3.org' n1:a='b1' n2:a='b2'/>
     /// ```
+    ///
+    /// A repeated default namespace declaration (`xmlns`) is reported
+    /// as a duplicated `xmlns` attribute too.
     DuplicatedAttribute(String, TextPos),
 
     /// The XML document must have at least one element.
@@ -829,6 +832,11 @@ fn process_attribute<'input>(
         if value.as_str() == NS_XMLNS_URI {
             let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::UnexpectedXmlnsUri(pos));
+        }
+
+        if ctx.doc.namespaces.exists(ctx.namespace_start_idx, None) {
+            let pos = ctx.doc.text_pos_at(range.start);
+            return Err(Error::DuplicatedAttribute(XMLNS.to_string(), pos));
         }
 
         ctx.doc.namespaces.push_ns(None, value)?;
