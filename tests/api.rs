@@ -268,7 +268,28 @@ fn text_pos_06() {
     assert_eq!(doc.text_pos_at(attr.range().end), TextPos::new(1, 269));
     assert_eq!(doc.text_pos_at(attr.range_qname().start), TextPos::new(1, 4));
     assert_eq!(doc.text_pos_at(attr.range_qname().end), TextPos::new(1, 5));
-    attr.range_value(); // unreliable since >254 spaces around equal sign, but still shouldn't panic
+    assert_eq!(doc.text_pos_at(attr.range_value().start), TextPos::new(1, 267));
+    assert_eq!(doc.text_pos_at(attr.range_value().end), TextPos::new(1, 268));
+    assert_eq!(&data[attr.range_value()], "b");
+}
+
+#[cfg(feature = "positions")]
+#[test]
+fn text_pos_07() {
+    // A qname longer than u16::MAX bytes and more than u8::MAX bytes around the equal sign.
+    let name = format!("n:{}", "a".repeat(70_000));
+    let data = format!(
+        "<e xmlns:n='http://www.w3.org' {}{}={}\"value\"/>",
+        name,
+        " ".repeat(300),
+        " ".repeat(300)
+    );
+
+    let doc = Document::parse(&data).unwrap();
+    let attr = doc.root_element().attributes().next().unwrap();
+
+    assert_eq!(&data[attr.range_qname()], name);
+    assert_eq!(&data[attr.range_value()], "value");
 }
 
 #[test]

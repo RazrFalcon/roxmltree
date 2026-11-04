@@ -491,9 +491,9 @@ struct AttributeData<'input> {
     #[cfg(feature = "positions")]
     range: Range<usize>,
     #[cfg(feature = "positions")]
-    qname_len: u16,
+    qname_len: u32,
     #[cfg(feature = "positions")]
-    eq_len: u8, // includes any surrounding spaces
+    eq_len: u32, // includes any surrounding spaces
 }
 
 /// An attribute.
@@ -599,12 +599,12 @@ impl<'a, 'input> Attribute<'a, 'input> {
     ///    ^^^^^^
     /// ```
     ///
-    /// To reduce memory usage the qname length is limited by u16::MAX.
+    /// To reduce memory usage the qname length is limited by u32::MAX.
     /// If the attribute exceeds that limit then the end of the returned range will be incorrect.
     #[cfg(feature = "positions")]
     #[inline]
     pub fn range_qname(&self) -> Range<usize> {
-        let end = self.data.range.start + usize::from(self.data.qname_len);
+        let end = self.data.range.start + self.data.qname_len as usize;
         self.data.range.start..end
     }
 
@@ -617,14 +617,14 @@ impl<'a, 'input> Attribute<'a, 'input> {
     ///            ^^^^^
     /// ```
     ///
-    /// To reduce memory usage the qname length is limited by u16::MAX,
-    /// and the number of spaces around the equal sign is limited by u8::MAX.
+    /// To reduce memory usage the qname length is limited by u32::MAX,
+    /// and the number of spaces around the equal sign is limited by u32::MAX.
     /// If the attribute exceeds those limits then the start of the returned range will be incorrect.
     #[cfg(feature = "positions")]
     #[inline]
     pub fn range_value(&self) -> Range<usize> {
         // +1 on start and -1 on end are to exclude the quotes around the value (all valid quotes are 1 byte)
-        let start = self.data.range.start + usize::from(self.data.qname_len) + usize::from(self.data.eq_len) + 1;
+        let start = self.data.range.start + self.data.qname_len as usize + self.data.eq_len as usize + 1;
         let end = self.data.range.end - 1;
         start..end
     }

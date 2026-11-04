@@ -404,9 +404,9 @@ struct TempAttributeData<'input> {
     value: StringStorage<'input>,
     range: Range<usize>,
     #[cfg(feature = "positions")]
-    qname_len: u16,
+    qname_len: u32,
     #[cfg(feature = "positions")]
-    eq_len: u8,
+    eq_len: u32,
 }
 
 impl<'input> Document<'input> {
@@ -770,8 +770,8 @@ impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
 #[allow(clippy::too_many_arguments)]
 fn process_attribute<'input>(
     range: Range<usize>,
-    qname_len: u16,
-    eq_len: u8,
+    qname_len: u32,
+    eq_len: u32,
     prefix: &'input str,
     local: &'input str,
     value: StrSpan<'input>,
