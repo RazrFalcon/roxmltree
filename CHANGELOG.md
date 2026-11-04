@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   than `u8::MAX` bytes. Both limits are `u32::MAX` now.
 - A repeated default namespace declaration (`xmlns`) on one element is an error now
   (`Error::DuplicatedAttribute`), as XML requires each attribute name once per tag.
+- Quadratic time per element when an element that declares a namespace inherits
+  many namespaces. Inherited bindings are now checked only against the element's
+  own declarations.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed

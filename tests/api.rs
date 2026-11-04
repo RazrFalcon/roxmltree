@@ -452,3 +452,42 @@ fn duplicated_default_namespace_from_an_entity() {
     let err = Document::parse_with_options(data, opt).unwrap_err();
     assert!(matches!(err, Error::DuplicatedAttribute(ref name, _) if name == "xmlns"));
 }
+
+#[test]
+fn inherited_namespaces_are_shadowed_by_own_declarations() {
+    let data = "<r xmlns='d1' xmlns:a='a1' xmlns:b='b1'><c xmlns='d2' xmlns:b='b2'/></r>";
+    let doc = Document::parse(data).unwrap();
+    let c = doc.root_element().first_element_child().unwrap();
+    let ns: Vec<_> = c.namespaces().map(|ns| (ns.name(), ns.uri())).collect();
+    assert_eq!(ns, [(None, "d2"), (Some("b"), "b2"), (Some("a"), "a1")]);
+}
+
+#[test]
+fn namespaces_are_inherited_through_several_levels() {
+    let data = "<r xmlns:a='a1'><m xmlns:b='b1'><c xmlns:a='a2' xmlns:d='d1'/></m></r>";
+    let doc = Document::parse(data).unwrap();
+    let c = doc.descendants().find(|n| n.has_tag_name("c")).unwrap();
+    let ns: Vec<_> = c.namespaces().map(|ns| (ns.name(), ns.uri())).collect();
+    assert_eq!(
+        ns,
+        [(Some("a"), "a2"), (Some("d"), "d1"), (Some("b"), "b1")]
+    );
+}
+
+#[test]
+fn an_empty_default_namespace_shadows_the_inherited_one() {
+    let data = "<r xmlns='d1' xmlns:a='a1'><c xmlns=''/></r>";
+    let doc = Document::parse(data).unwrap();
+    let c = doc.root_element().first_element_child().unwrap();
+    let ns: Vec<_> = c.namespaces().map(|ns| (ns.name(), ns.uri())).collect();
+    assert_eq!(ns, [(None, ""), (Some("a"), "a1")]);
+}
+
+#[test]
+fn declaring_only_the_xml_prefix_keeps_the_inherited_namespaces() {
+    let data = "<r xmlns:a='a1'><c xmlns:xml='http://www.w3.org/XML/1998/namespace'/></r>";
+    let doc = Document::parse(data).unwrap();
+    let c = doc.root_element().first_element_child().unwrap();
+    let ns: Vec<_> = c.namespaces().map(|ns| (ns.name(), ns.uri())).collect();
+    assert_eq!(ns, [(Some("a"), "a1")]);
+}

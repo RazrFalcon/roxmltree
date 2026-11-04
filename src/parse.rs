@@ -811,7 +811,7 @@ fn process_attribute<'input>(
         if ctx
             .doc
             .namespaces
-            .exists(ctx.namespace_start_idx, Some(local))
+            .exists(ctx.namespace_start_idx.., Some(local))
         {
             let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::DuplicatedNamespace(local.to_string(), pos));
@@ -834,7 +834,7 @@ fn process_attribute<'input>(
             return Err(Error::UnexpectedXmlnsUri(pos));
         }
 
-        if ctx.doc.namespaces.exists(ctx.namespace_start_idx, None) {
+        if ctx.doc.namespaces.exists(ctx.namespace_start_idx.., None) {
             let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::DuplicatedAttribute(XMLNS.to_string(), pos));
         }
@@ -975,14 +975,18 @@ impl Context<'_> {
                 return parent_ns;
             }
 
+            // An inherited binding is shadowed only by the element's own
+            // declarations. Those have distinct prefixes (a repeated `xmlns`
+            // or `xmlns:p` is an error), and so do the parent's bindings,
+            // so the ones copied here need not be searched again.
+            let own = self.namespace_start_idx..self.doc.namespaces.tree_order.len();
             for i in parent_ns.to_urange() {
-                if !self.doc.namespaces.exists(
-                    self.namespace_start_idx,
-                    self.doc
-                        .namespaces
-                        .get(self.doc.namespaces.tree_order[i])
-                        .name,
-                ) {
+                let name = self
+                    .doc
+                    .namespaces
+                    .get(self.doc.namespaces.tree_order[i])
+                    .name;
+                if !self.doc.namespaces.exists(own.clone(), name) {
                     self.doc.namespaces.push_ref(i);
                 }
             }
