@@ -1032,9 +1032,11 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
             local_name: attr.local,
         };
 
-        // Check for duplicated attributes.
+        // Check for duplicated attributes. Local names are compared first,
+        // so a long namespace URI isn't compared for every pair.
         if ctx.doc.attributes[start_idx..].iter().any(|attr| {
-            attr.name.as_expanded_name(&ctx.doc) == attr_name.as_expanded_name(&ctx.doc)
+            attr.name.local_name == attr_name.local_name
+                && attr.name.as_expanded_name(&ctx.doc) == attr_name.as_expanded_name(&ctx.doc)
         }) {
             let pos = ctx.doc.text_pos_at(attr.range.start);
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
