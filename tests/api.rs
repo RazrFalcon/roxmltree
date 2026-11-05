@@ -439,7 +439,8 @@ fn empty_dtd_is_rejected_by_default() {
 #[test]
 fn duplicated_default_namespace() {
     let err = Document::parse("<e xmlns='a' xmlns='b'/>").unwrap_err();
-    assert_eq!(err, Error::DuplicatedAttribute("xmlns".to_string(), TextPos::new(1, 14)));
+    assert_eq!(err, Error::DuplicatedNamespace(String::new(), TextPos::new(1, 14)));
+    assert_eq!(err.to_string(), "the default namespace at 1:14 is already defined");
 }
 
 #[test]
@@ -450,7 +451,7 @@ fn duplicated_default_namespace_from_an_entity() {
         ..ParsingOptions::default()
     };
     let err = Document::parse_with_options(data, opt).unwrap_err();
-    assert!(matches!(err, Error::DuplicatedAttribute(ref name, _) if name == "xmlns"));
+    assert!(matches!(err, Error::DuplicatedNamespace(ref name, _) if name.is_empty()));
 }
 
 #[test]

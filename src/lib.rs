@@ -747,10 +747,7 @@ impl<'input> Namespaces<'input> {
     }
 
     #[inline]
-    fn exists<R>(&self, range: R, prefix: Option<&str>) -> bool
-    where
-        R: core::slice::SliceIndex<[NamespaceIdx], Output = [NamespaceIdx]>,
-    {
+    fn exists(&self, range: Range<usize>, prefix: Option<&str>) -> bool {
         self.tree_order[range]
             .iter()
             .any(|idx| self.values[idx.0 as usize].name == prefix)
