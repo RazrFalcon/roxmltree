@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Quadratic time per element when an element that declares a namespace inherits
   many namespaces. Inherited bindings are now checked only against the element's
   own declarations.
+- Checking an element for duplicate attributes could repeatedly compare long
+  namespace URIs before comparing distinct local names. Local names are now
+  compared first.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed

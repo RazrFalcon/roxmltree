@@ -492,3 +492,33 @@ fn declaring_only_the_xml_prefix_keeps_the_inherited_namespaces() {
     let ns: Vec<_> = c.namespaces().map(|ns| (ns.name(), ns.uri())).collect();
     assert_eq!(ns, [(Some("a"), "a1")]);
 }
+
+#[test]
+fn same_local_name_under_different_namespaces_is_not_duplicated() {
+    let data = "<e xmlns:a='A' xmlns:b='B' a:x='1' b:x='2' x='3'/>";
+    let doc = Document::parse(data).unwrap();
+    let attrs: Vec<_> = doc
+        .root_element()
+        .attributes()
+        .map(|a| (a.namespace(), a.name()))
+        .collect();
+    assert_eq!(attrs, [(Some("A"), "x"), (Some("B"), "x"), (None, "x")]);
+}
+
+#[test]
+fn duplicated_attributes_with_equal_local_names_are_found() {
+    for (data, local_name) in [
+        // The same prefix.
+        ("<e xmlns:p='u' p:x='1' p:x='2'/>", "x"),
+        // The xml prefix.
+        ("<e xml:lang='en' xml:lang='de'/>", "lang"),
+        // Two prefixes for one URI, equal only after a character reference.
+        ("<e xmlns:a='A' xmlns:b='&#65;' a:x='1' b:x='2'/>", "x"),
+    ] {
+        let err = Document::parse(data).unwrap_err();
+        assert!(
+            matches!(err, Error::DuplicatedAttribute(ref name, _) if name == local_name),
+            "{data}: {err:?}"
+        );
+    }
+}
