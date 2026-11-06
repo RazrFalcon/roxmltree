@@ -195,6 +195,7 @@ test!(attrs_005);
 test!(attrs_006);
 test!(attrs_err_001);
 test!(attrs_err_002);
+test!(attrs_err_003);
 test!(cdata_001);
 test!(cdata_002);
 test!(cdata_003);
@@ -273,6 +274,7 @@ test!(text_009);
 test!(text_010);
 test!(text_011);
 test!(text_012);
+test!(text_err_001);
 test!(tree_001);
 test!(tree_002);
 // test!(tree_003); // unsupported
