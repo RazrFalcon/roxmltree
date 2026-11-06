@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Quadratic time per element when an element that declares a namespace inherits
   many namespaces. Inherited bindings are now checked only against the element's
   own declarations.
+- Parameter entities were resolved by general entity references with the same name:
+  `<!ENTITY % e "...">` made `&e;` valid and could shadow a general entity `e` declared later.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed
