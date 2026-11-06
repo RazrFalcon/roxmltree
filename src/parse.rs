@@ -32,6 +32,8 @@ pub enum Error {
     InvalidElementNamePrefix(TextPos),
 
     /// A namespace was already defined on this element.
+    ///
+    /// The name is the prefix, or empty for the default namespace (`xmlns`).
     DuplicatedNamespace(String, TextPos),
 
     /// An unknown namespace.
@@ -222,7 +224,11 @@ impl core::fmt::Display for Error {
                 )
             }
             Error::DuplicatedNamespace(ref name, pos) => {
-                write!(f, "namespace '{}' at {} is already defined", name, pos)
+                if name.is_empty() {
+                    write!(f, "the default namespace at {} is already defined", pos)
+                } else {
+                    write!(f, "namespace '{}' at {} is already defined", name, pos)
+                }
             }
             Error::UnknownNamespace(ref name, pos) => {
                 write!(f, "an unknown namespace prefix '{}' at {}", name, pos)
@@ -805,11 +811,8 @@ fn process_attribute<'input>(
         }
 
         // Check for duplicated namespaces.
-        if ctx
-            .doc
-            .namespaces
-            .exists(ctx.namespace_start_idx, Some(local))
-        {
+        let own_ns = ctx.namespace_start_idx..ctx.doc.namespaces.tree_order.len();
+        if ctx.doc.namespaces.exists(own_ns, Some(local)) {
             let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::DuplicatedNamespace(local.to_string(), pos));
         }
@@ -829,6 +832,12 @@ fn process_attribute<'input>(
         if value.as_str() == NS_XMLNS_URI {
             let pos = ctx.doc.text_pos_at(range.start);
             return Err(Error::UnexpectedXmlnsUri(pos));
+        }
+
+        let own_ns = ctx.namespace_start_idx..ctx.doc.namespaces.tree_order.len();
+        if ctx.doc.namespaces.exists(own_ns, None) {
+            let pos = ctx.doc.text_pos_at(range.start);
+            return Err(Error::DuplicatedNamespace(String::new(), pos));
         }
 
         ctx.doc.namespaces.push_ns(None, value)?;
@@ -967,14 +976,18 @@ impl Context<'_> {
                 return parent_ns;
             }
 
+            // An inherited binding is shadowed only by the element's own
+            // declarations. Those have distinct prefixes (a repeated `xmlns`
+            // or `xmlns:p` is an error), and so do the parent's bindings,
+            // so the ones copied here need not be searched again.
+            let own_ns = self.namespace_start_idx..self.doc.namespaces.tree_order.len();
             for i in parent_ns.to_urange() {
-                if !self.doc.namespaces.exists(
-                    self.namespace_start_idx,
-                    self.doc
-                        .namespaces
-                        .get(self.doc.namespaces.tree_order[i])
-                        .name,
-                ) {
+                let name = self
+                    .doc
+                    .namespaces
+                    .get(self.doc.namespaces.tree_order[i])
+                    .name;
+                if !self.doc.namespaces.exists(own_ns.clone(), name) {
                     self.doc.namespaces.push_ref(i);
                 }
             }
