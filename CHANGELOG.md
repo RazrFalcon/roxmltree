@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Checking an element for duplicate attributes could repeatedly compare long
   namespace URIs before comparing distinct local names. Local names are now
   compared first.
+- Comments or CDATA full of `<`, or text full of `=`, made parsing reserve a node
+  or attribute slot per input byte up front. The initial guess is now capped by
+  the input size.
 
 ## [0.21.2] - 2026-10-24
 ### Fixed
