@@ -1,4 +1,4 @@
-use roxmltree::{parse_events, Document, NodeType, ParsingOptions, ValidatedEvent};
+use roxmltree::{parse_events, EventReader, Document, NodeType, ParsingOptions, ValidatedEvent};
 
 type AttributeSnapshot = (Option<String>, String, String, bool, Vec<std::ops::Range<usize>>);
 
@@ -135,6 +135,22 @@ fn indexed(doc: &Document<'_>) -> Vec<Snapshot> {
     events
 }
 
+fn pulled_events<'input>(
+    xml: &'input str,
+    options: ParsingOptions<'input>,
+) -> (Vec<Snapshot>, Result<(), roxmltree::Error>) {
+    let mut reader = EventReader::new(xml, options).unwrap();
+    let mut events = Vec::new();
+    let result = loop {
+        match reader.next_event() {
+            Ok(Some(event)) => events.push(snapshot(event)),
+            Ok(None) => break Ok(()),
+            Err(error) => break Err(error),
+        }
+    };
+    (events, result)
+}
+
 fn parity(xml: &str, allow_dtd: bool, nodes_limit: u32) {
     let options = || ParsingOptions {
         allow_dtd,
@@ -144,6 +160,9 @@ fn parity(xml: &str, allow_dtd: bool, nodes_limit: u32) {
     let expected = Document::parse_with_options(xml, options());
     let mut actual = Vec::new();
     let result = parse_events(xml, options(), |event| actual.push(snapshot(event)));
+    let (pulled, pulled_result) = pulled_events(xml, options());
+    assert_eq!(pulled_result, result, "pull/callback error differs: {xml}");
+    assert_eq!(pulled, actual, "pull/callback prefix differs: {xml}");
     match (expected, result) {
         (Ok(doc), Ok(())) => assert_eq!(actual, indexed(&doc), "{xml}"),
         (Err(expected), Err(actual)) => assert_eq!(actual, expected, "{xml}"),
@@ -213,10 +232,12 @@ fn semantic_errors_and_logical_text_nodes_match() {
 fn external_entity_resolution_and_errors_match() {
     let xml = "<!DOCTYPE a [<!ENTITY one SYSTEM 'one'><!ENTITY two PUBLIC 'public' 'two'>]><a>&one;&two;</a>";
     for fail in [false, true] {
-        let run = |events: bool| {
+        let run = |mode: u8| {
             let calls = std::cell::RefCell::new(Vec::new());
             let resolver = |public: Option<&str>, uri: &str| {
-                calls.borrow_mut().push((public.map(str::to_owned), uri.to_owned()));
+                calls
+                    .borrow_mut()
+                    .push((public.map(str::to_owned), uri.to_owned()));
                 if fail {
                     Err("resolver rejected".to_owned())
                 } else {
@@ -228,15 +249,20 @@ fn external_entity_resolution_and_errors_match() {
                 entity_resolver: Some(&resolver),
                 ..ParsingOptions::default()
             };
-            let result = if events {
+            let result = if mode == 2 {
+                let (captured, result) = pulled_events(xml, options);
+                result.map(|()| captured)
+            } else if mode == 1 {
                 let mut captured = Vec::new();
-                parse_events(xml, options, |event| captured.push(snapshot(event))).map(|()| captured)
+                parse_events(xml, options, |event| captured.push(snapshot(event)))
+                    .map(|()| captured)
             } else {
                 Document::parse_with_options(xml, options).map(|doc| indexed(&doc))
             };
             (result, calls.into_inner())
         };
-        assert_eq!(run(true), run(false));
+        assert_eq!(run(1), run(0));
+        assert_eq!(run(2), run(0));
     }
 }
 
@@ -252,4 +278,53 @@ fn completed_namespace_scopes_still_count_towards_the_same_limit() {
         parse_events(&xml, ParsingOptions::default(), |_| {}),
         Err(roxmltree::Error::NamespacesLimitReached)
     );
+}
+
+#[test]
+fn pull_errors_keep_the_checked_prefix_and_are_terminal() {
+    let xml = "<r>text</wrong>";
+    let mut reader = EventReader::new(xml, ParsingOptions::default()).unwrap();
+    assert!(matches!(
+        reader.next_event().unwrap(),
+        Some(ValidatedEvent::ElementStart { .. })
+    ));
+    assert!(
+        matches!(reader.next_event().unwrap(), Some(ValidatedEvent::Text { id, parent, text: "text", .. }) if id.get() == 2 && parent.get() == 1)
+    );
+    assert_eq!(
+        reader.next_event().unwrap_err(),
+        Document::parse(xml).unwrap_err()
+    );
+    assert!(reader.next_event().unwrap().is_none());
+    assert!(reader.next_event().unwrap().is_none());
+}
+
+#[test]
+fn pull_retains_namespaces_and_attribute_values_until_the_next_event() {
+    let xml = "<r xmlns:p='urn:first'><p:a p:x='A&amp;B'/><b xmlns:p='urn:second' p:x='C'/></r>";
+    let mut reader = EventReader::new(xml, ParsingOptions::default()).unwrap();
+    reader.next_event().unwrap();
+    match reader.next_event().unwrap().unwrap() {
+        ValidatedEvent::ElementStart {
+            tag_name,
+            mut attributes,
+            mut namespaces,
+            ..
+        } => {
+            assert_eq!(tag_name.namespace(), Some("urn:first"));
+            let attribute = attributes.next().unwrap();
+            assert_eq!(attribute.namespace(), Some("urn:first"));
+            assert_eq!(attribute.value(), "A&B");
+            assert!(namespaces
+                .any(|namespace| namespace.name() == Some("p") && namespace.uri() == "urn:first"));
+        }
+        _ => panic!("the first child is fully validated before it is exposed"),
+    }
+    reader.next_event().unwrap(); // a's closing event
+    match reader.next_event().unwrap().unwrap() {
+        ValidatedEvent::ElementStart { mut attributes, .. } => {
+            assert_eq!(attributes.next().unwrap().namespace(), Some("urn:second"))
+        }
+        _ => panic!("the second child has its own attribute scratch"),
+    }
 }

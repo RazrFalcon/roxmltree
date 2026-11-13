@@ -239,56 +239,203 @@ pub trait XmlEvents<'input> {
     fn resolve_entity(&mut self, _pub_id: Option<&str>, _uri: &str) -> core::result::Result<Option<&'input str>, String> { Ok(None) }
 }
 
-// document ::= prolog element Misc*
+/// Resumable lexical grammar state, shared by indexed and event parsing.
+pub(crate) struct Driver<'input> {
+    pub(crate) stream: Stream<'input>,
+    phase: Phase,
+    allow_dtd: bool,
+    document: bool,
+}
+
+enum Phase {
+    Declaration,
+    BeforeDtd,
+    Dtd(usize),
+    AfterDtd,
+    Root,
+    Content(u32),
+    Trailing,
+    Done,
+}
+
+impl<'input> Driver<'input> {
+    pub(crate) fn document(text: &'input str, allow_dtd: bool) -> Self {
+        Self {
+            stream: Stream::new(text),
+            phase: Phase::Declaration,
+            allow_dtd,
+            document: true,
+        }
+    }
+
+    pub(crate) fn content(stream: Stream<'input>) -> Self {
+        Self {
+            stream,
+            phase: Phase::Content(0),
+            allow_dtd: false,
+            document: false,
+        }
+    }
+
+    /// Advances one lexical construct; false denotes the end of this input frame.
+    pub(crate) fn step(&mut self, events: &mut impl XmlEvents<'input>) -> Result<bool> {
+        let s = &mut self.stream;
+        match self.phase {
+            Phase::Declaration => {
+                parse_declaration(s)?;
+                self.phase = Phase::BeforeDtd;
+            }
+            Phase::BeforeDtd | Phase::AfterDtd | Phase::Trailing => {
+                if parse_misc_one(s, events)? {
+                    return Ok(true);
+                }
+                self.phase = match self.phase {
+                    Phase::BeforeDtd if s.starts_with(b"<!DOCTYPE") => {
+                        if !self.allow_dtd {
+                            return Err(Error::DtdDetected);
+                        }
+                        let start = s.pos();
+                        parse_doctype_start(s)?;
+                        s.skip_spaces();
+                        if s.curr_byte() == Ok(b'>') {
+                            s.advance(1);
+                            Phase::AfterDtd
+                        } else {
+                            s.advance(1); // [
+                            Phase::Dtd(start)
+                        }
+                    }
+                    Phase::BeforeDtd | Phase::AfterDtd => Phase::Root,
+                    Phase::Trailing => {
+                        if !s.at_end() {
+                            return Err(Error::UnknownToken(s.gen_text_pos()));
+                        }
+                        Phase::Done
+                    }
+                    _ => unreachable!(),
+                };
+            }
+            Phase::Dtd(start) => {
+                if s.at_end() {
+                    self.phase = Phase::AfterDtd;
+                    return Ok(true);
+                }
+                s.skip_spaces();
+                if s.starts_with(b"<!ENTITY") {
+                    parse_entity_decl(s, events)?;
+                } else if s.starts_with(b"<!--") {
+                    parse_comment(s, events)?;
+                } else if s.starts_with(b"<?") {
+                    parse_pi(s, events)?;
+                } else if s.starts_with(b"]") {
+                    s.advance(1);
+                    s.skip_spaces();
+                    match s.curr_byte() {
+                        Ok(b'>') => {
+                            s.advance(1);
+                            self.phase = Phase::AfterDtd;
+                        }
+                        Ok(c) => return Err(Error::InvalidChar2("'>'", c, s.gen_text_pos())),
+                        Err(_) => return Err(Error::UnexpectedEndOfStream),
+                    }
+                } else if s.starts_with(b"<!ELEMENT")
+                    || s.starts_with(b"<!ATTLIST")
+                    || s.starts_with(b"<!NOTATION")
+                {
+                    if consume_decl(s).is_err() {
+                        return Err(Error::UnknownToken(s.gen_text_pos_from(start)));
+                    }
+                } else {
+                    return Err(Error::UnknownToken(s.gen_text_pos()));
+                }
+            }
+            Phase::Root => {
+                self.phase = if s.curr_byte().ok() == Some(b'<') && parse_start_tag(s, events)? {
+                    Phase::Content(0)
+                } else {
+                    Phase::Trailing
+                };
+            }
+            Phase::Content(mut depth) => {
+                if s.at_end() {
+                    self.phase = if self.document {
+                        Phase::Trailing
+                    } else {
+                        Phase::Done
+                    };
+                    return Ok(true);
+                }
+                let mut ended = false;
+                match s.curr_byte() {
+                    Ok(b'<') => match s.next_byte() {
+                        Ok(b'!') => {
+                            if s.starts_with(b"<!--") {
+                                parse_comment(s, events)?;
+                            } else if s.starts_with(b"<![CDATA[") {
+                                parse_cdata(s, events)?;
+                            } else {
+                                return Err(Error::UnknownToken(s.gen_text_pos()));
+                            }
+                        }
+                        Ok(b'?') => parse_pi(s, events)?,
+                        Ok(b'/') => {
+                            parse_close_element(s, events)?;
+                            if depth == 0 {
+                                ended = true;
+                            } else {
+                                depth -= 1;
+                            }
+                        }
+                        Ok(_) => {
+                            if parse_start_tag(s, events)? {
+                                depth = depth.checked_add(1).ok_or(Error::NodesLimitReached)?;
+                            }
+                        }
+                        Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
+                    },
+                    Ok(_) => parse_text(s, events)?,
+                    Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
+                }
+                self.phase = if ended {
+                    if self.document {
+                        Phase::Trailing
+                    } else {
+                        Phase::Done
+                    }
+                } else {
+                    Phase::Content(depth)
+                };
+            }
+            Phase::Done => return Ok(false),
+        }
+        Ok(true)
+    }
+}
+
+#[cfg(test)]
 pub fn parse<'input>(
     text: &'input str,
     allow_dtd: bool,
     events: &mut impl XmlEvents<'input>,
 ) -> Result<()> {
-    let s = &mut Stream::new(text);
-
-    parse_declaration(s)?;
-
-    parse_misc(s, events)?;
-
-    s.skip_spaces();
-    if s.starts_with(b"<!DOCTYPE") {
-        if !allow_dtd {
-            return Err(Error::DtdDetected);
-        }
-
-        parse_doctype(s, events)?;
-        parse_misc(s, events)?;
-    }
-
-    s.skip_spaces();
-    if s.curr_byte().ok() == Some(b'<') && parse_start_tag(s, events)? {
-        parse_content(s, events)?;
-    }
-
-    parse_misc(s, events)?;
-
-    if !s.at_end() {
-        return Err(Error::UnknownToken(s.gen_text_pos()));
-    }
-
+    let mut driver = Driver::document(text, allow_dtd);
+    while driver.step(events)? {}
     Ok(())
 }
 
-// Misc ::= Comment | PI | S
-fn parse_misc<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
-    while !s.at_end() {
-        s.skip_spaces();
-        if s.starts_with(b"<!--") {
-            parse_comment(s, events)?;
-        } else if s.starts_with(b"<?") {
-            parse_pi(s, events)?;
-        } else {
-            break;
-        }
+fn parse_misc_one<'input>(
+    s: &mut Stream<'input>,
+    events: &mut impl XmlEvents<'input>,
+) -> Result<bool> {
+    s.skip_spaces();
+    if s.starts_with(b"<!--") {
+        parse_comment(s, events)?;
+    } else if s.starts_with(b"<?") {
+        parse_pi(s, events)?;
+    } else {
+        return Ok(false);
     }
-
-    Ok(())
+    Ok(true)
 }
 
 // XMLDecl ::= '<?xml' VersionInfo EncodingDecl? SDDecl? S? '?>'
@@ -387,57 +534,6 @@ fn parse_pi<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>)
 
     let range = s.range_from(start);
     events.token(Token::ProcessingInstruction(target, content, range))?;
-    Ok(())
-}
-
-fn parse_doctype<'input>(s: &mut Stream<'input>, events: &mut impl XmlEvents<'input>) -> Result<()> {
-    let start = s.pos();
-    parse_doctype_start(s)?;
-    s.skip_spaces();
-
-    if s.curr_byte() == Ok(b'>') {
-        s.advance(1);
-        return Ok(());
-    }
-
-    s.advance(1); // [
-    while !s.at_end() {
-        s.skip_spaces();
-        if s.starts_with(b"<!ENTITY") {
-            parse_entity_decl(s, events)?;
-        } else if s.starts_with(b"<!--") {
-            parse_comment(s, events)?;
-        } else if s.starts_with(b"<?") {
-            parse_pi(s, events)?;
-        } else if s.starts_with(b"]") {
-            // DTD ends with ']' S? '>', therefore we have to skip possible spaces.
-            s.advance(1);
-            s.skip_spaces();
-            match s.curr_byte() {
-                Ok(b'>') => {
-                    s.advance(1);
-                    break;
-                }
-                Ok(c) => {
-                    return Err(Error::InvalidChar2("'>'", c, s.gen_text_pos()));
-                }
-                Err(_) => {
-                    return Err(Error::UnexpectedEndOfStream);
-                }
-            }
-        } else if s.starts_with(b"<!ELEMENT")
-            || s.starts_with(b"<!ATTLIST")
-            || s.starts_with(b"<!NOTATION")
-        {
-            if consume_decl(s).is_err() {
-                let pos = s.gen_text_pos_from(start);
-                return Err(Error::UnknownToken(pos));
-            }
-        } else {
-            return Err(Error::UnknownToken(s.gen_text_pos()));
-        }
-    }
-
     Ok(())
 }
 
@@ -662,47 +758,6 @@ fn parse_attribute<'input>(
 // Nested elements are parsed iteratively, tracking the depth explicitly
 // instead of recursing, so deeply nested documents cannot overflow the stack.
 // An end tag at depth 0 closes the caller's element and ends this call.
-pub fn parse_content<'input>(
-    s: &mut Stream<'input>,
-    events: &mut impl XmlEvents<'input>,
-) -> Result<()> {
-    let mut depth: u32 = 0;
-
-    while !s.at_end() {
-        match s.curr_byte() {
-            Ok(b'<') => match s.next_byte() {
-                Ok(b'!') => {
-                    if s.starts_with(b"<!--") {
-                        parse_comment(s, events)?;
-                    } else if s.starts_with(b"<![CDATA[") {
-                        parse_cdata(s, events)?;
-                    } else {
-                        return Err(Error::UnknownToken(s.gen_text_pos()));
-                    }
-                }
-                Ok(b'?') => parse_pi(s, events)?,
-                Ok(b'/') => {
-                    parse_close_element(s, events)?;
-                    if depth == 0 {
-                        break;
-                    }
-                    depth -= 1;
-                }
-                Ok(_) => {
-                    if parse_start_tag(s, events)? {
-                        depth = depth.checked_add(1).ok_or(Error::NodesLimitReached)?;
-                    }
-                }
-                Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
-            },
-            Ok(_) => parse_text(s, events)?,
-            Err(_) => return Err(Error::UnknownToken(s.gen_text_pos())),
-        }
-    }
-
-    Ok(())
-}
-
 // CDSect  ::= CDStart CData CDEnd
 // CDStart ::= '<![CDATA['
 // CData   ::= (Char* - (Char* ']]>' Char*))

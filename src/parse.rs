@@ -1,5 +1,5 @@
 use alloc::string::{String, ToString};
-use alloc::{vec, vec::Vec};
+use alloc::{collections::VecDeque, vec, vec::Vec};
 use alloc::borrow::Cow;
 use core::ops::Range;
 use core::mem::take;
@@ -451,7 +451,325 @@ pub fn parse_events<'input>(
     opt: ParsingOptions<'input>,
     mut sink: impl for<'a> FnMut(crate::ValidatedEvent<'a, 'input>),
 ) -> Result<()> {
-    parse_with_output(text, opt, Output::Events(&mut sink)).map(|_| ())
+    let mut reader = EventReader::new(text, opt)?;
+    while let Some(event) = reader.next_event()? {
+        sink(event);
+    }
+    Ok(())
+}
+
+/// A pull reader using the same XML validation as indexed and callback parsing.
+///
+/// Events borrow this reader until the next mutable access. Reaching the end of
+/// input proves complete validation only if no earlier read returned an error.
+/// Dropping a reader early, or reaching fused exhaustion after an error, does
+/// not prove validation.
+pub struct EventReader<'input> {
+    execution: Execution<'input>,
+    current: Option<PendingEvent<'input>>,
+    error: Option<Error>,
+    failed: bool,
+}
+
+impl fmt::Debug for EventReader<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("EventReader")
+            .field("nodes_seen", &self.execution.context.nodes_seen)
+            .field("open_elements", &self.execution.context.parents.len())
+            .field("complete", &self.execution.complete)
+            .field("failed", &self.failed)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'input> EventReader<'input> {
+    /// Creates a reader without parsing ahead into the input.
+    pub fn new(text: &'input str, options: ParsingOptions<'input>) -> Result<Self> {
+        Ok(Self {
+            execution: Execution::new(text, options, Output::Events)?,
+            current: None,
+            error: None,
+            failed: false,
+        })
+    }
+
+    /// Reads the next semantically checked event, or the terminal parse error.
+    ///
+    /// Attribute, namespace and text views remain valid while the event is
+    /// borrowed. After an error, subsequent calls return `Ok(None)`; that fused
+    /// exhaustion does not indicate successful validation.
+    ///
+    /// A borrowed event cannot outlive the next mutable read:
+    ///
+    /// ```compile_fail
+    /// let mut reader = roxmltree::EventReader::new("<r/>", Default::default()).unwrap();
+    /// let first = reader.next_event().unwrap().unwrap();
+    /// let second = reader.next_event();
+    /// println!("{:?}", first);
+    /// ```
+    pub fn next_event(&mut self) -> Result<Option<crate::ValidatedEvent<'_, 'input>>> {
+        if let Some(PendingEvent::Node {
+            kind: NodeKind::Element { .. },
+            ..
+        }) = self.current.take()
+        {
+            self.execution.context.doc.attributes.clear();
+        }
+        if self.failed {
+            return Ok(None);
+        }
+        loop {
+            if let Some(event) = self.execution.context.pending.pop_front() {
+                self.current = Some(event);
+                break;
+            }
+            if let Some(error) = self.error.take() {
+                self.failed = true;
+                return Err(error);
+            }
+            if self.execution.complete {
+                return Ok(None);
+            }
+            if let Err(error) = self.execution.step() {
+                self.error = Some(error);
+                self.execution.tasks.clear();
+            }
+        }
+        Ok(self
+            .current
+            .as_ref()
+            .map(|event| event.view(&self.execution.context.doc)))
+    }
+}
+
+enum PendingEvent<'input> {
+    Node {
+        id: NodeId,
+        parent: NodeId,
+        kind: NodeKind<'input>,
+        range: Range<usize>,
+    },
+    End {
+        id: NodeId,
+        end: usize,
+    },
+}
+
+impl<'input> PendingEvent<'input> {
+    fn view<'a>(&'a self, doc: &'a Document<'input>) -> crate::ValidatedEvent<'a, 'input> {
+        use crate::ValidatedEvent;
+        match self {
+            Self::Node {
+                id,
+                parent,
+                kind,
+                range,
+            } => match kind {
+                NodeKind::Element {
+                    tag_name,
+                    attributes,
+                    namespaces,
+                } => ValidatedEvent::ElementStart {
+                    id: *id,
+                    parent: *parent,
+                    tag_name: tag_name.as_expanded_name(doc),
+                    attributes: crate::Attributes {
+                        doc,
+                        attrs: doc.attributes[attributes.to_urange()].iter(),
+                    },
+                    namespaces: crate::NamespaceIter {
+                        doc,
+                        namespaces: doc.namespaces.tree_order[namespaces.to_urange()].iter(),
+                    },
+                    start: range.start,
+                },
+                NodeKind::Text(text) => ValidatedEvent::Text {
+                    id: *id,
+                    parent: *parent,
+                    text: text.as_str(),
+                    range: range.clone(),
+                },
+                NodeKind::Comment(text) => ValidatedEvent::Comment {
+                    id: *id,
+                    parent: *parent,
+                    text: text.as_str(),
+                    range: range.clone(),
+                },
+                NodeKind::PI(pi) => ValidatedEvent::ProcessingInstruction {
+                    id: *id,
+                    parent: *parent,
+                    pi: *pi,
+                    range: range.clone(),
+                },
+                NodeKind::Root => unreachable!(),
+            },
+            Self::End { id, end } => ValidatedEvent::ElementEnd { id: *id, end: *end },
+        }
+    }
+}
+
+struct Execution<'input> {
+    context: Context<'input>,
+    tasks: Vec<Task<'input>>,
+    complete: bool,
+}
+
+enum Task<'input> {
+    Lexical {
+        driver: tokenizer::Driver<'input>,
+        entity: Option<TagNameSpan<'input>>,
+    },
+    Text(TextState<'input>),
+}
+
+impl<'input> Execution<'input> {
+    fn new(text: &'input str, options: ParsingOptions<'input>, output: Output) -> Result<Self> {
+        let driver = tokenizer::Driver::document(text, options.allow_dtd);
+        Ok(Self {
+            context: Context::new(text, options, output)?,
+            tasks: vec![Task::Lexical {
+                driver,
+                entity: None,
+            }],
+            complete: false,
+        })
+    }
+
+    fn step(&mut self) -> Result<()> {
+        if let Some(mut task) = self.tasks.pop() {
+            let (again, child) = match &mut task {
+                Task::Lexical { driver, entity } => {
+                    let again = driver.step(&mut self.context)?;
+                    if !again {
+                        if let Some(previous) = entity {
+                            self.context.tag_name = *previous;
+                            self.context.loop_detector.dec_depth();
+                        }
+                    }
+                    (again, self.context.scheduled.take().map(Task::Text))
+                }
+                Task::Text(text) => text.step(&mut self.context)?,
+            };
+            if again {
+                self.tasks.push(task);
+            }
+            if let Some(child) = child {
+                self.tasks.push(child);
+            }
+        } else {
+            if !self.context.root_seen {
+                return Err(Error::NoRootNode);
+            }
+            if self.context.parents.len() > 1 {
+                return Err(Error::UnclosedRootNode);
+            }
+            self.context.reset_after_text();
+            self.complete = true;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod pull_backpressure_tests {
+    #[test]
+    fn creating_a_reader_does_not_build_the_future_index() {
+        let reader = super::EventReader::new(
+            "<root><first/><future><nested/></future></root>",
+            super::ParsingOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            reader.execution.context.doc.nodes.len(),
+            1,
+            "only the implicit root may exist before the first pull"
+        );
+        assert_eq!(reader.execution.context.nodes_seen, 1);
+        assert_eq!(reader.execution.context.doc.attributes.len(), 0);
+    }
+    #[test]
+    fn first_child_pull_leaves_future_source_unread() {
+        let xml = "<root><first x='1'/><future><nested/></future></root>";
+        let mut reader = super::EventReader::new(xml, super::ParsingOptions::default()).unwrap();
+        assert!(
+            matches!(reader.next_event().unwrap(), Some(crate::ValidatedEvent::ElementStart { id, .. }) if id.get() == 1)
+        );
+        assert!(
+            matches!(reader.next_event().unwrap(), Some(crate::ValidatedEvent::ElementStart { id, .. }) if id.get() == 2)
+        );
+        assert_eq!(reader.execution.context.nodes_seen, 3);
+        assert_eq!(reader.execution.context.doc.nodes.len(), 1);
+        assert_eq!(reader.execution.context.pending.len(), 1); // only first's closing event
+        match &reader.execution.tasks[0] {
+            super::Task::Lexical { driver, .. } => {
+                assert_eq!(driver.stream.pos(), xml.find("<future>").unwrap())
+            }
+            _ => panic!("the document frame remains lexical"),
+        }
+    }
+
+    #[test]
+    fn markup_entity_expansion_stops_at_the_first_child() {
+        let children = "<a x='value'/>".repeat(5000);
+        let xml = alloc::format!(
+            "<!DOCTYPE root [<!ENTITY many \"{}\">]><root>&many;</root>",
+            children
+        );
+        let mut reader = super::EventReader::new(
+            &xml,
+            super::ParsingOptions {
+                allow_dtd: true,
+                ..super::ParsingOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(
+            matches!(reader.next_event().unwrap(), Some(crate::ValidatedEvent::ElementStart { id, .. }) if id.get() == 1)
+        );
+        assert!(
+            matches!(reader.next_event().unwrap(), Some(crate::ValidatedEvent::ElementStart { id, attributes, .. }) if id.get() == 2 && attributes.len() == 1)
+        );
+        assert_eq!(reader.execution.context.nodes_seen, 3);
+        assert_eq!(reader.execution.context.pending.len(), 1);
+        assert_eq!(reader.execution.context.doc.nodes.len(), 1);
+        match reader.execution.tasks.last().unwrap() {
+            super::Task::Lexical {
+                driver,
+                entity: Some(_),
+            } => assert_eq!(
+                driver.stream.pos(),
+                xml.find("<a x='value'/>").unwrap() + "<a x='value'/>".len()
+            ),
+            _ => panic!("the entity continuation remains resumable"),
+        }
+    }
+
+    #[test]
+    fn dropping_during_dtd_does_not_resolve_future_declarations() {
+        let calls = core::cell::Cell::new(0);
+        let resolver = |_: Option<&str>, _: &str| {
+            calls.set(calls.get() + 1);
+            Ok(Some("value"))
+        };
+        let xml = "<!DOCTYPE r [<!--first--><!ENTITY later SYSTEM 'resource'>]><r>&later;</r>";
+        let mut reader = super::EventReader::new(
+            xml,
+            super::ParsingOptions {
+                allow_dtd: true,
+                entity_resolver: Some(&resolver),
+                ..super::ParsingOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            reader.next_event().unwrap(),
+            Some(crate::ValidatedEvent::Comment { text: "first", .. })
+        ));
+        assert_eq!(calls.get(), 0);
+        drop(reader);
+        assert_eq!(calls.get(), 0);
+    }
 }
 
 struct Entity<'input> {
@@ -555,9 +873,9 @@ impl LoopDetector {
     }
 }
 
-enum Output<'input, 'sink> {
+enum Output {
     Indexed,
-    Events(&'sink mut dyn for<'a> FnMut(crate::ValidatedEvent<'a, 'input>)),
+    Events,
 }
 
 #[derive(Clone, Copy)]
@@ -568,7 +886,7 @@ struct OpenElement<'input> {
     namespaces: ShortRange,
 }
 
-struct Context<'input, 'sink> {
+struct Context<'input> {
     opt: ParsingOptions<'input>,
     namespace_start_idx: usize,
     current_attributes: Vec<TempAttributeData<'input>>,
@@ -582,12 +900,16 @@ struct Context<'input, 'sink> {
     root_seen: bool,
     tag_name: TagNameSpan<'input>,
     loop_detector: LoopDetector,
-    output: Output<'input, 'sink>,
+    output: Output,
+    // One lexical construct can flush text and emit one tag's start/end.
+    // Entity content is stepped separately; future subtree events never queue.
+    pending: VecDeque<PendingEvent<'input>>,
+    scheduled: Option<TextState<'input>>,
     doc: Document<'input>,
 }
 
-impl<'input, 'sink> Context<'input, 'sink> {
-    fn new(text: &'input str, opt: ParsingOptions<'input>, output: Output<'input, 'sink>) -> Result<Self> {
+impl<'input> Context<'input> {
+    fn new(text: &'input str, opt: ParsingOptions<'input>, output: Output) -> Result<Self> {
         let indexed = matches!(output, Output::Indexed);
         let nodes_capacity = if indexed {
             memchr_iter(b'<', text.as_bytes()).count()
@@ -636,6 +958,8 @@ impl<'input, 'sink> Context<'input, 'sink> {
             tag_name: TagNameSpan::new_null(),
             loop_detector: LoopDetector::default(),
             output,
+            pending: VecDeque::new(),
+            scheduled: None,
             doc,
         })
     }
@@ -682,54 +1006,7 @@ impl<'input, 'sink> Context<'input, 'sink> {
                     self.awaiting_subtree.push(id);
                 }
             }
-            Output::Events(sink) => {
-                use crate::ValidatedEvent;
-                let doc = &self.doc;
-                let event = match kind {
-                    NodeKind::Element {
-                        tag_name,
-                        attributes,
-                        namespaces,
-                    } => ValidatedEvent::ElementStart {
-                        id,
-                        parent,
-                        tag_name: tag_name.as_expanded_name(doc),
-                        attributes: crate::Attributes {
-                            doc,
-                            attrs: doc.attributes[attributes.to_urange()].iter(),
-                        },
-                        namespaces: crate::NamespaceIter {
-                            doc,
-                            namespaces: doc.namespaces.tree_order[namespaces.to_urange()].iter(),
-                        },
-                        start: range.start,
-                    },
-                    NodeKind::Text(text) => {
-                        sink(ValidatedEvent::Text {
-                            id,
-                            parent,
-                            text: text.as_str(),
-                            range,
-                        });
-                        return;
-                    }
-                    NodeKind::Comment(text) => {
-                        sink(ValidatedEvent::Comment {
-                            id,
-                            parent,
-                            text: text.as_str(),
-                            range,
-                        });
-                        return;
-                    }
-                    NodeKind::PI(pi) => ValidatedEvent::ProcessingInstruction { id, parent, pi, range },
-                    NodeKind::Root => unreachable!(),
-                };
-                sink(event);
-                if element {
-                    self.doc.attributes.clear();
-                }
-            }
+            Output::Events => self.pending.push_back(PendingEvent::Node { id, parent, kind, range }),
         }
     }
 
@@ -742,7 +1019,7 @@ impl<'input, 'sink> Context<'input, 'sink> {
                 }
                 self.awaiting_subtree.push(id);
             }
-            Output::Events(sink) => sink(crate::ValidatedEvent::ElementEnd { id, end }),
+            Output::Events => self.pending.push_back(PendingEvent::End { id, end }),
         }
     }
 
@@ -780,20 +1057,14 @@ fn parse<'input>(text: &'input str, opt: ParsingOptions<'input>) -> Result<Docum
 fn parse_with_output<'input>(
     text: &'input str,
     opt: ParsingOptions<'input>,
-    output: Output<'input, '_>,
+    output: Output,
 ) -> Result<Document<'input>> {
     let indexed = matches!(output, Output::Indexed);
-    let allow_dtd = opt.allow_dtd;
-    let mut ctx = Context::new(text, opt, output)?;
-    tokenizer::parse(text, allow_dtd, &mut ctx)?;
-    if !ctx.root_seen {
-        return Err(Error::NoRootNode);
+    let mut execution = Execution::new(text, opt, output)?;
+    while !execution.complete {
+        execution.step()?;
     }
-    if ctx.parents.len() > 1 {
-        return Err(Error::UnclosedRootNode);
-    }
-    ctx.reset_after_text();
-    let mut doc = ctx.doc;
+    let mut doc = execution.context.doc;
     if indexed {
         doc.nodes.shrink_to_fit();
         doc.attributes.shrink_to_fit();
@@ -802,7 +1073,7 @@ fn parse_with_output<'input>(
     Ok(doc)
 }
 
-impl<'input> tokenizer::XmlEvents<'input> for Context<'input, '_> {
+impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
     #[inline(always)]
     fn token(&mut self, token: tokenizer::Token<'input>) -> Result<()> {
         match token {
@@ -871,7 +1142,7 @@ fn process_attribute<'input>(
     prefix: &'input str,
     local: &'input str,
     value: StrSpan<'input>,
-    ctx: &mut Context<'input, '_>,
+    ctx: &mut Context<'input>,
 ) -> Result<()> {
     let value = normalize_attribute(value, ctx)?;
 
@@ -950,7 +1221,7 @@ fn process_attribute<'input>(
 fn process_element<'input>(
     end_token: tokenizer::ElementEnd<'input>,
     token_range: Range<usize>,
-    ctx: &mut Context<'input, '_>,
+    ctx: &mut Context<'input>,
 ) -> Result<()> {
     if ctx.tag_name.name.is_empty() {
         // May occur in XML like this:
@@ -1025,7 +1296,7 @@ fn process_element<'input>(
     Ok(())
 }
 
-impl Context<'_, '_> {
+impl Context<'_> {
     fn resolve_namespaces(&mut self) -> ShortRange {
         if self.parents.len() > 1 {
             let parent_ns = self.parents.last().expect("an element frame").namespaces;
@@ -1104,72 +1375,81 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
 fn process_text<'input>(
     text: &'input str,
     range: Range<usize>,
-    ctx: &mut Context<'input, '_>,
+    ctx: &mut Context<'input>,
 ) -> Result<()> {
-    // Add text as is if it has only valid characters.
     if memchr2(b'&', b'\r', text.as_bytes()).is_none() {
         ctx.append_text(Cow::Borrowed(text), range)?;
-        return Ok(());
+    } else {
+        ctx.scheduled = Some(TextState {
+            stream: Stream::from_substr(ctx.doc.text, range.clone()),
+            range,
+            buffer: TextBuffer::new(),
+            is_as_is: false,
+        });
     }
+    Ok(())
+}
 
-    let mut text_buffer = TextBuffer::new();
-    let mut is_as_is = false; // TODO: explain
-    let mut stream = Stream::from_substr(ctx.doc.text, range.clone());
-    while !stream.at_end() {
-        match parse_next_chunk(&mut stream, &ctx.entities)? {
-            NextChunk::Byte(c) => {
-                if is_as_is {
-                    text_buffer.push_raw(c);
-                    is_as_is = false;
-                } else {
-                    text_buffer.push_from_text(c, stream.at_end());
-                }
-            }
-            NextChunk::Char(c) => {
-                for b in CharToBytes::new(c) {
-                    if ctx.loop_detector.depth > 0 {
-                        text_buffer.push_from_text(b, stream.at_end());
+struct TextState<'input> {
+    stream: Stream<'input>,
+    range: Range<usize>,
+    buffer: TextBuffer,
+    is_as_is: bool,
+}
+
+impl<'input> TextState<'input> {
+    fn step(&mut self, ctx: &mut Context<'input>) -> Result<(bool, Option<Task<'input>>)> {
+        while !self.stream.at_end() {
+            match parse_next_chunk(&mut self.stream, &ctx.entities)? {
+                NextChunk::Byte(c) => {
+                    if self.is_as_is {
+                        self.buffer.push_raw(c);
+                        self.is_as_is = false;
                     } else {
-                        // Characters not from entity should be added as is.
-                        // Not sure why... At least `lxml` produces the same result.
-                        text_buffer.push_raw(b);
-                        is_as_is = true;
+                        self.buffer.push_from_text(c, self.stream.at_end());
                     }
                 }
-            }
-            NextChunk::Text(fragment) => {
-                is_as_is = false;
-
-                if !text_buffer.is_empty() {
-                    ctx.append_text(Cow::Owned(text_buffer.finish()), range.clone())?;
+                NextChunk::Char(c) => {
+                    for byte in CharToBytes::new(c) {
+                        if ctx.loop_detector.depth > 0 {
+                            self.buffer.push_from_text(byte, self.stream.at_end());
+                        } else {
+                            self.buffer.push_raw(byte);
+                            self.is_as_is = true;
+                        }
+                    }
                 }
-
-                ctx.loop_detector.inc_references(&stream)?;
-                ctx.loop_detector.inc_depth(&stream)?;
-
-                let text = if fragment.range().start == 0 {
-                    fragment.as_str()
-                } else {
-                    ctx.doc.text
-                };
-
-                let mut stream = Stream::from_substr(text, fragment.range());
-                let prev_tag_name = ctx.tag_name;
-                ctx.tag_name = TagNameSpan::new_null();
-                tokenizer::parse_content(&mut stream, ctx)?;
-                ctx.tag_name = prev_tag_name;
-                text_buffer.clear();
-
-                ctx.loop_detector.dec_depth();
+                NextChunk::Text(fragment) => {
+                    self.is_as_is = false;
+                    if !self.buffer.is_empty() {
+                        ctx.append_text(Cow::Owned(self.buffer.finish()), self.range.clone())?;
+                    }
+                    ctx.loop_detector.inc_references(&self.stream)?;
+                    ctx.loop_detector.inc_depth(&self.stream)?;
+                    let source = if fragment.range().start == 0 {
+                        fragment.as_str()
+                    } else {
+                        ctx.doc.text
+                    };
+                    let stream = Stream::from_substr(source, fragment.range());
+                    let previous = ctx.tag_name;
+                    ctx.tag_name = TagNameSpan::new_null();
+                    self.buffer.clear();
+                    return Ok((
+                        true,
+                        Some(Task::Lexical {
+                            driver: tokenizer::Driver::content(stream),
+                            entity: Some(previous),
+                        }),
+                    ));
+                }
             }
         }
+        if !self.buffer.is_empty() {
+            ctx.append_text(Cow::Owned(self.buffer.finish()), self.range.clone())?;
+        }
+        Ok((false, None))
     }
-
-    if !text_buffer.is_empty() {
-        ctx.append_text(Cow::Owned(text_buffer.finish()), range)?;
-    }
-
-    Ok(())
 }
 
 // While the whole purpose of CDATA is to indicate to an XML library that this text
@@ -1177,7 +1457,7 @@ fn process_text<'input>(
 fn process_cdata<'input>(
     mut text: &'input str,
     range: Range<usize>,
-    ctx: &mut Context<'input, '_>,
+    ctx: &mut Context<'input>,
 ) -> Result<()> {
     let mut pos = memchr(b'\r', text.as_bytes());
 
@@ -1250,7 +1530,7 @@ fn parse_next_chunk<'a>(stream: &mut Stream<'a>, entities: &[Entity<'a>]) -> Res
 // https://www.w3.org/TR/REC-xml/#AVNormalize
 fn normalize_attribute<'input>(
     text: StrSpan<'input>,
-    ctx: &mut Context<'input, '_>,
+    ctx: &mut Context<'input>,
 ) -> Result<StringStorage<'input>> {
     // We assume that `&` indicates an entity or a character reference.
     // But in rare cases it can be just an another character.
@@ -1479,12 +1759,10 @@ impl TextBuffer {
 mod event_counter_tests {
     use super::*;
 
-    fn ignore(_: crate::ValidatedEvent<'_, '_>) {}
 
     #[test]
     fn discarded_nodes_still_reach_the_configured_limit() {
-        let mut sink = ignore;
-        let mut context = Context::new("<a/>", ParsingOptions::default(), Output::Events(&mut sink)).unwrap();
+        let mut context = Context::new("<a/>", ParsingOptions::default(), Output::Events).unwrap();
         context.opt.nodes_limit = 3;
         context.nodes_seen = 3;
         assert_eq!(context.doc.nodes.len(), 1);
@@ -1496,8 +1774,7 @@ mod event_counter_tests {
 
     #[test]
     fn discarded_attributes_still_reach_the_total_limit() {
-        let mut sink = ignore;
-        let mut context = Context::new("<a x='v'/>", ParsingOptions::default(), Output::Events(&mut sink)).unwrap();
+        let mut context = Context::new("<a x='v'/>", ParsingOptions::default(), Output::Events).unwrap();
         context.attributes_seen = u32::MAX as usize - 2;
         let attribute = || TempAttributeData {
             prefix: "",
@@ -1525,6 +1802,8 @@ mod event_counter_tests {
                 0..10,
             )
             .unwrap();
+        context.pending.clear();
+        context.doc.attributes.clear(); // released after the lending start event
         assert!(context.doc.attributes.is_empty());
         assert_eq!(context.attributes_seen, u32::MAX as usize - 1);
         context.current_attributes.push(attribute());
