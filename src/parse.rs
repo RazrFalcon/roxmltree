@@ -443,6 +443,17 @@ impl<'input> Document<'input> {
     }
 }
 
+/// Parses XML with the same semantic checks as `Document::parse_with_options`.
+/// Event IDs follow the indexed document's node order; zero is the implicit root.
+/// The callback can observe events before a later parse error.
+pub fn parse_events<'input>(
+    text: &'input str,
+    opt: ParsingOptions<'input>,
+    mut sink: impl for<'a> FnMut(crate::ValidatedEvent<'a, 'input>),
+) -> Result<()> {
+    parse_with_output(text, opt, Output::Events(&mut sink)).map(|_| ())
+}
+
 struct Entity<'input> {
     name: &'input str,
     value: StrSpan<'input>,
@@ -544,166 +555,254 @@ impl LoopDetector {
     }
 }
 
-struct Context<'input> {
+enum Output<'input, 'sink> {
+    Indexed,
+    Events(&'sink mut dyn for<'a> FnMut(crate::ValidatedEvent<'a, 'input>)),
+}
+
+#[derive(Clone, Copy)]
+struct OpenElement<'input> {
+    id: NodeId,
+    prefix: &'input str,
+    local: &'input str,
+    namespaces: ShortRange,
+}
+
+struct Context<'input, 'sink> {
     opt: ParsingOptions<'input>,
     namespace_start_idx: usize,
     current_attributes: Vec<TempAttributeData<'input>>,
     awaiting_subtree: Vec<NodeId>,
-    parent_prefixes: Vec<&'input str>,
+    parents: Vec<OpenElement<'input>>,
     entities: Vec<Entity<'input>>,
     after_text: Vec<Cow<'input, str>>,
-    parent_id: NodeId,
+    pending_text: Option<(NodeId, Range<usize>)>,
+    nodes_seen: usize,
+    attributes_seen: usize,
+    root_seen: bool,
     tag_name: TagNameSpan<'input>,
     loop_detector: LoopDetector,
+    output: Output<'input, 'sink>,
     doc: Document<'input>,
 }
 
-impl<'input> Context<'input> {
-    fn append_node(&mut self, kind: NodeKind<'input>, range: Range<usize>) -> Result<NodeId> {
-        if self.doc.nodes.len() >= self.opt.nodes_limit as usize {
-            return Err(Error::NodesLimitReached);
-        }
-
-        #[cfg(not(feature = "positions"))]
-        let _ = range;
-
-        let new_child_id = NodeId::from(self.doc.nodes.len());
-
-        let appending_element = matches!(kind, NodeKind::Element { .. });
-        self.doc.nodes.push(NodeData {
-            parent: Some(self.parent_id),
+impl<'input, 'sink> Context<'input, 'sink> {
+    fn new(text: &'input str, opt: ParsingOptions<'input>, output: Output<'input, 'sink>) -> Result<Self> {
+        let indexed = matches!(output, Output::Indexed);
+        let nodes_capacity = if indexed {
+            memchr_iter(b'<', text.as_bytes()).count()
+        } else {
+            1
+        };
+        let attributes_capacity = if indexed {
+            memchr_iter(b'=', text.as_bytes()).count()
+        } else {
+            16
+        };
+        let mut doc = Document {
+            text,
+            nodes: Vec::with_capacity(nodes_capacity),
+            attributes: Vec::with_capacity(attributes_capacity),
+            namespaces: Namespaces::default(),
+        };
+        doc.nodes.push(NodeData {
+            parent: None,
             prev_sibling: None,
             next_subtree: None,
             last_child: None,
-            kind,
+            kind: NodeKind::Root,
             #[cfg(feature = "positions")]
-            range,
+            range: 0..text.len(),
         });
-
-        let last_child_id = self.doc.nodes[self.parent_id.get_usize()].last_child;
-        self.doc.nodes[new_child_id.get_usize()].prev_sibling = last_child_id;
-        self.doc.nodes[self.parent_id.get_usize()].last_child = Some(new_child_id);
-
-        for id in &self.awaiting_subtree {
-            self.doc.nodes[id.get_usize()].next_subtree = Some(new_child_id);
-        }
-        self.awaiting_subtree.clear();
-
-        if !appending_element {
-            self.awaiting_subtree
-                .push(NodeId::from(self.doc.nodes.len() - 1));
-        }
-
-        Ok(new_child_id)
+        doc.namespaces
+            .push_ns(Some(NS_XML_PREFIX), StringStorage::Borrowed(NS_XML_URI))?;
+        Ok(Self {
+            opt,
+            namespace_start_idx: 1,
+            current_attributes: Vec::with_capacity(16),
+            entities: Vec::new(),
+            awaiting_subtree: Vec::new(),
+            parents: vec![OpenElement {
+                id: NodeId::new(0),
+                prefix: "",
+                local: "",
+                namespaces: ShortRange::new(0, 0),
+            }],
+            after_text: Vec::with_capacity(1),
+            pending_text: None,
+            nodes_seen: 1,
+            attributes_seen: 0,
+            root_seen: false,
+            tag_name: TagNameSpan::new_null(),
+            loop_detector: LoopDetector::default(),
+            output,
+            doc,
+        })
     }
 
-    fn append_text(
-        &mut self,
-        text: Cow<'input, str>,
-        range: Range<usize>,
-    ) -> Result<()> {
-        if self.after_text.is_empty() {
-            let text = match &text {
-                Cow::Borrowed(text) => StringStorage::Borrowed(text),
-                Cow::Owned(text) => StringStorage::new_owned(text.as_str()),
-            };
-
-            self.append_node(NodeKind::Text(text), range)?;
+    fn reserve_node(&mut self) -> Result<NodeId> {
+        if self.nodes_seen >= self.opt.nodes_limit as usize {
+            return Err(Error::NodesLimitReached);
         }
+        let id = NodeId::from(self.nodes_seen);
+        self.nodes_seen += 1;
+        Ok(id)
+    }
 
+    fn append_node(&mut self, kind: NodeKind<'input>, range: Range<usize>) -> Result<NodeId> {
+        let id = self.reserve_node()?;
+        self.append_node_data(id, kind, range);
+        Ok(id)
+    }
+
+    fn append_node_data(&mut self, id: NodeId, kind: NodeKind<'input>, range: Range<usize>) {
+        let parent = self.parents.last().expect("the document frame remains open").id;
+        let element = matches!(kind, NodeKind::Element { .. });
+        self.root_seen |= element && parent == NodeId::new(0);
+        match &mut self.output {
+            Output::Indexed => {
+                debug_assert_eq!(id.get_usize(), self.doc.nodes.len());
+                self.doc.nodes.push(NodeData {
+                    parent: Some(parent),
+                    prev_sibling: None,
+                    next_subtree: None,
+                    last_child: None,
+                    kind,
+                    #[cfg(feature = "positions")]
+                    range,
+                });
+                let last_child = self.doc.nodes[parent.get_usize()].last_child;
+                self.doc.nodes[id.get_usize()].prev_sibling = last_child;
+                self.doc.nodes[parent.get_usize()].last_child = Some(id);
+                for previous in &self.awaiting_subtree {
+                    self.doc.nodes[previous.get_usize()].next_subtree = Some(id);
+                }
+                self.awaiting_subtree.clear();
+                if !element {
+                    self.awaiting_subtree.push(id);
+                }
+            }
+            Output::Events(sink) => {
+                use crate::ValidatedEvent;
+                let doc = &self.doc;
+                let event = match kind {
+                    NodeKind::Element {
+                        tag_name,
+                        attributes,
+                        namespaces,
+                    } => ValidatedEvent::ElementStart {
+                        id,
+                        parent,
+                        tag_name: tag_name.as_expanded_name(doc),
+                        attributes: crate::Attributes {
+                            doc,
+                            attrs: doc.attributes[attributes.to_urange()].iter(),
+                        },
+                        namespaces: crate::NamespaceIter {
+                            doc,
+                            namespaces: doc.namespaces.tree_order[namespaces.to_urange()].iter(),
+                        },
+                        start: range.start,
+                    },
+                    NodeKind::Text(text) => {
+                        sink(ValidatedEvent::Text {
+                            id,
+                            parent,
+                            text: text.as_str(),
+                            range,
+                        });
+                        return;
+                    }
+                    NodeKind::Comment(text) => {
+                        sink(ValidatedEvent::Comment {
+                            id,
+                            parent,
+                            text: text.as_str(),
+                            range,
+                        });
+                        return;
+                    }
+                    NodeKind::PI(pi) => ValidatedEvent::ProcessingInstruction { id, parent, pi, range },
+                    NodeKind::Root => unreachable!(),
+                };
+                sink(event);
+                if element {
+                    self.doc.attributes.clear();
+                }
+            }
+        }
+    }
+
+    fn close_element(&mut self, id: NodeId, end: usize) {
+        match &mut self.output {
+            Output::Indexed => {
+                #[cfg(feature = "positions")]
+                {
+                    self.doc.nodes[id.get_usize()].range.end = end;
+                }
+                self.awaiting_subtree.push(id);
+            }
+            Output::Events(sink) => sink(crate::ValidatedEvent::ElementEnd { id, end }),
+        }
+    }
+
+    fn append_text(&mut self, text: Cow<'input, str>, range: Range<usize>) -> Result<()> {
+        if self.after_text.is_empty() {
+            self.pending_text = Some((self.reserve_node()?, range));
+        }
         self.after_text.push(text);
         Ok(())
     }
 
-    #[cold]
-    #[inline(never)]
-    fn merge_text(&mut self) {
-        let node = &mut self.doc.nodes.last_mut().unwrap();
-
-        let text = match &mut node.kind {
-            NodeKind::Text(text) => text,
-            _ => unreachable!(),
-        };
-
-        *text = StringStorage::new_owned(&self.after_text.join(""));
-    }
-
-    #[inline]
     fn reset_after_text(&mut self) {
         if self.after_text.is_empty() {
             return;
         }
-
-        if self.after_text.len() > 1 {
-            self.merge_text();
-        }
-
-        self.after_text.clear();
+        let (id, range) = self.pending_text.take().expect("text has a reserved node");
+        let text = if self.after_text.len() == 1 {
+            match self.after_text.pop().expect("one text chunk") {
+                Cow::Borrowed(text) => StringStorage::Borrowed(text),
+                Cow::Owned(text) => StringStorage::new_owned(&text),
+            }
+        } else {
+            let text = StringStorage::new_owned(&self.after_text.join(""));
+            self.after_text.clear();
+            text
+        };
+        self.append_node_data(id, NodeKind::Text(text), range);
     }
 }
 
 fn parse<'input>(text: &'input str, opt: ParsingOptions<'input>) -> Result<Document<'input>> {
-    // Trying to guess rough nodes and attributes amount.
-    let nodes_capacity = memchr_iter(b'<', text.as_bytes()).count();
-    let attributes_capacity = memchr_iter(b'=', text.as_bytes()).count();
+    parse_with_output(text, opt, Output::Indexed)
+}
 
-    // Init document.
-    let mut doc = Document {
-        text,
-        nodes: Vec::with_capacity(nodes_capacity),
-        attributes: Vec::with_capacity(attributes_capacity),
-        namespaces: Namespaces::default(),
-    };
-
-    // Add a root node.
-    doc.nodes.push(NodeData {
-        parent: None,
-        prev_sibling: None,
-        next_subtree: None,
-        last_child: None,
-        kind: NodeKind::Root,
-        #[cfg(feature = "positions")]
-        range: 0..text.len(),
-    });
-
-    doc.namespaces
-        .push_ns(Some(NS_XML_PREFIX), StringStorage::Borrowed(NS_XML_URI))?;
-
+fn parse_with_output<'input>(
+    text: &'input str,
+    opt: ParsingOptions<'input>,
+    output: Output<'input, '_>,
+) -> Result<Document<'input>> {
+    let indexed = matches!(output, Output::Indexed);
     let allow_dtd = opt.allow_dtd;
-
-    let mut ctx = Context {
-        opt,
-        namespace_start_idx: 1,
-        current_attributes: Vec::with_capacity(16),
-        entities: Vec::new(),
-        awaiting_subtree: Vec::new(),
-        parent_prefixes: vec![""],
-        after_text: Vec::with_capacity(1),
-        parent_id: NodeId::new(0),
-        tag_name: TagNameSpan::new_null(),
-        loop_detector: LoopDetector::default(),
-        doc,
-    };
-
+    let mut ctx = Context::new(text, opt, output)?;
     tokenizer::parse(text, allow_dtd, &mut ctx)?;
-
-    let mut doc = ctx.doc;
-    if !doc.root().children().any(|n| n.is_element()) {
+    if !ctx.root_seen {
         return Err(Error::NoRootNode);
     }
-
-    if ctx.parent_prefixes.len() > 1 {
+    if ctx.parents.len() > 1 {
         return Err(Error::UnclosedRootNode);
     }
-
-    doc.nodes.shrink_to_fit();
-    doc.attributes.shrink_to_fit();
-    doc.namespaces.shrink_to_fit();
-
+    ctx.reset_after_text();
+    let mut doc = ctx.doc;
+    if indexed {
+        doc.nodes.shrink_to_fit();
+        doc.attributes.shrink_to_fit();
+        doc.namespaces.shrink_to_fit();
+    }
     Ok(doc)
 }
 
-impl<'input> tokenizer::XmlEvents<'input> for Context<'input> {
+impl<'input> tokenizer::XmlEvents<'input> for Context<'input, '_> {
     #[inline(always)]
     fn token(&mut self, token: tokenizer::Token<'input>) -> Result<()> {
         match token {
@@ -772,7 +871,7 @@ fn process_attribute<'input>(
     prefix: &'input str,
     local: &'input str,
     value: StrSpan<'input>,
-    ctx: &mut Context<'input>,
+    ctx: &mut Context<'input, '_>,
 ) -> Result<()> {
     let value = normalize_attribute(value, ctx)?;
 
@@ -851,7 +950,7 @@ fn process_attribute<'input>(
 fn process_element<'input>(
     end_token: tokenizer::ElementEnd<'input>,
     token_range: Range<usize>,
-    ctx: &mut Context<'input>,
+    ctx: &mut Context<'input, '_>,
 ) -> Result<()> {
     if ctx.tag_name.name.is_empty() {
         // May occur in XML like this:
@@ -859,9 +958,7 @@ fn process_element<'input>(
         // <root>&p;</root>
 
         if let tokenizer::ElementEnd::Close(..) = end_token {
-            return Err(Error::UnexpectedEntityCloseTag(
-                ctx.doc.text_pos_at(token_range.start),
-            ));
+            return Err(Error::UnexpectedEntityCloseTag(ctx.doc.text_pos_at(token_range.start)));
         } else {
             unreachable!("should be already checked by the tokenizer");
         }
@@ -874,12 +971,7 @@ fn process_element<'input>(
 
     match end_token {
         tokenizer::ElementEnd::Empty => {
-            let tag_ns_idx = get_ns_idx_by_prefix(
-                namespaces,
-                ctx.tag_name.prefix_pos,
-                ctx.tag_name.prefix,
-                &ctx.doc,
-            )?;
+            let tag_ns_idx = get_ns_idx_by_prefix(namespaces, ctx.tag_name.prefix_pos, ctx.tag_name.prefix, &ctx.doc)?;
             let new_element_id = ctx.append_node(
                 NodeKind::Element {
                     tag_name: ExpandedNameIndexed {
@@ -891,52 +983,26 @@ fn process_element<'input>(
                 },
                 ctx.tag_name.pos..token_range.end,
             )?;
-            ctx.awaiting_subtree.push(new_element_id);
+            ctx.close_element(new_element_id, token_range.end);
         }
         tokenizer::ElementEnd::Close(prefix, local) => {
-            let parent_node = &mut ctx.doc.nodes[ctx.parent_id.get_usize()];
-            // should never panic as we start with the single prefix of the
-            // root node and always push another one when changing the parent
-            let parent_prefix = *ctx.parent_prefixes.last().unwrap();
-
-            #[cfg(feature = "positions")]
-            {
-                parent_node.range.end = token_range.end;
+            let parent = *ctx.parents.last().expect("the document frame remains open");
+            if ctx.parents.len() == 1 {
+                return Err(Error::UnexpectedEntityCloseTag(ctx.doc.text_pos_at(token_range.start)));
             }
-
-            if let NodeKind::Element { ref tag_name, .. } = parent_node.kind {
-                if prefix != parent_prefix || local != tag_name.local_name {
-                    return Err(Error::UnexpectedCloseTag(
-                        gen_qname_string(parent_prefix, tag_name.local_name),
-                        gen_qname_string(prefix, local),
-                        ctx.doc.text_pos_at(token_range.start),
-                    ));
-                }
-            }
-            ctx.awaiting_subtree.push(ctx.parent_id);
-
-            if let Some(id) = parent_node.parent {
-                ctx.parent_id = id;
-                ctx.parent_prefixes.pop();
-                debug_assert!(!ctx.parent_prefixes.is_empty());
-            } else {
-                // May occur in XML like this:
-                // <!DOCTYPE test [ <!ENTITY p '<p></p></p>'> ]>
-                // <p>&p;&p;
-
-                return Err(Error::UnexpectedEntityCloseTag(
+            if prefix != parent.prefix || local != parent.local {
+                return Err(Error::UnexpectedCloseTag(
+                    gen_qname_string(parent.prefix, parent.local),
+                    gen_qname_string(prefix, local),
                     ctx.doc.text_pos_at(token_range.start),
                 ));
             }
+            ctx.close_element(parent.id, token_range.end);
+            ctx.parents.pop();
         }
         tokenizer::ElementEnd::Open => {
-            let tag_ns_idx = get_ns_idx_by_prefix(
-                namespaces,
-                ctx.tag_name.prefix_pos,
-                ctx.tag_name.prefix,
-                &ctx.doc,
-            )?;
-            ctx.parent_id = ctx.append_node(
+            let tag_ns_idx = get_ns_idx_by_prefix(namespaces, ctx.tag_name.prefix_pos, ctx.tag_name.prefix, &ctx.doc)?;
+            let id = ctx.append_node(
                 NodeKind::Element {
                     tag_name: ExpandedNameIndexed {
                         namespace_idx: tag_ns_idx,
@@ -947,19 +1013,22 @@ fn process_element<'input>(
                 },
                 ctx.tag_name.pos..token_range.end,
             )?;
-            ctx.parent_prefixes.push(ctx.tag_name.prefix);
+            ctx.parents.push(OpenElement {
+                id,
+                prefix: ctx.tag_name.prefix,
+                local: ctx.tag_name.name,
+                namespaces,
+            });
         }
     }
 
     Ok(())
 }
 
-impl Context<'_> {
+impl Context<'_, '_> {
     fn resolve_namespaces(&mut self) -> ShortRange {
-        if let NodeKind::Element { ref namespaces, .. } =
-            self.doc.nodes[self.parent_id.get_usize()].kind
-        {
-            let parent_ns = *namespaces;
+        if self.parents.len() > 1 {
+            let parent_ns = self.parents.last().expect("an element frame").namespaces;
             if self.namespace_start_idx == self.doc.namespaces.tree_order.len() {
                 return parent_ns;
             }
@@ -967,10 +1036,7 @@ impl Context<'_> {
             for i in parent_ns.to_urange() {
                 if !self.doc.namespaces.exists(
                     self.namespace_start_idx,
-                    self.doc
-                        .namespaces
-                        .get(self.doc.namespaces.tree_order[i])
-                        .name,
+                    self.doc.namespaces.get(self.doc.namespaces.tree_order[i]).name,
                 ) {
                     self.doc.namespaces.push_ref(i);
                 }
@@ -986,7 +1052,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
         return Ok(ShortRange::new(0, 0));
     }
 
-    if ctx.doc.attributes.len() + ctx.current_attributes.len() >= u32::MAX as usize {
+    if ctx.attributes_seen + ctx.current_attributes.len() >= u32::MAX as usize {
         return Err(Error::AttributesLimitReached);
     }
 
@@ -1019,6 +1085,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
             return Err(Error::DuplicatedAttribute(attr.local.to_string(), pos));
         }
 
+        ctx.attributes_seen += 1;
         ctx.doc.attributes.push(AttributeData {
             name: attr_name,
             value: attr.value,
@@ -1037,7 +1104,7 @@ fn resolve_attributes(namespaces: ShortRange, ctx: &mut Context) -> Result<Short
 fn process_text<'input>(
     text: &'input str,
     range: Range<usize>,
-    ctx: &mut Context<'input>,
+    ctx: &mut Context<'input, '_>,
 ) -> Result<()> {
     // Add text as is if it has only valid characters.
     if memchr2(b'&', b'\r', text.as_bytes()).is_none() {
@@ -1110,7 +1177,7 @@ fn process_text<'input>(
 fn process_cdata<'input>(
     mut text: &'input str,
     range: Range<usize>,
-    ctx: &mut Context<'input>,
+    ctx: &mut Context<'input, '_>,
 ) -> Result<()> {
     let mut pos = memchr(b'\r', text.as_bytes());
 
@@ -1183,7 +1250,7 @@ fn parse_next_chunk<'a>(stream: &mut Stream<'a>, entities: &[Entity<'a>]) -> Res
 // https://www.w3.org/TR/REC-xml/#AVNormalize
 fn normalize_attribute<'input>(
     text: StrSpan<'input>,
-    ctx: &mut Context<'input>,
+    ctx: &mut Context<'input, '_>,
 ) -> Result<StringStorage<'input>> {
     // We assume that `&` indicates an entity or a character reference.
     // But in rare cases it can be just an another character.
@@ -1405,5 +1472,65 @@ impl TextBuffer {
     fn finish(&mut self) -> String {
         // `unwrap` is safe, because buffer must contain a valid UTF-8 string.
         String::from_utf8(take(&mut self.buffer)).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod event_counter_tests {
+    use super::*;
+
+    fn ignore(_: crate::ValidatedEvent<'_, '_>) {}
+
+    #[test]
+    fn discarded_nodes_still_reach_the_configured_limit() {
+        let mut sink = ignore;
+        let mut context = Context::new("<a/>", ParsingOptions::default(), Output::Events(&mut sink)).unwrap();
+        context.opt.nodes_limit = 3;
+        context.nodes_seen = 3;
+        assert_eq!(context.doc.nodes.len(), 1);
+        assert_eq!(
+            context.append_node(NodeKind::Comment(StringStorage::Borrowed("")), 0..0),
+            Err(Error::NodesLimitReached)
+        );
+    }
+
+    #[test]
+    fn discarded_attributes_still_reach_the_total_limit() {
+        let mut sink = ignore;
+        let mut context = Context::new("<a x='v'/>", ParsingOptions::default(), Output::Events(&mut sink)).unwrap();
+        context.attributes_seen = u32::MAX as usize - 2;
+        let attribute = || TempAttributeData {
+            prefix: "",
+            local: "x",
+            value: StringStorage::Borrowed("v"),
+            range: 3..8,
+            #[cfg(feature = "positions")]
+            qname_len: 1,
+            #[cfg(feature = "positions")]
+            eq_len: 1,
+        };
+        context.current_attributes.push(attribute());
+        let namespaces = ShortRange::new(0, 0);
+        let attributes = resolve_attributes(namespaces, &mut context).unwrap();
+        context
+            .append_node(
+                NodeKind::Element {
+                    tag_name: ExpandedNameIndexed {
+                        namespace_idx: None,
+                        local_name: "a",
+                    },
+                    attributes,
+                    namespaces,
+                },
+                0..10,
+            )
+            .unwrap();
+        assert!(context.doc.attributes.is_empty());
+        assert_eq!(context.attributes_seen, u32::MAX as usize - 1);
+        context.current_attributes.push(attribute());
+        assert!(matches!(
+            resolve_attributes(namespaces, &mut context),
+            Err(Error::AttributesLimitReached)
+        ));
     }
 }

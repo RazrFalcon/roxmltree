@@ -32,12 +32,14 @@ use core::ops::Range;
 
 use alloc::vec::Vec;
 
+mod events;
 mod parse;
 mod tokenizer;
 
 #[cfg(test)]
 mod tokenizer_tests;
 
+pub use crate::events::ValidatedEvent;
 pub use crate::parse::*;
 
 /// The <http://www.w3.org/XML/1998/namespace> URI.
