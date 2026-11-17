@@ -2,6 +2,71 @@
 
 use roxmltree::*;
 
+#[cfg(feature = "positions")]
+#[test]
+fn merged_text_ranges() {
+    for (content, expected) in [
+        ("hello<![CDATA[world]]>", "helloworld"),
+        ("<![CDATA[hello]]>world", "helloworld"),
+        ("<![CDATA[hello]]><![CDATA[world]]>", "helloworld"),
+        ("a<![CDATA[b]]>c<![CDATA[d]]>e", "abcde"),
+        ("hello<![CDATA[]]>", "hello"),
+        ("<![CDATA[]]>hello", "hello"),
+        ("a<![CDATA[b\r\nc\r]]>d", "ab\nc\nd"),
+        ("é<![CDATA[東京]]>🫠", "é東京🫠"),
+        ("&amp;<![CDATA[<>]]>&#x1f600;", "&<>😀"),
+    ] {
+        let source = format!("<p>{content}</p>");
+        let doc = Document::parse(&source).unwrap();
+        let text = doc.root_element().first_child().unwrap();
+        assert_eq!(text.text(), Some(expected));
+        assert_eq!(text.range(), 3..3 + content.len(), "{source}");
+        assert_eq!(text.next_sibling(), None);
+    }
+}
+
+#[cfg(feature = "positions")]
+#[test]
+fn merged_text_ranges_stop_at_other_nodes() {
+    let first = "a<![CDATA[b]]>";
+    let last = "c<![CDATA[d]]>";
+    for separator in ["<!--comment-->", "<?pi value?>", "<child/>"] {
+        let source = format!("<p>{first}{separator}{last}</p>");
+        let doc = Document::parse(&source).unwrap();
+        let text: Vec<_> = doc
+            .root_element()
+            .children()
+            .filter(Node::is_text)
+            .collect();
+        assert_eq!(text.len(), 2);
+        assert_eq!(text[0].text(), Some("ab"));
+        assert_eq!(text[0].range(), 3..3 + first.len());
+        let start = 3 + first.len() + separator.len();
+        assert_eq!(text[1].text(), Some("cd"));
+        assert_eq!(text[1].range(), start..start + last.len());
+    }
+}
+
+#[cfg(feature = "positions")]
+#[test]
+fn merged_text_range_ignores_external_entity_offsets() {
+    let source = "<!DOCTYPE p [<!ENTITY e SYSTEM 'e.txt'>]><p>x&e;</p>";
+    let entity = "z".repeat(1024);
+    let resolver = |_pub_id: Option<&str>, _uri: &str| Ok(Some(entity.as_str()));
+    let options = ParsingOptions {
+        allow_dtd: true,
+        entity_resolver: Some(&resolver),
+        ..Default::default()
+    };
+    let doc = Document::parse_with_options(source, options).unwrap();
+    let text = doc.root_element().first_child().unwrap();
+    assert_eq!(text.text().unwrap().len(), 1025);
+    assert_eq!(
+        text.range(),
+        source.find("x&e;").unwrap()..source.find("</p>").unwrap()
+    );
+}
+
 #[test]
 fn error_size() {
     assert!(::std::mem::size_of::<Error>() <= 64);
