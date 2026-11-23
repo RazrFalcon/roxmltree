@@ -54,6 +54,30 @@ fn get_text_02() {
 }
 
 #[test]
+fn get_text_03() {
+    // A CR that is not followed by LF becomes LF, also before a reference.
+    // A CR that comes from a character reference is kept.
+    for (data, text) in [
+        ("<a>x\ry</a>", "x\ny"),
+        ("<a>x\r&amp;</a>", "x\n&"),
+        ("<a>x\r&#38;</a>", "x\n&"),
+        ("<a>x\r&#65;</a>", "x\nA"),
+        ("<a>x\r&#13;</a>", "x\n\r"),
+        ("<a>x\r\n&amp;</a>", "x\n&"),
+        ("<a>&#65;\ry</a>", "A\ny"),
+        ("<a>&#13;\ny</a>", "\r\ny"),
+        ("<!DOCTYPE a [<!ENTITY e \"y\">]><a>x\r&e;</a>", "x\ny"),
+    ] {
+        let opt = ParsingOptions {
+            allow_dtd: true,
+            ..ParsingOptions::default()
+        };
+        let doc = Document::parse_with_options(data, opt).unwrap();
+        assert_eq!(doc.root_element().text(), Some(text), "{data:?}");
+    }
+}
+
+#[test]
 fn api_01() {
     let data = "\
 <e a:attr='a_ns' b:attr='b_ns' attr='no_ns' xmlns:b='http://www.ietf.org' \
